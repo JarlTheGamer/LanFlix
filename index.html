@@ -14,8 +14,8 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <header class="top-nav">
+    <header class="top-nav">
+      <div class="nav-inner">
         <div class="brand" aria-label="RipFlix">
           <div class="brand-icon" aria-hidden="true">
             <svg viewBox="0 0 32 32" role="presentation">
@@ -28,10 +28,10 @@
         </div>
         <nav class="menu">
           <button class="menu-item active" data-hero="home">Home</button>
-          <button class="menu-item" data-hero="shows">Shows</button>
-          <button class="menu-item" data-hero="movies">Movies</button>
+          <button class="menu-item" data-hero="shows">Series</button>
+          <button class="menu-item" data-hero="movies">Films</button>
           <button class="menu-item" data-hero="games">Games</button>
-          <button class="menu-item" data-hero="my">My RipFlix</button>
+          <button class="menu-item" data-hero="my">My List</button>
         </nav>
         <div class="actions">
           <button class="search" aria-label="Search">
@@ -50,12 +50,14 @@
             </svg>
           </button>
         </div>
-      </header>
+      </div>
+    </header>
 
-      <main>
-        <section class="hero" id="hero">
-          <div class="hero-bg" id="hero-bg"></div>
-          <div class="hero-overlay"></div>
+    <main>
+      <section class="hero" id="hero">
+        <div class="hero-bg" id="hero-bg"></div>
+        <div class="hero-overlay"></div>
+        <div class="hero-body">
           <div class="hero-content">
             <div class="hero-tag" id="hero-tag"></div>
             <h1 class="hero-title" id="hero-title"></h1>
@@ -71,8 +73,10 @@
             </div>
           </div>
           <div class="hero-secondary" id="hero-secondary"></div>
-        </section>
+        </div>
+      </section>
 
+      <div class="content-shell">
         <section class="spotlight">
           <div class="spotlight-header">
             <h2>Your Next Watch</h2>
@@ -84,8 +88,8 @@
           </div>
           <div class="spotlight-row" id="spotlight-row"></div>
         </section>
-      </main>
-    </div>
+      </div>
+    </main>
     <script src="script.js"></script>
   </body>
 </html>
