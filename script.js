@@ -108,6 +108,8 @@ const heroTitle = document.getElementById('hero-title');
 const heroMeta = document.getElementById('hero-meta');
 const heroDescription = document.getElementById('hero-description');
 const heroSecondary = document.getElementById('hero-secondary');
+const topNav = document.querySelector('.top-nav');
+const heroSection = document.querySelector('.hero');
 
 function updateHero(key) {
   const hero = HEROES[key] ?? HEROES.home;
@@ -125,6 +127,17 @@ function updateHero(key) {
   heroMeta.innerHTML = hero.meta.map((item) => `<span>${item}</span>`).join('');
   heroDescription.textContent = hero.description;
   heroSecondary.innerHTML = `<span>New</span> ${hero.secondary}`;
+}
+
+function handleScroll() {
+  if (!topNav || !heroSection) return;
+
+  const threshold = heroSection.offsetHeight * 0.45;
+  if (window.scrollY > threshold) {
+    topNav.classList.add('is-solid');
+  } else {
+    topNav.classList.remove('is-solid');
+  }
 }
 
 function renderCards(filter) {
@@ -171,3 +184,5 @@ updateHero('home');
 renderCards('all');
 setupMenu();
 setupTabs();
+handleScroll();
+window.addEventListener('scroll', handleScroll, { passive: true });
