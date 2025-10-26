@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RipFlix</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="top-nav">
+      <div class="nav-inner">
+        <div class="brand" aria-label="RipFlix">
+          <div class="brand-icon" aria-hidden="true">
+            <svg viewBox="0 0 32 32" role="presentation">
+              <path
+                d="M6 4h8l5.5 10.5L25 4h3l-4.5 12 4.5 12h-8l-5-10.5L10 28H7l4.5-12z"
+              />
+            </svg>
+          </div>
+          <span class="brand-name">RipFlix</span>
+        </div>
+        <nav class="menu">
+          <button class="menu-item active" data-hero="home">Home</button>
+          <button class="menu-item" data-hero="shows">Series</button>
+          <button class="menu-item" data-hero="movies">Films</button>
+          <button class="menu-item" data-hero="games">Games</button>
+          <button class="menu-item" data-hero="my">My List</button>
+        </nav>
+        <div class="actions">
+          <button class="search" aria-label="Search">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M15.5 14h-.79l-.28-.27a6.471 6.471 0 0 0 1.57-4.23 6.5 6.5 0 1 0-6.5 6.5 6.47 6.47 0 0 0 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zM6.5 10a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"
+              />
+            </svg>
+          </button>
+          <button class="account" type="button">
+            <span class="account-label">Account</span>
+            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <path
+                d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.98l3.71-3.75a.75.75 0 0 1 1.07 1.05l-4.24 4.28a.75.75 0 0 1-1.07 0L5.21 8.28a.75.75 0 0 1 .02-1.07z"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" id="hero">
+        <div class="hero-bg" id="hero-bg"></div>
+        <div class="hero-overlay"></div>
+        <div class="hero-body">
+          <div class="hero-content">
+            <div class="hero-tag" id="hero-tag"></div>
+            <h1 class="hero-title" id="hero-title"></h1>
+            <div class="hero-meta" id="hero-meta"></div>
+            <p class="hero-description" id="hero-description"></p>
+            <div class="hero-actions">
+              <button class="cta primary">
+                <span>Remind Me</span>
+              </button>
+              <button class="cta ghost">
+                <span>More Info</span>
+              </button>
+            </div>
+          </div>
+          <div class="hero-secondary" id="hero-secondary"></div>
+        </div>
+      </section>
+
+      <div class="content-shell">
+        <section class="spotlight">
+          <div class="spotlight-header">
+            <h2>Your Next Watch</h2>
+            <div class="spotlight-tabs" role="tablist">
+              <button class="tab active" data-tab="all">All</button>
+              <button class="tab" data-tab="series">Series</button>
+              <button class="tab" data-tab="movies">Movies</button>
+            </div>
+          </div>
+          <div class="spotlight-row" id="spotlight-row"></div>
+        </section>
+      </div>
+    </main>
+    <script src="script.js"></script>
+  </body>
+</html>
