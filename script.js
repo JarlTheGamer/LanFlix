@@ -102,24 +102,39 @@ const CARDS = [
   },
 ];
 
+const root = document.documentElement;
 const heroBg = document.getElementById('hero-bg');
 const heroTag = document.getElementById('hero-tag');
 const heroTitle = document.getElementById('hero-title');
 const heroMeta = document.getElementById('hero-meta');
 const heroDescription = document.getElementById('hero-description');
 const heroSecondary = document.getElementById('hero-secondary');
+const heroAmbilight = document.getElementById('hero-ambilight');
 const topNav = document.querySelector('.top-nav');
 const heroSection = document.querySelector('.hero');
 
 function updateHero(key) {
   const hero = HEROES[key] ?? HEROES.home;
+  if (root) {
+    root.style.setProperty('--hero-bg-image', hero.background);
+  }
   heroBg.style.backgroundImage = hero.background;
   heroBg.style.opacity = 0;
+  if (heroAmbilight) {
+    heroAmbilight.style.backgroundImage = hero.background;
+    heroAmbilight.style.opacity = '0';
+  }
   requestAnimationFrame(() => {
     heroBg.style.transition = 'none';
     heroBg.offsetHeight;
     heroBg.style.transition = '';
     heroBg.style.opacity = 1;
+    if (heroAmbilight) {
+      heroAmbilight.style.transition = 'none';
+      heroAmbilight.offsetHeight;
+      heroAmbilight.style.transition = '';
+      heroAmbilight.style.opacity = '';
+    }
   });
 
   heroTag.textContent = hero.tag;
