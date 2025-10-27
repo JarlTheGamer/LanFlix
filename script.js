@@ -184,24 +184,28 @@ function createCarouselItems() {
     heroCarouselTrack.appendChild(heroSection);
   });
 
-  focusedHeroElement = heroCarouselTrack.querySelector('.hero');
+  applyHeroClasses();
+
+  focusedHeroElement = heroCarouselTrack.querySelector('.hero.is-active');
   if (focusedHeroElement) {
     focusedHeroElement.classList.add('focused');
   }
 }
 
-function updateCarouselPosition() {
-  const offset = -currentHeroIndex * 100;
-  heroCarouselTrack.style.transform = `translateX(${offset}%)`;
+function applyHeroClasses() {
+  const heroElements = heroCarouselTrack.querySelectorAll('.hero');
+  heroElements.forEach((heroElement, index) => {
+    heroElement.classList.remove('is-active', 'is-before', 'is-after');
 
-  // Move background images to create parallax effect
-  const allHeros = heroCarouselTrack.querySelectorAll('.hero');
-  allHeros.forEach((hero, index) => {
-    const background = hero.querySelector('.hero-background');
-    if (background) {
-      const relativePosition = index - currentHeroIndex;
-      const bgOffset = relativePosition * 100;
-      background.style.transform = `translateX(${bgOffset}%)`;
+    if (index === currentHeroIndex) {
+      heroElement.classList.add('is-active');
+      heroElement.setAttribute('aria-hidden', 'false');
+    } else if (index < currentHeroIndex) {
+      heroElement.classList.add('is-before');
+      heroElement.setAttribute('aria-hidden', 'true');
+    } else {
+      heroElement.classList.add('is-after');
+      heroElement.setAttribute('aria-hidden', 'true');
     }
   });
 }
@@ -209,7 +213,7 @@ function updateCarouselPosition() {
 function goToSlide(index) {
   const heroes = HEROES[currentCategory];
   currentHeroIndex = index;
-  updateCarouselPosition();
+  applyHeroClasses();
   updateAmbilightForCurrentSlide();
   updateFocusedHero();
 }
@@ -227,11 +231,7 @@ function updateAmbilightForCurrentSlide() {
 
 function updateFocusedHero() {
   const allHeros = heroCarouselTrack.querySelectorAll('.hero');
-  allHeros.forEach((hero, index) => {
-    if (index === currentHeroIndex) {
-      focusedHeroElement = hero;
-    }
-  });
+  focusedHeroElement = allHeros[currentHeroIndex] || null;
 }
 
 function switchCategory(category) {
@@ -333,10 +333,12 @@ function setupKeyboardNavigation() {
         e.preventDefault();
         const newIndex = currentHeroIndex > 0 ? currentHeroIndex - 1 : heroes.length - 1;
         goToSlide(newIndex);
+        updateFocus();
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         const newIndex = currentHeroIndex < heroes.length - 1 ? currentHeroIndex + 1 : 0;
         goToSlide(newIndex);
+        updateFocus();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         focusedElement = 'menu';
