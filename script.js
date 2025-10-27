@@ -210,10 +210,18 @@ function applyHeroClasses() {
   });
 }
 
+
 function goToSlide(index) {
   const heroes = HEROES[currentCategory];
-  currentHeroIndex = index;
-  applyHeroClasses();
+  if (index < 0) {
+    currentHeroIndex = heroes.length - 1;
+  } else if (index >= heroes.length) {
+    currentHeroIndex = 0;
+  } else {
+    currentHeroIndex = index;
+  }
+
+  updateCarouselPosition();
   updateAmbilightForCurrentSlide();
   updateFocusedHero();
 }
@@ -230,8 +238,11 @@ function updateAmbilightForCurrentSlide() {
 }
 
 function updateFocusedHero() {
-  const allHeros = heroCarouselTrack.querySelectorAll('.hero');
-  focusedHeroElement = allHeros[currentHeroIndex] || null;
+  const allHeroes = heroCarouselTrack.querySelectorAll('.hero');
+  allHeroes.forEach((hero, index) => {
+    hero.classList.toggle('focused', index === currentHeroIndex);
+  });
+  focusedHeroElement = allHeroes[currentHeroIndex];
 }
 
 function switchCategory(category) {
@@ -328,14 +339,13 @@ function setupKeyboardNavigation() {
 
   document.addEventListener('keydown', (e) => {
     if (focusedElement === 'hero') {
-      const heroes = HEROES[currentCategory];
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        const newIndex = currentHeroIndex > 0 ? currentHeroIndex - 1 : heroes.length - 1;
-        goToSlide(newIndex);
-        updateFocus();
+        goToSlide(currentHeroIndex - 1);
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
+        goToSlide(currentHeroIndex + 1);
+      } else if (e.key === 'ArrowUp') {
         const newIndex = currentHeroIndex < heroes.length - 1 ? currentHeroIndex + 1 : 0;
         goToSlide(newIndex);
         updateFocus();
