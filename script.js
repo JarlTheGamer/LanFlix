@@ -143,72 +143,109 @@ const CARDS = [
 ];
 
 const root = document.documentElement;
-const heroCarousel = document.getElementById('hero-carousel');
-const heroTag = document.getElementById('hero-tag');
-const heroTitle = document.getElementById('hero-title');
-const heroMeta = document.getElementById('hero-meta');
-const heroDescription = document.getElementById('hero-description');
-const heroSecondary = document.getElementById('hero-secondary');
+const heroCarouselTrack = document.getElementById('hero-carousel-track');
 const heroAmbilight = document.getElementById('hero-ambilight');
 const topNav = document.querySelector('.top-nav');
-const heroSection = document.querySelector('.hero');
+let focusedHeroElement = null;
 
 let currentCategory = 'home';
 let currentHeroIndex = 0;
 
 function createCarouselItems() {
-  heroCarousel.innerHTML = '';
+  heroCarouselTrack.innerHTML = '';
   const heroes = HEROES[currentCategory];
   heroes.forEach((hero, index) => {
-    const item = document.createElement('div');
-    item.className = 'hero-carousel-item';
-    item.style.backgroundImage = hero.background;
-    item.dataset.index = index;
-    heroCarousel.appendChild(item);
+    const heroSection = document.createElement('section');
+    heroSection.className = 'hero';
+    heroSection.dataset.index = index;
+
+    heroSection.innerHTML = `
+      <div class="hero-background" style="background-image: ${hero.background}"></div>
+      <div class="hero-overlay"></div>
+      <div class="hero-body">
+        <div class="hero-content">
+          <div class="hero-tag">${hero.tag}</div>
+          <h1 class="hero-title">${hero.title}</h1>
+          <div class="hero-meta">${hero.meta.map((item) => `<span>${item}</span>`).join('')}</div>
+          <p class="hero-description">${hero.description}</p>
+          <div class="hero-actions">
+            <button class="cta primary">
+              <span>Remind Me</span>
+            </button>
+            <button class="cta ghost">
+              <span>More Info</span>
+            </button>
+          </div>
+        </div>
+        <div class="hero-secondary"><span>New</span> ${hero.secondary}</div>
+      </div>
+    `;
+
+    heroCarouselTrack.appendChild(heroSection);
   });
+
+  focusedHeroElement = heroCarouselTrack.querySelector('.hero');
+  if (focusedHeroElement) {
+    focusedHeroElement.classList.add('focused');
+  }
 }
 
 function updateCarouselPosition() {
   const offset = -currentHeroIndex * 100;
-  heroCarousel.style.transform = `translateX(${offset}%)`;
+  heroCarouselTrack.style.transform = `translateX(${offset}%)`;
+
+  // Move background images to create parallax effect
+  const allHeros = heroCarouselTrack.querySelectorAll('.hero');
+  allHeros.forEach((hero, index) => {
+    const background = hero.querySelector('.hero-background');
+    if (background) {
+      const relativePosition = index - currentHeroIndex;
+      const bgOffset = relativePosition * 100;
+      background.style.transform = `translateX(${bgOffset}%)`;
+    }
+  });
 }
 
 function goToSlide(index) {
   const heroes = HEROES[currentCategory];
   currentHeroIndex = index;
   updateCarouselPosition();
-  updateHeroContent(heroes[index]);
-  heroSection.classList.add('focused');
+  updateAmbilightForCurrentSlide();
+  updateFocusedHero();
 }
 
-function updateHeroContent(hero) {
+function updateAmbilightForCurrentSlide() {
+  const heroes = HEROES[currentCategory];
+  const hero = heroes[currentHeroIndex];
   if (root) {
     root.style.setProperty('--hero-bg-image', hero.background);
   }
   if (heroAmbilight) {
     heroAmbilight.style.backgroundImage = hero.background;
   }
+}
 
-  heroTag.textContent = hero.tag;
-  heroTitle.textContent = hero.title;
-  heroMeta.innerHTML = hero.meta.map((item) => `<span>${item}</span>`).join('');
-  heroDescription.textContent = hero.description;
-  heroSecondary.innerHTML = `<span>New</span> ${hero.secondary}`;
+function updateFocusedHero() {
+  const allHeros = heroCarouselTrack.querySelectorAll('.hero');
+  allHeros.forEach((hero, index) => {
+    if (index === currentHeroIndex) {
+      focusedHeroElement = hero;
+    }
+  });
 }
 
 function switchCategory(category) {
   currentCategory = category;
   currentHeroIndex = 0;
-  
+
   createCarouselItems();
-  updateHeroContent(HEROES[category][0]);
-  heroSection.classList.add('focused');
+  updateAmbilightForCurrentSlide();
 }
 
 function handleScroll() {
-  if (!topNav || !heroSection) return;
+  if (!topNav) return;
 
-  const threshold = heroSection.offsetHeight * 0.45;
+  const threshold = 640 * 0.45;
   if (window.scrollY > threshold) {
     topNav.classList.add('is-solid');
   } else {
@@ -267,13 +304,16 @@ function setupKeyboardNavigation() {
   let focusedCardIndex = 0;
 
   function updateFocus() {
-    heroSection.classList.remove('focused');
+    const allHeros = document.querySelectorAll('.hero');
+    allHeros.forEach(h => h.classList.remove('focused'));
     menuButtons.forEach((btn) => btn.classList.remove('focused'));
     tabs.forEach((tab) => tab.classList.remove('focused'));
     cards().forEach((card) => card.classList.remove('focused'));
 
     if (focusedElement === 'hero') {
-      heroSection.classList.add('focused');
+      if (focusedHeroElement) {
+        focusedHeroElement.classList.add('focused');
+      }
     } else if (focusedElement === 'menu') {
       menuButtons[focusedMenuIndex].classList.add('focused');
     } else if (focusedElement === 'tabs') {
@@ -288,7 +328,16 @@ function setupKeyboardNavigation() {
 
   document.addEventListener('keydown', (e) => {
     if (focusedElement === 'hero') {
-      if (e.key === 'ArrowUp') {
+      const heroes = HEROES[currentCategory];
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const newIndex = currentHeroIndex > 0 ? currentHeroIndex - 1 : heroes.length - 1;
+        goToSlide(newIndex);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const newIndex = currentHeroIndex < heroes.length - 1 ? currentHeroIndex + 1 : 0;
+        goToSlide(newIndex);
+      } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         focusedElement = 'menu';
         updateFocus();
@@ -375,7 +424,7 @@ function setupKeyboardNavigation() {
 }
 
 createCarouselItems();
-updateHeroContent(HEROES.home[0]);
+updateAmbilightForCurrentSlide();
 renderCards('all');
 setupMenu();
 setupTabs();
