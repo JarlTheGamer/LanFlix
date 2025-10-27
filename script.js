@@ -145,11 +145,14 @@ const CARDS = [
 const root = document.documentElement;
 const heroCarouselTrack = document.getElementById('hero-carousel-track');
 const heroAmbilight = document.getElementById('hero-ambilight');
+const ambilightLayer1 = document.getElementById('ambilight-layer-1');
+const ambilightLayer2 = document.getElementById('ambilight-layer-2');
 const topNav = document.querySelector('.top-nav');
 let focusedHeroElement = null;
 
 let currentCategory = 'home';
 let currentHeroIndex = 0;
+let activeAmbilightLayer = 1;
 
 function createCarouselItems() {
   heroCarouselTrack.innerHTML = '';
@@ -184,29 +187,20 @@ function createCarouselItems() {
     heroCarouselTrack.appendChild(heroSection);
   });
 
-  applyHeroClasses();
-
-  focusedHeroElement = heroCarouselTrack.querySelector('.hero.is-active');
+  focusedHeroElement = heroCarouselTrack.querySelector('.hero');
   if (focusedHeroElement) {
     focusedHeroElement.classList.add('focused');
   }
 }
 
-function applyHeroClasses() {
-  const heroElements = heroCarouselTrack.querySelectorAll('.hero');
-  heroElements.forEach((heroElement, index) => {
-    heroElement.classList.remove('is-active', 'is-before', 'is-after');
-
-    if (index === currentHeroIndex) {
-      heroElement.classList.add('is-active');
-      heroElement.setAttribute('aria-hidden', 'false');
-    } else if (index < currentHeroIndex) {
-      heroElement.classList.add('is-before');
-      heroElement.setAttribute('aria-hidden', 'true');
-    } else {
-      heroElement.classList.add('is-after');
-      heroElement.setAttribute('aria-hidden', 'true');
-    }
+function updateCarouselPosition() {
+  const heroes = heroCarouselTrack.querySelectorAll('.hero');
+  heroes.forEach((hero, index) => {
+    const offset = (index - currentHeroIndex) * 100;
+    hero.style.transform = `translateX(${offset}%)`;
+    hero.style.opacity = index === currentHeroIndex ? '1' : '0';
+    hero.style.scale = index === currentHeroIndex ? '1' : '0.9';
+    hero.style.zIndex = index === currentHeroIndex ? '2' : '0';
   });
 }
 
@@ -226,14 +220,26 @@ function goToSlide(index) {
   updateFocusedHero();
 }
 
+
+
 function updateAmbilightForCurrentSlide() {
   const heroes = HEROES[currentCategory];
   const hero = heroes[currentHeroIndex];
   if (root) {
     root.style.setProperty('--hero-bg-image', hero.background);
   }
-  if (heroAmbilight) {
-    heroAmbilight.style.backgroundImage = hero.background;
+  
+  // Crossfade between two layers for smooth transition
+  if (activeAmbilightLayer === 1) {
+    ambilightLayer2.style.backgroundImage = hero.background;
+    ambilightLayer2.classList.add('active');
+    ambilightLayer1.classList.remove('active');
+    activeAmbilightLayer = 2;
+  } else {
+    ambilightLayer1.style.backgroundImage = hero.background;
+    ambilightLayer1.classList.add('active');
+    ambilightLayer2.classList.remove('active');
+    activeAmbilightLayer = 1;
   }
 }
 
@@ -339,16 +345,15 @@ function setupKeyboardNavigation() {
 
   document.addEventListener('keydown', (e) => {
     if (focusedElement === 'hero') {
+      const heroes = HEROES[currentCategory];
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        goToSlide(currentHeroIndex - 1);
+        const newIndex = currentHeroIndex > 0 ? currentHeroIndex - 1 : heroes.length - 1;
+        goToSlide(newIndex);
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        goToSlide(currentHeroIndex + 1);
-      } else if (e.key === 'ArrowUp') {
         const newIndex = currentHeroIndex < heroes.length - 1 ? currentHeroIndex + 1 : 0;
         goToSlide(newIndex);
-        updateFocus();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         focusedElement = 'menu';
@@ -436,6 +441,7 @@ function setupKeyboardNavigation() {
 }
 
 createCarouselItems();
+updateCarouselPosition();
 updateAmbilightForCurrentSlide();
 renderCards('all');
 setupMenu();
