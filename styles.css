@@ -258,7 +258,7 @@ main {
   position: relative;
   width: 100%;
   height: 640px;
-  overflow: visible;
+  overflow: hidden;
   border-radius: 32px;
   z-index: 1;
 }

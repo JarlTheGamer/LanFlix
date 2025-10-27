@@ -193,17 +193,6 @@ function createCarouselItems() {
 function updateCarouselPosition() {
   const offset = -currentHeroIndex * 100;
   heroCarouselTrack.style.transform = `translateX(${offset}%)`;
-
-  // Move background images to create parallax effect
-  const allHeros = heroCarouselTrack.querySelectorAll('.hero');
-  allHeros.forEach((hero, index) => {
-    const background = hero.querySelector('.hero-background');
-    if (background) {
-      const relativePosition = index - currentHeroIndex;
-      const bgOffset = relativePosition * 100;
-      background.style.transform = `translateX(${bgOffset}%)`;
-    }
-  });
 }
 
 function goToSlide(index) {
@@ -333,10 +322,12 @@ function setupKeyboardNavigation() {
         e.preventDefault();
         const newIndex = currentHeroIndex > 0 ? currentHeroIndex - 1 : heroes.length - 1;
         goToSlide(newIndex);
+        updateFocus();
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         const newIndex = currentHeroIndex < heroes.length - 1 ? currentHeroIndex + 1 : 0;
         goToSlide(newIndex);
+        updateFocus();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         focusedElement = 'menu';
