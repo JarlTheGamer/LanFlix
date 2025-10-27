@@ -1,54 +1,94 @@
 const HEROES = {
-  home: {
-    background:
-      'url(https://image.tmdb.org/t/p/original/qYeg0MP1LpPD5r5h9wxR83DMnyE.jpg)',
-    tag: 'New Series • Fantasy',
-    title: 'Wednesday',
-    meta: ['Series', '2022', 'TV-14', '8 Episodes'],
-    description:
-      'Smart, sarcastic and a little dead inside, Wednesday Addams investigates a murder spree while making new friends — and foes — at Nevermore Academy.',
-    secondary: 'Season 2 coming soon',
-  },
-  shows: {
-    background:
-      'url(https://image.tmdb.org/t/p/original/oqP1qEZccq5AD9TVTIaO6IGUj7o.jpg)',
-    tag: 'Hit Series • Thriller',
-    title: 'Squid Game',
-    meta: ['Series', '2021', 'TV-MA', '9 Episodes'],
-    description:
-      'Hundreds of cash-strapped contestants accept an invitation to compete in children’s games for a tempting prize, but the stakes are deadly.',
-    secondary: 'Season 2 premieres June 27',
-  },
-  movies: {
-    background:
-      'url(https://image.tmdb.org/t/p/original/4VujM9lbRv6j8N3w6JkYp1q5bZp.jpg)',
-    tag: 'Exclusive Film',
-    title: 'The Gray Man',
-    meta: ['Movie', '2022', '2h 9m'],
-    description:
-      'When a shadowy CIA agent uncovers damning agency secrets, he’s hunted across the globe by a sociopathic rogue operative who’s put a bounty on his head.',
-    secondary: 'Now streaming in Ultra HD',
-  },
-  games: {
-    background:
-      'url(https://images.unsplash.com/photo-1528741386504-9040b037703b?auto=format&fit=crop&w=1400&q=80)',
-    tag: 'Mobile Game',
-    title: 'Samurai Blade',
-    meta: ['Game', 'Action', 'Rogue-lite'],
-    description:
-      'Slash through endless arenas filled with neon-soaked enemies and upgrade your blade in this stylish RipFlix exclusive game.',
-    secondary: 'New season pass available',
-  },
-  my: {
-    background:
-      'url(https://images.unsplash.com/photo-1524985069026-dd778a71c7b4?auto=format&fit=crop&w=1400&q=80)',
-    tag: 'Because you watched',
-    title: 'Midnight Tales',
-    meta: ['Series', '2020', 'TV-MA', '3 Seasons'],
-    description:
-      'Dive back into the anthology of haunting stories where every episode unlocks a new mystery, curated from your personal watch history.',
-    secondary: 'Continue watching S3:E4',
-  },
+  home: [
+    {
+      background:
+        'url(https://image.tmdb.org/t/p/original/qYeg0MP1LpPD5r5h9wxR83DMnyE.jpg)',
+      tag: 'New Series • Fantasy',
+      title: 'Wednesday',
+      meta: ['Series', '2022', 'TV-14', '8 Episodes'],
+      description:
+        'Smart, sarcastic and a little dead inside, Wednesday Addams investigates a murder spree while making new friends — and foes — at Nevermore Academy.',
+      secondary: 'Season 2 coming soon',
+    },
+    {
+      background:
+        'url(https://image.tmdb.org/t/p/original/oqP1qEZccq5AD9TVTIaO6IGUj7o.jpg)',
+      tag: 'Hit Series • Thriller',
+      title: 'Squid Game',
+      meta: ['Series', '2021', 'TV-MA', '9 Episodes'],
+      description:
+        "'Hundreds of cash-strapped contestants accept an invitation to compete in children's games for a tempting prize, but the stakes are deadly.'",
+      secondary: 'Season 2 premieres June 27',
+    },
+    {
+      background:
+        'url(https://image.tmdb.org/t/p/original/4VujM9lbRv6j8N3w6JkYp1q5bZp.jpg)',
+      tag: 'Exclusive Film',
+      title: 'The Gray Man',
+      meta: ['Movie', '2022', '2h 9m'],
+      description:
+        "'When a shadowy CIA agent uncovers damning agency secrets, he's hunted across the globe by a sociopathic rogue operative who's put a bounty on his head.'",
+      secondary: 'Now streaming in Ultra HD',
+    },
+  ],
+  shows: [
+    {
+      background:
+        'url(https://image.tmdb.org/t/p/original/oqP1qEZccq5AD9TVTIaO6IGUj7o.jpg)',
+      tag: 'Hit Series • Thriller',
+      title: 'Squid Game',
+      meta: ['Series', '2021', 'TV-MA', '9 Episodes'],
+      description:
+        "'Hundreds of cash-strapped contestants accept an invitation to compete in children's games for a tempting prize, but the stakes are deadly.'",
+      secondary: 'Season 2 premieres June 27',
+    },
+    {
+      background:
+        'url(https://image.tmdb.org/t/p/original/qYeg0MP1LpPD5r5h9wxR83DMnyE.jpg)',
+      tag: 'New Series • Fantasy',
+      title: 'Wednesday',
+      meta: ['Series', '2022', 'TV-14', '8 Episodes'],
+      description:
+        'Smart, sarcastic and a little dead inside, Wednesday Addams investigates a murder spree while making new friends — and foes — at Nevermore Academy.',
+      secondary: 'Season 2 coming soon',
+    },
+  ],
+  movies: [
+    {
+      background:
+        'url(https://image.tmdb.org/t/p/original/4VujM9lbRv6j8N3w6JkYp1q5bZp.jpg)',
+      tag: 'Exclusive Film',
+      title: 'The Gray Man',
+      meta: ['Movie', '2022', '2h 9m'],
+      description:
+        "'When a shadowy CIA agent uncovers damning agency secrets, he's hunted across the globe by a sociopathic rogue operative who's put a bounty on his head.'",
+      secondary: 'Now streaming in Ultra HD',
+    },
+  ],
+  games: [
+    {
+      background:
+        'url(https://images.unsplash.com/photo-1528741386504-9040b037703b?auto=format&fit=crop&w=1400&q=80)',
+      tag: 'Mobile Game',
+      title: 'Samurai Blade',
+      meta: ['Game', 'Action', 'Rogue-lite'],
+      description:
+        'Slash through endless arenas filled with neon-soaked enemies and upgrade your blade in this stylish RipFlix exclusive game.',
+      secondary: 'New season pass available',
+    },
+  ],
+  my: [
+    {
+      background:
+        'url(https://images.unsplash.com/photo-1524985069026-dd778a71c7b4?auto=format&fit=crop&w=1400&q=80)',
+      tag: 'Because you watched',
+      title: 'Midnight Tales',
+      meta: ['Series', '2020', 'TV-MA', '3 Seasons'],
+      description:
+        'Dive back into the anthology of haunting stories where every episode unlocks a new mystery, curated from your personal watch history.',
+      secondary: 'Continue watching S3:E4',
+    },
+  ],
 };
 
 const CARDS = [
@@ -103,7 +143,7 @@ const CARDS = [
 ];
 
 const root = document.documentElement;
-const heroBg = document.getElementById('hero-bg');
+const heroCarousel = document.getElementById('hero-carousel');
 const heroTag = document.getElementById('hero-tag');
 const heroTitle = document.getElementById('hero-title');
 const heroMeta = document.getElementById('hero-meta');
@@ -113,35 +153,56 @@ const heroAmbilight = document.getElementById('hero-ambilight');
 const topNav = document.querySelector('.top-nav');
 const heroSection = document.querySelector('.hero');
 
-function updateHero(key) {
-  const hero = HEROES[key] ?? HEROES.home;
+let currentCategory = 'home';
+let currentHeroIndex = 0;
+
+function createCarouselItems() {
+  heroCarousel.innerHTML = '';
+  const heroes = HEROES[currentCategory];
+  heroes.forEach((hero, index) => {
+    const item = document.createElement('div');
+    item.className = 'hero-carousel-item';
+    item.style.backgroundImage = hero.background;
+    item.dataset.index = index;
+    heroCarousel.appendChild(item);
+  });
+}
+
+function updateCarouselPosition() {
+  const offset = -currentHeroIndex * 100;
+  heroCarousel.style.transform = `translateX(${offset}%)`;
+}
+
+function goToSlide(index) {
+  const heroes = HEROES[currentCategory];
+  currentHeroIndex = index;
+  updateCarouselPosition();
+  updateHeroContent(heroes[index]);
+  heroSection.classList.add('focused');
+}
+
+function updateHeroContent(hero) {
   if (root) {
     root.style.setProperty('--hero-bg-image', hero.background);
   }
-  heroBg.style.backgroundImage = hero.background;
-  heroBg.style.opacity = 0;
   if (heroAmbilight) {
     heroAmbilight.style.backgroundImage = hero.background;
-    heroAmbilight.style.opacity = '0';
   }
-  requestAnimationFrame(() => {
-    heroBg.style.transition = 'none';
-    heroBg.offsetHeight;
-    heroBg.style.transition = '';
-    heroBg.style.opacity = 1;
-    if (heroAmbilight) {
-      heroAmbilight.style.transition = 'none';
-      heroAmbilight.offsetHeight;
-      heroAmbilight.style.transition = '';
-      heroAmbilight.style.opacity = '';
-    }
-  });
 
   heroTag.textContent = hero.tag;
   heroTitle.textContent = hero.title;
   heroMeta.innerHTML = hero.meta.map((item) => `<span>${item}</span>`).join('');
   heroDescription.textContent = hero.description;
   heroSecondary.innerHTML = `<span>New</span> ${hero.secondary}`;
+}
+
+function switchCategory(category) {
+  currentCategory = category;
+  currentHeroIndex = 0;
+  
+  createCarouselItems();
+  updateHeroContent(HEROES[category][0]);
+  heroSection.classList.add('focused');
 }
 
 function handleScroll() {
@@ -179,7 +240,7 @@ function setupMenu() {
     button.addEventListener('click', () => {
       menuButtons.forEach((btn) => btn.classList.remove('active'));
       button.classList.add('active');
-      updateHero(button.dataset.hero);
+      switchCategory(button.dataset.hero);
     });
   });
 }
@@ -195,9 +256,129 @@ function setupTabs() {
   });
 }
 
-updateHero('home');
+function setupKeyboardNavigation() {
+  let focusedElement = 'hero';
+  const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
+  const tabs = Array.from(document.querySelectorAll('.tab'));
+  const cards = () => Array.from(document.querySelectorAll('.card'));
+
+  let focusedMenuIndex = 0;
+  let focusedTabIndex = 0;
+  let focusedCardIndex = 0;
+
+  function updateFocus() {
+    heroSection.classList.remove('focused');
+    menuButtons.forEach((btn) => btn.classList.remove('focused'));
+    tabs.forEach((tab) => tab.classList.remove('focused'));
+    cards().forEach((card) => card.classList.remove('focused'));
+
+    if (focusedElement === 'hero') {
+      heroSection.classList.add('focused');
+    } else if (focusedElement === 'menu') {
+      menuButtons[focusedMenuIndex].classList.add('focused');
+    } else if (focusedElement === 'tabs') {
+      tabs[focusedTabIndex].classList.add('focused');
+    } else if (focusedElement === 'cards') {
+      const cardElements = cards();
+      if (cardElements[focusedCardIndex]) {
+        cardElements[focusedCardIndex].classList.add('focused');
+      }
+    }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (focusedElement === 'hero') {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedElement = 'menu';
+        updateFocus();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedElement = 'tabs';
+        updateFocus();
+      }
+    } else if (focusedElement === 'menu') {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        focusedMenuIndex = focusedMenuIndex > 0 ? focusedMenuIndex - 1 : menuButtons.length - 1;
+        updateFocus();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        focusedMenuIndex = focusedMenuIndex < menuButtons.length - 1 ? focusedMenuIndex + 1 : 0;
+        updateFocus();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedElement = 'hero';
+        updateFocus();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        menuButtons[focusedMenuIndex].click();
+        focusedElement = 'hero';
+        updateFocus();
+      }
+    } else if (focusedElement === 'tabs') {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        focusedTabIndex = focusedTabIndex > 0 ? focusedTabIndex - 1 : tabs.length - 1;
+        updateFocus();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        focusedTabIndex = focusedTabIndex < tabs.length - 1 ? focusedTabIndex + 1 : 0;
+        updateFocus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedElement = 'hero';
+        updateFocus();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedElement = 'cards';
+        focusedCardIndex = 0;
+        updateFocus();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        tabs[focusedTabIndex].click();
+        updateFocus();
+      }
+    } else if (focusedElement === 'cards') {
+      const cardElements = cards();
+      const cardsPerRow = 6;
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        focusedCardIndex = focusedCardIndex > 0 ? focusedCardIndex - 1 : cardElements.length - 1;
+        updateFocus();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        focusedCardIndex = focusedCardIndex < cardElements.length - 1 ? focusedCardIndex + 1 : 0;
+        updateFocus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (focusedCardIndex < cardsPerRow) {
+          focusedElement = 'tabs';
+          updateFocus();
+        } else {
+          focusedCardIndex = Math.max(0, focusedCardIndex - cardsPerRow);
+          updateFocus();
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const newIndex = focusedCardIndex + cardsPerRow;
+        if (newIndex < cardElements.length) {
+          focusedCardIndex = newIndex;
+          updateFocus();
+        }
+      }
+    }
+  });
+
+  updateFocus();
+}
+
+createCarouselItems();
+updateHeroContent(HEROES.home[0]);
 renderCards('all');
 setupMenu();
 setupTabs();
+setupKeyboardNavigation();
 handleScroll();
 window.addEventListener('scroll', handleScroll, { passive: true });

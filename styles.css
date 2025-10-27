@@ -62,12 +62,10 @@ main {
 
 .top-nav::after {
   inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(10, 10, 11, 0.86),
-    rgba(10, 10, 10, 0.32),
-    rgba(10, 10, 10, 0)
-  );
+  background: linear-gradient(180deg,
+      rgba(10, 10, 11, 0.86),
+      rgba(10, 10, 10, 0.32),
+      rgba(10, 10, 10, 0));
   z-index: -1;
   transition: background 240ms ease, opacity 320ms ease;
 }
@@ -162,6 +160,9 @@ main {
   padding: 6px 0;
   letter-spacing: 0.02em;
   transition: color var(--transition);
+  outline: 0px solid rgba(255, 255, 255, 0);
+  outline-offset: 4px;
+  border-radius: 4px;
 }
 
 .menu-item::after {
@@ -183,6 +184,11 @@ main {
 
 .menu-item.active::after {
   background: var(--accent);
+}
+
+.menu-item.focused {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  color: #ffffff;
 }
 
 .actions {
@@ -252,21 +258,34 @@ main {
   width: 100%;
   border-radius: 32px;
   overflow: hidden;
-  min-height: 640px;
+  height: 640px;
   isolation: isolate;
   background: #090909;
   z-index: 1;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  outline: 0px solid rgba(255, 255, 255, 0);
+  outline-offset: 4px;
+  transition: outline 200ms ease;
 }
 
-.hero-bg {
+.hero.focused {
+  outline: 4px solid rgba(255, 255, 255, 0.9);
+}
+
+.hero-carousel {
   position: absolute;
   inset: 0;
+  display: flex;
+}
+
+.hero-carousel-item {
+  position: relative;
+  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
   background-position: center;
   background-size: cover;
-  transform: scale(1.05);
   filter: saturate(108%);
-  transition: opacity 400ms ease, transform 800ms ease;
 }
 
 .hero-overlay {
@@ -282,7 +301,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 32px;
-  min-height: inherit;
+  height: 100%;
 }
 
 .hero-content {
@@ -436,12 +455,19 @@ main {
   border-radius: 999px;
   cursor: pointer;
   font-weight: 500;
-  transition: background var(--transition), color var(--transition);
+  transition: background var(--transition), color var(--transition), outline 200ms ease;
+  outline: 0px solid rgba(255, 255, 255, 0);
+  outline-offset: 4px;
 }
 
 .tab.active,
 .tab:hover {
   background: rgba(255, 255, 255, 0.18);
+  color: var(--text-primary);
+}
+
+.tab.focused {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
   color: var(--text-primary);
 }
 
@@ -457,7 +483,9 @@ main {
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.04);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-  transition: transform 220ms ease, box-shadow 220ms ease;
+  transition: transform 220ms ease, box-shadow 220ms ease, outline 200ms ease;
+  outline: 0px solid rgba(255, 255, 255, 0);
+  outline-offset: 4px;
 }
 
 .card img {
@@ -483,6 +511,12 @@ main {
 }
 
 .card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.4);
+}
+
+.card.focused {
+  outline: 4px solid rgba(255, 255, 255, 0.9);
   transform: translateY(-6px);
   box-shadow: 0 18px 38px rgba(0, 0, 0, 0.4);
 }
