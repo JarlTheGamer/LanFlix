@@ -54,27 +54,53 @@
     </header>
 
     <main>
-      <section class="hero" id="hero">
-        <div class="hero-bg" id="hero-bg"></div>
-        <div class="hero-overlay"></div>
-        <div class="hero-body">
-          <div class="hero-content">
-            <div class="hero-tag" id="hero-tag"></div>
-            <h1 class="hero-title" id="hero-title"></h1>
-            <div class="hero-meta" id="hero-meta"></div>
-            <p class="hero-description" id="hero-description"></p>
-            <div class="hero-actions">
-              <button class="cta primary">
-                <span>Remind Me</span>
-              </button>
-              <button class="cta ghost">
-                <span>More Info</span>
-              </button>
+      <div class="hero-stage">
+        <div class="hero-ambilight" id="hero-ambilight" aria-hidden="true"></div>
+        <div class="hero-carousel">
+          <button
+            class="hero-nav hero-nav--prev"
+            type="button"
+            aria-label="Previous featured title"
+            data-direction="prev"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+            </svg>
+          </button>
+          <section class="hero" id="hero">
+            <div class="hero-bg" id="hero-bg"></div>
+            <div class="hero-overlay"></div>
+            <div class="hero-body">
+              <div class="hero-content">
+                <div class="hero-tag" id="hero-tag"></div>
+                <h1 class="hero-title" id="hero-title"></h1>
+                <div class="hero-meta" id="hero-meta"></div>
+                <p class="hero-description" id="hero-description"></p>
+                <div class="hero-actions">
+                  <button class="cta primary">
+                    <span>Remind Me</span>
+                  </button>
+                  <button class="cta ghost">
+                    <span>More Info</span>
+                  </button>
+                </div>
+              </div>
+              <div class="hero-secondary" id="hero-secondary"></div>
             </div>
-          </div>
-          <div class="hero-secondary" id="hero-secondary"></div>
+          </section>
+          <button
+            class="hero-nav hero-nav--next"
+            type="button"
+            aria-label="Next featured title"
+            data-direction="next"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z" />
+            </svg>
+          </button>
         </div>
-      </section>
+        <div class="hero-tray" id="hero-tray" aria-label="Featured titles"></div>
+      </div>
 
       <div class="content-shell">
         <section class="spotlight">
@@ -86,7 +112,29 @@
               <button class="tab" data-tab="movies">Movies</button>
             </div>
           </div>
-          <div class="spotlight-row" id="spotlight-row"></div>
+          <div class="spotlight-slider">
+            <button
+              class="spotlight-nav"
+              type="button"
+              aria-label="Scroll back"
+              data-direction="prev"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+              </svg>
+            </button>
+            <div class="spotlight-track" id="spotlight-track"></div>
+            <button
+              class="spotlight-nav"
+              type="button"
+              aria-label="Scroll forward"
+              data-direction="next"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z" />
+              </svg>
+            </button>
+          </div>
         </section>
       </div>
     </main>
