@@ -550,14 +550,25 @@ function initializeProfileSelection() {
 function createBackgroundTiles() {
   const backgroundAnimation = document.getElementById('profile-background-animation');
   const allShows = PROFILES.flatMap(profile => profile.watchedShows);
-
-  // Create enough tiles to fill the screen
-  for (let i = 0; i < 200; i++) {
-    const tile = document.createElement('div');
-    tile.className = 'profile-background-tile';
-    const randomShow = allShows[Math.floor(Math.random() * allShows.length)];
-    tile.style.backgroundImage = `url(${randomShow.image})`;
-    backgroundAnimation.appendChild(tile);
+  
+  // Create rows of tiles
+  const rowCount = 20;
+  const tilesPerRow = 25;
+  
+  for (let row = 0; row < rowCount; row++) {
+    const rowElement = document.createElement('div');
+    rowElement.className = 'background-row';
+    
+    // Create enough tiles for seamless looping (double the amount)
+    for (let tile = 0; tile < tilesPerRow * 2; tile++) {
+      const tileElement = document.createElement('div');
+      tileElement.className = 'profile-background-tile';
+      const randomShow = allShows[Math.floor(Math.random() * allShows.length)];
+      tileElement.style.backgroundImage = `url(${randomShow.image})`;
+      rowElement.appendChild(tileElement);
+    }
+    
+    backgroundAnimation.appendChild(rowElement);
   }
 }
 
@@ -579,12 +590,12 @@ function updateProfileBackground(profile) {
 
   // Update tiles to show more content from the focused profile
   backgroundTiles.forEach((tile, index) => {
-    if (index % 3 === 0) { // Every third tile shows focused profile content
+    if (index % 4 === 0) { // Every fourth tile shows focused profile content
       const randomShow = profile.watchedShows[Math.floor(Math.random() * profile.watchedShows.length)];
       tile.style.backgroundImage = `url(${randomShow.image})`;
-      tile.style.opacity = '0.5';
+      tile.style.opacity = '0.6';
     } else {
-      tile.style.opacity = '0.2';
+      tile.style.opacity = '0.3';
     }
   });
 }

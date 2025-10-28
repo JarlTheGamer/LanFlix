@@ -682,7 +682,7 @@ main {
   font-weight: 700;
   margin-bottom: 8px;
   line-height: 1.2;
-  transition: text-shadow 0.6s ease; 
+  transition: text-shadow 0.6s ease;
   transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-font-smoothing: antialiased;
@@ -1040,22 +1040,48 @@ main {
 .profile-background-animation {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 20px;
-  animation: moveBackground 60s linear infinite;
-  width: 120%;
-  height: 120%;
-  transform: rotate(-15deg);
+  width: 150%;
+  height: 150%;
+  top: -25%;
+  left: -25%;
+  transform: rotate(-20deg);
+  overflow: hidden;
 }
 
-@keyframes moveBackground {
+.background-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  animation-duration: 40s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.background-row:nth-child(odd) {
+  animation-name: moveRowLeft;
+}
+
+.background-row:nth-child(even) {
+  animation-name: moveRowRight;
+}
+
+@keyframes moveRowLeft {
   0% {
-    transform: rotate(-15deg) translateX(-10%) translateY(-10%);
+    transform: translateX(0);
   }
+
   100% {
-    transform: rotate(-15deg) translateX(10%) translateY(10%);
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes moveRowRight {
+  0% {
+    transform: translateX(-50%);
+  }
+
+  100% {
+    transform: translateX(0);
   }
 }
 
@@ -1073,13 +1099,11 @@ main {
 .profile-background-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    90deg,
-    rgba(0, 0, 0, 0.95) 0%,
-    rgba(0, 0, 0, 0.8) 30%,
-    rgba(0, 0, 0, 0.4) 70%,
-    rgba(0, 0, 0, 0.1) 100%
-  );
+  background: linear-gradient(90deg,
+      rgba(0, 0, 0, 0.95) 0%,
+      rgba(0, 0, 0, 0.8) 30%,
+      rgba(0, 0, 0, 0.4) 70%,
+      rgba(0, 0, 0, 0.1) 100%);
   backdrop-filter: blur(2px);
 }
 
@@ -1110,13 +1134,13 @@ main {
   flex-direction: column;
   gap: 24px;
   padding: 32px 24px;
-  background: rgba(15, 15, 16, 0.4);
-  backdrop-filter: blur(40px);
+  /* background: rgba(15, 15, 16, 0.4);
+  backdrop-filter: blur(40px); */
   border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 
+  /* border: 1px solid rgba(255, 255, 255, 0.1); */
+  /* box-shadow: 
     0 32px 64px rgba(0, 0, 0, 0.6),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05); */
 }
 
 .profile-item {
@@ -1128,7 +1152,7 @@ main {
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(20px);
-  border: 2px solid transparent;
+  border: none;
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -1150,21 +1174,15 @@ main {
 }
 
 .profile-item.focused {
-  border-color: rgba(255, 255, 255, 0.6);
-  transform: translateX(8px) scale(1.05);
-  box-shadow: 
-    0 20px 40px rgba(0, 0, 0, 0.6),
-    0 0 0 4px rgba(255, 255, 255, 0.1);
+  transform: scale(1.05);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
   background: rgba(255, 255, 255, 0.12);
 }
 
 .profile-item.selected {
-  border-color: rgba(255, 255, 255, 0.9);
   background: rgba(255, 255, 255, 0.2);
-  transform: translateX(8px) scale(1.05);
-  box-shadow: 
-    0 20px 40px rgba(0, 0, 0, 0.6),
-    0 0 0 4px rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
 }
 
 .profile-avatar-large {
@@ -1250,33 +1268,33 @@ main {
     justify-content: center;
     gap: 60px;
   }
-  
+
   .profile-selection-left {
     align-items: center;
     min-height: auto;
   }
-  
+
   .profile-selection-right {
     text-align: center;
     max-width: none;
     padding-left: 0;
   }
-  
+
   .profiles-vertical-bar {
     flex-direction: row;
     padding: 24px 32px;
   }
-  
+
   .profile-item {
     min-width: 100px;
   }
-  
+
   .profile-item.focused {
-    transform: translateY(-8px) scale(1.05);
+    transform: scale(1.05);
   }
-  
+
   .profile-item.selected {
-    transform: translateY(-8px) scale(1.05);
+    transform: scale(1.05);
   }
 }
 
@@ -1285,21 +1303,21 @@ main {
     padding: 0 24px;
     gap: 40px;
   }
-  
+
   .profile-selection-title {
     font-size: clamp(2.5rem, 8vw, 4rem);
   }
-  
+
   .profiles-vertical-bar {
     padding: 20px 24px;
     gap: 16px;
   }
-  
+
   .profile-avatar-large {
     width: 56px;
     height: 56px;
   }
-  
+
   .profile-name {
     font-size: 0.9rem;
   }
@@ -1309,23 +1327,23 @@ main {
   .profile-selection-container {
     padding: 0 16px;
   }
-  
+
   .profiles-vertical-bar {
     flex-direction: column;
     padding: 16px 20px;
     gap: 12px;
   }
-  
+
   .profile-item {
     min-width: 80px;
     padding: 16px 12px;
   }
-  
+
   .profile-avatar-large {
     width: 48px;
     height: 48px;
   }
-  
+
   .profile-name {
     font-size: 0.8rem;
   }
