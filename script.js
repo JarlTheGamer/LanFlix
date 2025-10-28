@@ -552,8 +552,8 @@ function createBackgroundTiles() {
   const allShows = PROFILES.flatMap(profile => profile.watchedShows);
   
   // Create rows of tiles
-  const rowCount = 20;
-  const tilesPerRow = 25;
+  const rowCount = 25;
+  const tilesPerRow = 30;
   
   for (let row = 0; row < rowCount; row++) {
     const rowElement = document.createElement('div');
