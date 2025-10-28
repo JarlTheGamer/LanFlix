@@ -101,6 +101,7 @@ const MOVIES = [
     rating: 'PG-13',
     year: '2022',
     image: 'https://image.tmdb.org/t/p/w500/t6HIqrRAclMCA60NsSmeqe9RmNV.jpg',
+    expandedImage: 'https://image.tmdb.org/t/p/original/8rpDcsfLJypbO6vREc0547VKqEv.jpg',
     description: 'Set more than a decade after the events of the first film, Avatar: The Way of Water begins to tell the story of the Sully family.',
   },
   {
@@ -111,6 +112,7 @@ const MOVIES = [
     rating: 'PG-13',
     year: '2022',
     image: 'https://image.tmdb.org/t/p/w500/62HCnUTziyWcpDaBO2i1DX17ljH.jpg',
+    expandedImage: 'https://image.tmdb.org/t/p/original/odJ4hx6g6vBt4lBWKFD1tI8WS4x.jpg',
     description: 'After thirty years, Maverick is still pushing the envelope as a top naval aviator, but must confront ghosts of his past.',
   },
   {
@@ -121,6 +123,7 @@ const MOVIES = [
     rating: 'PG-13',
     year: '2022',
     image: 'https://image.tmdb.org/t/p/w500/sv1xJUazXeYqALzczSZ3O6nkH75.jpg',
+    expandedImage: 'https://image.tmdb.org/t/p/original/yYrvN5WFeGYjJnRzhY0QXuo4Isw.jpg',
     description: 'Queen Ramonda, Shuri, M\'Baku, Okoye and the Dora Milaje fight to protect their nation from intervening world powers.',
   },
   {
@@ -131,6 +134,7 @@ const MOVIES = [
     rating: 'PG-13',
     year: '2021',
     image: 'https://image.tmdb.org/t/p/w500/1g0dhYtq4irTY1GPXvft6k4YLjm.jpg',
+    expandedImage: 'https://image.tmdb.org/t/p/original/14QbnygCuTO0vl7CAFmPf1fgZfV.jpg',
     description: 'Peter Parker seeks help from Doctor Strange when his identity as Spider-Man is revealed, causing reality to fracture.',
   },
   {
@@ -141,6 +145,7 @@ const MOVIES = [
     rating: 'PG-13',
     year: '2021',
     image: 'https://image.tmdb.org/t/p/w500/d5NXSklXo0qyIYkgV94XAgMIckC.jpg',
+    expandedImage: 'https://image.tmdb.org/t/p/original/s1FdOr2M7VwjGJdyJmSvZmgOLdI.jpg',
     description: 'Paul Atreides leads nomadic tribes in a revolt against the evil Harkonnen oppressors on the desert planet Arrakis.',
   },
   {
@@ -151,6 +156,7 @@ const MOVIES = [
     rating: 'PG-13',
     year: '2022',
     image: 'https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg',
+    expandedImage: 'https://image.tmdb.org/t/p/original/b0PlSFdDwbyK0cf5RxwDpaOJQvQ.jpg',
     description: 'Batman ventures into Gotham City\'s underworld when a sadistic killer leaves behind a trail of cryptic clues.',
   },
   {
@@ -161,6 +167,7 @@ const MOVIES = [
     rating: 'R',
     year: '2022',
     image: 'https://image.tmdb.org/t/p/w500/w3LxiVYdWWRvEVdn5RYq6jIqkb1.jpg',
+    expandedImage: 'https://image.tmdb.org/t/p/original/AaV1YIdWKnjAIAOe7UMlqNjwjsv.jpg',
     description: 'A Chinese-American woman gets swept up in an insane adventure where she alone can save existence.',
   },
   {
@@ -253,6 +260,7 @@ const MOVIES = [
     rating: 'TV-14',
     year: '2016',
     image: 'https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg',
+    expandedImage: 'https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg',
     description: 'When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying supernatural forces, and one strange little girl.',
   },
   {
@@ -263,6 +271,7 @@ const MOVIES = [
     rating: 'TV-14',
     year: '2022',
     image: 'https://image.tmdb.org/t/p/w500/9PFonBhy4cQy7Jz20NpMygczOkv.jpg',
+    expandedImage: 'https://image.tmdb.org/t/p/original/qYeg0MP1LpPD5r5h9wxR83DMnyE.jpg',
     description: 'Smart, sarcastic and a little dead inside, Wednesday Addams investigates a murder spree while making new friends — and foes — at Nevermore Academy.',
   },
   {
@@ -601,7 +610,10 @@ function renderCards(filter) {
     movieCard.dataset.index = index;
     
     movieCard.innerHTML = `
-      <img src="${movie.image}" alt="${movie.title}" class="movie-poster" loading="lazy" />
+      <div class="movie-poster-container">
+        <img src="${movie.image}" alt="${movie.title}" class="movie-poster movie-poster-regular" loading="lazy" />
+        <img src="${movie.expandedImage || movie.image}" alt="${movie.title}" class="movie-poster movie-poster-expanded" loading="lazy" />
+      </div>
       <div class="movie-overlay"></div>
       <div class="movie-compact-title">${movie.title}</div>
       <div class="movie-info">
@@ -693,6 +705,12 @@ function setupKeyboardNavigation() {
     allCards.forEach((card) => {
       card.classList.remove('focused');
       card.classList.remove('expanded');
+      
+      // Remove ambilight effect from title
+      const title = card.querySelector('.movie-title');
+      if (title) {
+        title.style.textShadow = '';
+      }
     });
 
     if (focusedElement === 'hero') {
@@ -709,6 +727,16 @@ function setupKeyboardNavigation() {
         const focusedCard = cardElements[focusedCardIndex];
         focusedCard.classList.add('focused');
         focusedCard.classList.add('expanded');
+        
+        // Add ambilight effect to title
+        const title = focusedCard.querySelector('.movie-title');
+        if (title) {
+          title.style.textShadow = `
+            0 0 20px rgba(255, 255, 255, 0.8),
+            0 0 40px rgba(255, 255, 255, 0.6),
+            0 0 60px rgba(255, 255, 255, 0.4)
+          `;
+        }
         
         // Update the carousel position to keep focused card at left
         updateMovieCarousel();
