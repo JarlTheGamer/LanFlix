@@ -1,3 +1,55 @@
+// Profile Selection Data
+const PROFILES = [
+  {
+    id: 1,
+    name: 'Alex',
+    avatar: { primary: '#ff6b6b', secondary: '#ee5a24' },
+    watchedShows: [
+      { title: 'Stranger Things', image: 'https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg', meta: 'S4 • Sci-Fi' },
+      { title: 'The Crown', image: 'https://image.tmdb.org/t/p/original/1M876KPjulVwppEpldhdc8V4o68.jpg', meta: 'S6 • Drama' },
+      { title: 'Wednesday', image: 'https://image.tmdb.org/t/p/original/qYeg0MP1LpPD5r5h9wxR83DMnyE.jpg', meta: 'S1 • Mystery' },
+      { title: 'The Witcher', image: 'https://image.tmdb.org/t/p/original/7vjaCdMw15FEbXyLQTVa04URsPm.jpg', meta: 'S3 • Fantasy' }
+    ]
+  },
+  {
+    id: 2,
+    name: 'Sarah',
+    avatar: { primary: '#4ecdc4', secondary: '#26d0ce' },
+    watchedShows: [
+      { title: 'Bridgerton', image: 'https://image.tmdb.org/t/p/original/yYZTYdDbmblP60sGMgKkIYQ7oLD.jpg', meta: 'S3 • Romance' },
+      { title: 'The Queen\'s Gambit', image: 'https://image.tmdb.org/t/p/original/zU0htwkhNvBQdVSIKB9s6hgVeFK.jpg', meta: 'Limited • Drama' },
+      { title: 'Emily in Paris', image: 'https://image.tmdb.org/t/p/original/3nVf0RmcHm5w0Lv6urMMyOGWC8T.jpg', meta: 'S3 • Comedy' },
+      { title: 'Euphoria', image: 'https://image.tmdb.org/t/p/original/jtnfNzqZwN4E32FGGxx1YZaBWWf.jpg', meta: 'S2 • Drama' }
+    ]
+  },
+  {
+    id: 3,
+    name: 'Marcus',
+    avatar: { primary: '#a55eea', secondary: '#8854d0' },
+    watchedShows: [
+      { title: 'Breaking Bad', image: 'https://image.tmdb.org/t/p/original/3xnWaLQjelJDDF7LT1WBo6f4BRe.jpg', meta: 'S5 • Crime' },
+      { title: 'Better Call Saul', image: 'https://image.tmdb.org/t/p/original/fC2HDm5t0kHl7mTm7jxMR31cyEc.jpg', meta: 'S6 • Crime' },
+      { title: 'Ozark', image: 'https://image.tmdb.org/t/p/original/m73QiJOFMQWPMEjONLuOLNTlbpK.jpg', meta: 'S4 • Thriller' },
+      { title: 'The Bear', image: 'https://image.tmdb.org/t/p/original/sHFlbKS3WLqMnp9t2ghADIJFnuQ.jpg', meta: 'S3 • Comedy' }
+    ]
+  },
+  {
+    id: 4,
+    name: 'Kids',
+    avatar: { primary: '#ffa726', secondary: '#ff9800' },
+    watchedShows: [
+      { title: 'Arcane', image: 'https://image.tmdb.org/t/p/original/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg', meta: 'S1 • Animation' },
+      { title: 'The Mandalorian', image: 'https://image.tmdb.org/t/p/original/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg', meta: 'S3 • Sci-Fi' },
+      { title: 'Avatar: The Last Airbender', image: 'https://image.tmdb.org/t/p/original/cMD9Ygz11zjJzAovURpO75Qg7rT.jpg', meta: 'S3 • Animation' },
+      { title: 'Bluey', image: 'https://image.tmdb.org/t/p/original/3hxbOlpOTnCMrp4p6jgMONuyjzW.jpg', meta: 'S3 • Kids' }
+    ]
+  }
+];
+
+let selectedProfileId = null;
+let profileSelectionActive = true;
+let focusedProfileIndex = 0;
+
 const HEROES = {
   home: [
     {
@@ -466,6 +518,348 @@ const MOVIES = [
   },
 ];
 
+// Profile Selection Functions
+function initializeProfileSelection() {
+  const profilesBar = document.getElementById('profiles-vertical-bar');
+  const backgroundAnimation = document.getElementById('profile-background-animation');
+
+  // Create profile items
+  PROFILES.forEach((profile, index) => {
+    const profileItem = document.createElement('div');
+    profileItem.className = 'profile-item';
+    profileItem.dataset.profileId = profile.id;
+    profileItem.dataset.index = index;
+
+    profileItem.innerHTML = `
+      <div class="profile-avatar-large" style="background: linear-gradient(135deg, ${profile.avatar.primary}, ${profile.avatar.secondary})">
+      </div>
+      <div class="profile-name">${profile.name}</div>
+    `;
+
+    profilesBar.appendChild(profileItem);
+  });
+
+  // Create moving background tiles
+  createBackgroundTiles();
+
+  // Set initial focus and background
+  updateProfileFocus();
+  updateProfileBackground(PROFILES[0]);
+}
+
+function createBackgroundTiles() {
+  const backgroundAnimation = document.getElementById('profile-background-animation');
+  const allShows = PROFILES.flatMap(profile => profile.watchedShows);
+
+  // Create enough tiles to fill the screen
+  for (let i = 0; i < 200; i++) {
+    const tile = document.createElement('div');
+    tile.className = 'profile-background-tile';
+    const randomShow = allShows[Math.floor(Math.random() * allShows.length)];
+    tile.style.backgroundImage = `url(${randomShow.image})`;
+    backgroundAnimation.appendChild(tile);
+  }
+}
+
+function updateProfileFocus() {
+  const profileItems = document.querySelectorAll('.profile-item');
+  profileItems.forEach((item, index) => {
+    item.classList.toggle('focused', index === focusedProfileIndex);
+  });
+
+  // Update background for focused profile
+  const focusedProfile = PROFILES[focusedProfileIndex];
+  if (focusedProfile) {
+    updateProfileBackground(focusedProfile);
+  }
+}
+
+function updateProfileBackground(profile) {
+  const backgroundTiles = document.querySelectorAll('.profile-background-tile');
+
+  // Update tiles to show more content from the focused profile
+  backgroundTiles.forEach((tile, index) => {
+    if (index % 3 === 0) { // Every third tile shows focused profile content
+      const randomShow = profile.watchedShows[Math.floor(Math.random() * profile.watchedShows.length)];
+      tile.style.backgroundImage = `url(${randomShow.image})`;
+      tile.style.opacity = '0.5';
+    } else {
+      tile.style.opacity = '0.2';
+    }
+  });
+}
+
+function selectProfile(profileId) {
+  selectedProfileId = profileId;
+  const selectedProfile = PROFILES.find(p => p.id === profileId);
+
+  // Update profile button in nav
+  const profileButton = document.querySelector('.profile');
+  const profileAvatar = document.querySelector('.profile-avatar');
+  if (profileButton && profileAvatar && selectedProfile) {
+    profileAvatar.style.background = `linear-gradient(135deg, ${selectedProfile.avatar.primary}, ${selectedProfile.avatar.secondary})`;
+  }
+
+  // Hide profile selection
+  hideProfileSelection();
+}
+
+function showProfileSelection() {
+  profileSelectionActive = true;
+  focusedProfileIndex = 0;
+  const overlay = document.getElementById('profile-selection-overlay');
+  const main = document.querySelector('main');
+  const header = document.querySelector('header');
+
+  overlay.classList.remove('hidden');
+  main.style.display = 'none';
+  header.style.display = 'none';
+
+  updateProfileFocus();
+
+  // Disable main app keyboard navigation
+  document.removeEventListener('keydown', handleMainKeyboard);
+  document.addEventListener('keydown', handleProfileKeyboard);
+}
+
+function hideProfileSelection() {
+  profileSelectionActive = false;
+  const overlay = document.getElementById('profile-selection-overlay');
+  const main = document.querySelector('main');
+  const header = document.querySelector('header');
+
+  overlay.classList.add('hidden');
+  main.style.display = 'block';
+  header.style.display = 'block';
+
+  // Re-enable main app keyboard navigation
+  document.removeEventListener('keydown', handleProfileKeyboard);
+  document.addEventListener('keydown', handleMainKeyboard);
+}
+
+function handleProfileKeyboard(e) {
+  if (!profileSelectionActive) return;
+
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    focusedProfileIndex = focusedProfileIndex > 0 ? focusedProfileIndex - 1 : PROFILES.length - 1;
+    updateProfileFocus();
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    focusedProfileIndex = focusedProfileIndex < PROFILES.length - 1 ? focusedProfileIndex + 1 : 0;
+    updateProfileFocus();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const selectedProfile = PROFILES[focusedProfileIndex];
+    if (selectedProfile) {
+      selectProfile(selectedProfile.id);
+    }
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    hideProfileSelection();
+  }
+}
+
+// Global keyboard navigation variables
+let focusedElement = 'menu';
+let focusedMenuIndex = 1;
+let focusedTabIndex = 0;
+let focusedCardIndex = 0;
+let lastMenuIndex = 1;
+
+// Main keyboard handler function (moved outside setupKeyboardNavigation)
+function handleMainKeyboard(e) {
+  const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
+  const tabs = Array.from(document.querySelectorAll('.tab'));
+  const cards = () => Array.from(document.querySelectorAll('.movie-card'));
+  const profileButton = document.querySelector('.profile');
+
+  if (focusedElement === 'hero') {
+    const heroes = HEROES[currentCategory];
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const newIndex = currentHeroIndex > 0 ? currentHeroIndex - 1 : heroes.length - 1;
+      goToSlide(newIndex);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      const newIndex = currentHeroIndex < heroes.length - 1 ? currentHeroIndex + 1 : 0;
+      goToSlide(newIndex);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusedElement = 'menu';
+      focusedMenuIndex = lastMenuIndex;
+      updateMainFocus();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusedElement = 'tabs';
+      updateMainFocus();
+    }
+  } else if (focusedElement === 'menu') {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      if (focusedMenuIndex === 0) {
+        focusedElement = 'profile';
+        updateMainFocus();
+      } else {
+        focusedMenuIndex = focusedMenuIndex > 0 ? focusedMenuIndex - 1 : menuButtons.length - 1;
+        menuButtons.forEach((btn) => btn.classList.remove('active'));
+        menuButtons[focusedMenuIndex].classList.add('active');
+        switchCategory(menuButtons[focusedMenuIndex].dataset.hero);
+        updateMainFocus();
+      }
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      focusedMenuIndex = focusedMenuIndex < menuButtons.length - 1 ? focusedMenuIndex + 1 : 0;
+      menuButtons.forEach((btn) => btn.classList.remove('active'));
+      menuButtons[focusedMenuIndex].classList.add('active');
+      switchCategory(menuButtons[focusedMenuIndex].dataset.hero);
+      updateMainFocus();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      lastMenuIndex = focusedMenuIndex;
+      focusedElement = 'hero';
+      updateMainFocus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      lastMenuIndex = focusedMenuIndex;
+      focusedElement = 'hero';
+      updateMainFocus();
+    }
+  } else if (focusedElement === 'profile') {
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      focusedElement = 'menu';
+      focusedMenuIndex = 0;
+      updateMainFocus();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusedElement = 'hero';
+      updateMainFocus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      showProfileSelection();
+    }
+  } else if (focusedElement === 'tabs') {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      focusedTabIndex = focusedTabIndex > 0 ? focusedTabIndex - 1 : tabs.length - 1;
+      updateMainFocus();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      focusedTabIndex = focusedTabIndex < tabs.length - 1 ? focusedTabIndex + 1 : 0;
+      updateMainFocus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusedElement = 'hero';
+      updateMainFocus();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusedElement = 'cards';
+      focusedCardIndex = 0;
+      updateMainFocus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      tabs[focusedTabIndex].click();
+      updateMainFocus();
+    }
+  } else if (focusedElement === 'cards') {
+    const cardElements = cards();
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      focusedCardIndex = focusedCardIndex > 0 ? focusedCardIndex - 1 : cardElements.length - 1;
+      updateMainFocus();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      focusedCardIndex = focusedCardIndex < cardElements.length - 1 ? focusedCardIndex + 1 : 0;
+      updateMainFocus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusedElement = 'tabs';
+      updateMainFocus();
+    }
+  }
+}
+
+function updateMainFocus() {
+  const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
+  const tabs = Array.from(document.querySelectorAll('.tab'));
+  const cards = () => Array.from(document.querySelectorAll('.movie-card'));
+  const profileButton = document.querySelector('.profile');
+
+  const allHeros = document.querySelectorAll('.hero');
+  allHeros.forEach(h => h.classList.remove('focused'));
+  menuButtons.forEach((btn) => btn.classList.remove('focused'));
+  tabs.forEach((tab) => tab.classList.remove('focused'));
+  if (profileButton) profileButton.classList.remove('focused');
+
+  const allCards = cards();
+  allCards.forEach((card) => {
+    card.classList.remove('focused');
+    card.classList.remove('expanded');
+    const title = card.querySelector('.movie-title');
+    if (title) {
+      title.style.textShadow = '';
+    }
+  });
+
+  if (focusedElement === 'hero') {
+    if (focusedHeroElement) {
+      focusedHeroElement.classList.add('focused');
+    }
+  } else if (focusedElement === 'menu') {
+    menuButtons[focusedMenuIndex].classList.add('focused');
+    if (focusedMenuIndex === 0 && menuButtons[0].classList.contains('search-home')) {
+      updateAmbilightForCurrentSlide();
+    }
+  } else if (focusedElement === 'profile') {
+    if (profileButton) profileButton.classList.add('focused');
+  } else if (focusedElement === 'tabs') {
+    tabs[focusedTabIndex].classList.add('focused');
+  } else if (focusedElement === 'cards') {
+    const cardElements = cards();
+    if (cardElements[focusedCardIndex]) {
+      const focusedCard = cardElements[focusedCardIndex];
+      focusedCard.classList.add('focused');
+      focusedCard.classList.add('expanded');
+
+      const title = focusedCard.querySelector('.movie-title');
+      if (title) {
+        title.style.textShadow = `
+          0 0 20px rgba(255, 255, 255, 0.8),
+          0 0 40px rgba(255, 255, 255, 0.6),
+          0 0 60px rgba(255, 255, 255, 0.4)
+        `;
+      }
+
+      updateMovieCarousel();
+    }
+  }
+}
+
+function updateMovieCarousel() {
+  const movieHub = document.querySelector('.movie-hub');
+  const cards = () => Array.from(document.querySelectorAll('.movie-card'));
+  const cardElements = cards();
+
+  if (movieHub && cardElements.length > 0) {
+    const isTablet = window.innerWidth <= 768;
+    const isMobile = window.innerWidth <= 480;
+
+    const cardWidth = isMobile ? 120 : isTablet ? 140 : 180;
+    const expandedCardWidth = isMobile ? 320 : isTablet ? 380 : 480;
+    const gap = isMobile ? 12 : 16;
+
+    let offset = 0;
+    for (let i = 0; i < focusedCardIndex; i++) {
+      const card = cardElements[i];
+      const isExpanded = card.classList.contains('expanded');
+      offset += (isExpanded ? expandedCardWidth : cardWidth) + gap;
+    }
+
+    movieHub.style.transform = `translateX(-${offset}px)`;
+  }
+}
+
 const root = document.documentElement;
 const heroCarouselTrack = document.getElementById('hero-carousel-track');
 const heroAmbilight = document.getElementById('hero-ambilight');
@@ -666,218 +1060,23 @@ function setupTabs() {
 }
 
 function setupKeyboardNavigation() {
-  let focusedElement = 'menu'; // Start with menu (search-home button)
   const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
-  const tabs = Array.from(document.querySelectorAll('.tab'));
-  const cards = () => Array.from(document.querySelectorAll('.movie-card'));
-  const profileButton = document.querySelector('.profile');
-
-  function updateMovieCarousel() {
-    const movieHub = document.querySelector('.movie-hub');
-    const cardElements = cards();
-
-    if (movieHub && cardElements.length > 0) {
-      // Get responsive card dimensions
-      const isTablet = window.innerWidth <= 768;
-      const isMobile = window.innerWidth <= 480;
-
-      const cardWidth = isMobile ? 120 : isTablet ? 140 : 180;
-      const expandedCardWidth = isMobile ? 320 : isTablet ? 380 : 480;
-      const gap = isMobile ? 12 : 16;
-
-      // Calculate total offset needed to position focused card at left
-      let offset = 0;
-      for (let i = 0; i < focusedCardIndex; i++) {
-        const card = cardElements[i];
-        const isExpanded = card.classList.contains('expanded');
-        offset += (isExpanded ? expandedCardWidth : cardWidth) + gap;
-      }
-
-      // Apply transform to move the entire row
-      movieHub.style.transform = `translateX(-${offset}px)`;
-    }
-  }
-
-  let focusedMenuIndex = 1; // Start with Home button (index 1)
-  let focusedTabIndex = 0;
-  let focusedCardIndex = 0;
-  let lastMenuIndex = 1; // Track the last menu position
-
-  function updateFocus() {
-    const allHeros = document.querySelectorAll('.hero');
-    allHeros.forEach(h => h.classList.remove('focused'));
-    menuButtons.forEach((btn) => btn.classList.remove('focused'));
-    tabs.forEach((tab) => tab.classList.remove('focused'));
-    if (profileButton) profileButton.classList.remove('focused');
-
-    // Remove focused and expanded from all cards
-    const allCards = cards();
-    allCards.forEach((card) => {
-      card.classList.remove('focused');
-      card.classList.remove('expanded');
-
-      // Remove ambilight effect from title
-      const title = card.querySelector('.movie-title');
-      if (title) {
-        title.style.textShadow = '';
-      }
-    });
-
-    if (focusedElement === 'hero') {
-      if (focusedHeroElement) {
-        focusedHeroElement.classList.add('focused');
-      }
-    } else if (focusedElement === 'menu') {
-      menuButtons[focusedMenuIndex].classList.add('focused');
-      // Trigger ambilight update when focusing on search-home button
-      if (focusedMenuIndex === 0 && menuButtons[0].classList.contains('search-home')) {
-        updateAmbilightForCurrentSlide();
-      }
-    } else if (focusedElement === 'profile') {
-      if (profileButton) profileButton.classList.add('focused');
-    } else if (focusedElement === 'tabs') {
-      tabs[focusedTabIndex].classList.add('focused');
-    } else if (focusedElement === 'cards') {
-      const cardElements = cards();
-      if (cardElements[focusedCardIndex]) {
-        const focusedCard = cardElements[focusedCardIndex];
-        focusedCard.classList.add('focused');
-        focusedCard.classList.add('expanded');
-
-        // Add ambilight effect to title
-        const title = focusedCard.querySelector('.movie-title');
-        if (title) {
-          title.style.textShadow = `
-            0 0 20px rgba(255, 255, 255, 0.8),
-            0 0 40px rgba(255, 255, 255, 0.6),
-            0 0 60px rgba(255, 255, 255, 0.4)
-          `;
-        }
-
-        // Update the carousel position to keep focused card at left
-        updateMovieCarousel();
-      }
-    }
-  }
-
-  document.addEventListener('keydown', (e) => {
-    if (focusedElement === 'hero') {
-      const heroes = HEROES[currentCategory];
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        const newIndex = currentHeroIndex > 0 ? currentHeroIndex - 1 : heroes.length - 1;
-        goToSlide(newIndex);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        const newIndex = currentHeroIndex < heroes.length - 1 ? currentHeroIndex + 1 : 0;
-        goToSlide(newIndex);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        focusedElement = 'menu';
-        focusedMenuIndex = lastMenuIndex; // Go back to where we last were
-        updateFocus();
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        focusedElement = 'tabs';
-        updateFocus();
-      }
-    } else if (focusedElement === 'menu') {
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        if (focusedMenuIndex === 0) {
-          // If on search-home button, go to profile
-          focusedElement = 'profile';
-          updateFocus();
-        } else {
-          focusedMenuIndex = focusedMenuIndex > 0 ? focusedMenuIndex - 1 : menuButtons.length - 1;
-          // Automatically activate the focused menu item
-          menuButtons.forEach((btn) => btn.classList.remove('active'));
-          menuButtons[focusedMenuIndex].classList.add('active');
-          switchCategory(menuButtons[focusedMenuIndex].dataset.hero);
-          updateFocus();
-        }
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        focusedMenuIndex = focusedMenuIndex < menuButtons.length - 1 ? focusedMenuIndex + 1 : 0;
-        // Automatically activate the focused menu item
-        menuButtons.forEach((btn) => btn.classList.remove('active'));
-        menuButtons[focusedMenuIndex].classList.add('active');
-        switchCategory(menuButtons[focusedMenuIndex].dataset.hero);
-        updateFocus();
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        lastMenuIndex = focusedMenuIndex; // Remember where we were
-        focusedElement = 'hero';
-        updateFocus();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        lastMenuIndex = focusedMenuIndex; // Remember where we were
-        focusedElement = 'hero';
-        updateFocus();
-      }
-    } else if (focusedElement === 'profile') {
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        focusedElement = 'menu';
-        focusedMenuIndex = 0; // Go to search-home button
-        updateFocus();
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        focusedElement = 'hero';
-        updateFocus();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        // Handle profile menu action here
-        console.log('Profile menu opened');
-      }
-    } else if (focusedElement === 'tabs') {
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        focusedTabIndex = focusedTabIndex > 0 ? focusedTabIndex - 1 : tabs.length - 1;
-        updateFocus();
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        focusedTabIndex = focusedTabIndex < tabs.length - 1 ? focusedTabIndex + 1 : 0;
-        updateFocus();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        focusedElement = 'hero';
-        updateFocus();
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        focusedElement = 'cards';
-        focusedCardIndex = 0;
-        updateFocus();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        tabs[focusedTabIndex].click();
-        updateFocus();
-      }
-    } else if (focusedElement === 'cards') {
-      const cardElements = cards();
-
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        focusedCardIndex = focusedCardIndex > 0 ? focusedCardIndex - 1 : cardElements.length - 1;
-        updateFocus();
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        focusedCardIndex = focusedCardIndex < cardElements.length - 1 ? focusedCardIndex + 1 : 0;
-        updateFocus();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        focusedElement = 'tabs';
-        updateFocus();
-      }
-    }
-  });
 
   // Initialize the correct active state
   menuButtons.forEach((btn) => btn.classList.remove('active'));
   menuButtons[focusedMenuIndex].classList.add('active');
-  
-  updateFocus();
+
+  // Set up main keyboard handler
+  document.addEventListener('keydown', handleMainKeyboard);
+
+  updateMainFocus();
 }
+
+// Initialize profile selection
+initializeProfileSelection();
+
+// Start with profile selection active
+showProfileSelection();
 
 createCarouselItems();
 updateCarouselPosition();
