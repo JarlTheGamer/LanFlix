@@ -367,10 +367,18 @@ function setupKeyboardNavigation() {
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
         focusedMenuIndex = focusedMenuIndex > 0 ? focusedMenuIndex - 1 : menuButtons.length - 1;
+        // Automatically activate the focused menu item
+        menuButtons.forEach((btn) => btn.classList.remove('active'));
+        menuButtons[focusedMenuIndex].classList.add('active');
+        switchCategory(menuButtons[focusedMenuIndex].dataset.hero);
         updateFocus();
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         focusedMenuIndex = focusedMenuIndex < menuButtons.length - 1 ? focusedMenuIndex + 1 : 0;
+        // Automatically activate the focused menu item
+        menuButtons.forEach((btn) => btn.classList.remove('active'));
+        menuButtons[focusedMenuIndex].classList.add('active');
+        switchCategory(menuButtons[focusedMenuIndex].dataset.hero);
         updateFocus();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -378,7 +386,6 @@ function setupKeyboardNavigation() {
         updateFocus();
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        menuButtons[focusedMenuIndex].click();
         focusedElement = 'hero';
         updateFocus();
       }
