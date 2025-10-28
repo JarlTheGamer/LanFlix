@@ -1,34 +1,34 @@
 const HEROES = {
-  home: [
+ home: [
     {
       background:
-        'url(https://image.tmdb.org/t/p/original/qYeg0MP1LpPD5r5h9wxR83DMnyE.jpg)',
-      tag: 'New Series • Fantasy',
-      title: 'Wednesday',
-      meta: ['Series', '2022', 'TV-14', '8 Episodes'],
+        'url(https://image.tmdb.org/t/p/original/8rpDcsfLJypbO6vREc0547VKqEv.jpg)',
+      tag: 'New Release • Sci-Fi',
+      title: 'Avatar',
+      meta: ['Movie', '2024', 'PG-13', '2h 46m'],
       description:
-        'Smart, sarcastic and a little dead inside, Wednesday Addams investigates a murder spree while making new friends — and foes — at Nevermore Academy.',
-      secondary: 'Season 2 coming soon',
+        'Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family.',
+      secondary: 'Now streaming in 4K UHD',
     },
     {
       background:
-        'url(https://image.tmdb.org/t/p/original/oqP1qEZccq5AD9TVTIaO6IGUj7o.jpg)',
-      tag: 'Hit Series • Thriller',
-      title: 'Squid Game',
-      meta: ['Series', '2021', 'TV-MA', '9 Episodes'],
+        'url(https://www.hdwallpapers.in/download/the_boys_poster_4k_hd-3840x2160.jpg)',
+      tag: 'Popular • Superhero',
+      title: 'The Boys',
+      meta: ['Series', '2019–', 'TV-MA', '4 Seasons'],
       description:
-        "'Hundreds of cash-strapped contestants accept an invitation to compete in children's games for a tempting prize, but the stakes are deadly.'",
-      secondary: 'Season 2 premieres June 27',
+        'A group of vigilantes set out to take down corrupt superheroes who abuse their powers.',
+      secondary: 'Season 4 now streaming',
     },
     {
       background:
-        'url(https://image.tmdb.org/t/p/original/4VujM9lbRv6j8N3w6JkYp1q5bZp.jpg)',
-      tag: 'Exclusive Film',
-      title: 'The Gray Man',
-      meta: ['Movie', '2022', '2h 9m'],
+        'url(https://image.tmdb.org/t/p/original/fYPiQewg7ogbzro2XcCTACSB2KC.jpg)',
+      tag: 'Top Pick • Fantasy',
+      title: 'House of the Dragon',
+      meta: ['Series', '2022–', 'TV-MA', '2 Seasons'],
       description:
-        "'When a shadowy CIA agent uncovers damning agency secrets, he's hunted across the globe by a sociopathic rogue operative who's put a bounty on his head.'",
-      secondary: 'Now streaming in Ultra HD',
+        'The Targaryen dynasty rules Westeros — and the seeds of civil war begin to take root 200 years before the events of Game of Thrones.',
+      secondary: 'New season coming in 2025',
     },
   ],
   shows: [
@@ -447,5 +447,6 @@ renderCards('all');
 setupMenu();
 setupTabs();
 setupKeyboardNavigation();
+
 handleScroll();
 window.addEventListener('scroll', handleScroll, { passive: true });
