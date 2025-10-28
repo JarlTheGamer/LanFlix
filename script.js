@@ -685,6 +685,7 @@ function handleMainKeyboard(e) {
   const cards = () => Array.from(document.querySelectorAll('.movie-card'));
   const profileButton = document.querySelector('.profile');
 
+  
   if (focusedElement === 'hero') {
     const heroes = HEROES[currentCategory];
     if (e.key === 'ArrowLeft') {

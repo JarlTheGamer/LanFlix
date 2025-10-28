@@ -255,7 +255,6 @@ main {
 }
 
 .menu-item.search-home:hover svg,
-.menu-item.search-home.active svg,
 .menu-item.search-home.focused svg {
   fill: rgba(0, 0, 0, 0.8);
 }
