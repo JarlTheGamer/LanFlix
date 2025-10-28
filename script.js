@@ -677,6 +677,7 @@ let focusedMenuIndex = 1;
 let focusedTabIndex = 0;
 let focusedCardIndex = 0;
 let lastMenuIndex = 1;
+let settingsButtonFocused = false;
 
 // Main keyboard handler function (moved outside setupKeyboardNavigation)
 function handleMainKeyboard(e) {
@@ -721,11 +722,16 @@ function handleMainKeyboard(e) {
       }
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
-      focusedMenuIndex = focusedMenuIndex < menuButtons.length - 1 ? focusedMenuIndex + 1 : 0;
-      menuButtons.forEach((btn) => btn.classList.remove('active'));
-      menuButtons[focusedMenuIndex].classList.add('active');
-      switchCategory(menuButtons[focusedMenuIndex].dataset.hero);
-      updateMainFocus();
+      if (focusedMenuIndex === menuButtons.length - 1) {
+        focusedElement = 'settings';
+        updateMainFocus();
+      } else {
+        focusedMenuIndex = focusedMenuIndex < menuButtons.length - 1 ? focusedMenuIndex + 1 : 0;
+        menuButtons.forEach((btn) => btn.classList.remove('active'));
+        menuButtons[focusedMenuIndex].classList.add('active');
+        switchCategory(menuButtons[focusedMenuIndex].dataset.hero);
+        updateMainFocus();
+      }
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       lastMenuIndex = focusedMenuIndex;
@@ -750,6 +756,21 @@ function handleMainKeyboard(e) {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       showProfileSelection();
+    }
+  } else if (focusedElement === 'settings') {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      focusedElement = 'menu';
+      focusedMenuIndex = menuButtons.length - 1;
+      updateMainFocus();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusedElement = 'hero';
+      updateMainFocus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      // Settings button action can be added here
+      console.log('Settings button clicked');
     }
   } else if (focusedElement === 'tabs') {
     if (e.key === 'ArrowLeft') {
@@ -797,12 +818,14 @@ function updateMainFocus() {
   const tabs = Array.from(document.querySelectorAll('.tab'));
   const cards = () => Array.from(document.querySelectorAll('.movie-card'));
   const profileButton = document.querySelector('.profile');
+  const settingsButton = document.querySelector('.settings-btn');
 
   const allHeros = document.querySelectorAll('.hero');
   allHeros.forEach(h => h.classList.remove('focused'));
   menuButtons.forEach((btn) => btn.classList.remove('focused'));
   tabs.forEach((tab) => tab.classList.remove('focused'));
   if (profileButton) profileButton.classList.remove('focused');
+  if (settingsButton) settingsButton.classList.remove('focused');
 
   const allCards = cards();
   allCards.forEach((card) => {
@@ -824,6 +847,8 @@ function updateMainFocus() {
     }
   } else if (focusedElement === 'profile') {
     if (profileButton) profileButton.classList.add('focused');
+  } else if (focusedElement === 'settings') {
+    if (settingsButton) settingsButton.classList.add('focused');
   } else if (focusedElement === 'tabs') {
     tabs[focusedTabIndex].classList.add('focused');
   } else if (focusedElement === 'cards') {

@@ -148,7 +148,7 @@ main {
   height: 36px;
   border-radius: 10px;
   border: none;
-  background: rgba(255, 255, 255, 0.08);
+  background: transparent;
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -165,13 +165,15 @@ main {
 }
 
 .settings-btn:hover,
-.settings-btn:focus-visible {
+.settings-btn:focus-visible,
+.settings-btn.focused {
   background: rgba(255, 255, 255, 0.95);
   transform: translateY(-1px);
 }
 
 .settings-btn:hover svg,
-.settings-btn:focus-visible svg {
+.settings-btn:focus-visible svg,
+.settings-btn.focused svg {
   fill: rgba(0, 0, 0, 0.8);
 }
 
