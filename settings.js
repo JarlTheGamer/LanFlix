@@ -1,11 +1,10 @@
 // Settings page navigation
-let focusedArea = 'nav'; // 'nav' or 'content'
+let focusedArea = 'back'; // 'back', 'nav', or 'content'
 let focusedNavIndex = 0;
 let focusedContentIndex = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
   const navItems = document.querySelectorAll('.settings-nav-item');
-  const sections = document.querySelectorAll('.settings-section');
 
   // Click handlers for nav items
   navItems.forEach(item => {
@@ -13,6 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
       switchToSection(item.dataset.section);
     });
   });
+
+  // Initialize custom dropdowns
+  initializeCustomSelects();
 
   // Initialize focus
   updateSettingsFocus();
@@ -28,12 +30,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Handle select changes
-  const selects = document.querySelectorAll('.settings-select');
-  selects.forEach(select => {
-    select.addEventListener('change', (e) => {
-      console.log(`${e.target.id} changed to:`, e.target.value);
-    });
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.custom-select-wrapper')) {
+      closeAllDropdowns();
+    }
   });
 
   // Modal event listeners
@@ -121,6 +122,134 @@ let selectMode = false;
 let currentSelectElement = null;
 let selectOptionIndex = 0;
 
+// Custom dropdown functions
+function initializeCustomSelects() {
+  const selects = document.querySelectorAll('.settings-select');
+
+  selects.forEach(select => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'custom-select-wrapper';
+
+    const trigger = document.createElement('div');
+    trigger.className = 'custom-select-trigger';
+
+    const selectedText = document.createElement('span');
+    selectedText.className = 'custom-select-text';
+    selectedText.textContent = select.options[select.selectedIndex].text;
+
+    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    arrow.setAttribute('class', 'custom-select-arrow');
+    arrow.setAttribute('viewBox', '0 0 24 24');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M7 10l5 5 5-5z');
+    arrow.appendChild(path);
+
+    trigger.appendChild(selectedText);
+    trigger.appendChild(arrow);
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'custom-select-dropdown';
+
+    Array.from(select.options).forEach((option, index) => {
+      const optionBtn = document.createElement('button');
+      optionBtn.className = 'custom-select-option';
+      optionBtn.textContent = option.text;
+      optionBtn.dataset.value = option.value;
+      optionBtn.dataset.index = index;
+
+      if (index === select.selectedIndex) {
+        optionBtn.classList.add('selected');
+      }
+
+      optionBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectOption(wrapper, select, optionBtn, index);
+      });
+
+      dropdown.appendChild(optionBtn);
+    });
+
+    wrapper.appendChild(trigger);
+    wrapper.appendChild(dropdown);
+
+    select.parentNode.insertBefore(wrapper, select);
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleDropdown(wrapper);
+    });
+
+    wrapper._nativeSelect = select;
+  });
+}
+
+function toggleDropdown(wrapper) {
+  const trigger = wrapper.querySelector('.custom-select-trigger');
+  const dropdown = wrapper.querySelector('.custom-select-dropdown');
+  const isActive = trigger.classList.contains('active');
+
+  closeAllDropdowns();
+
+  if (!isActive) {
+    wrapper.classList.add('active');
+    trigger.classList.add('active');
+    dropdown.classList.add('active');
+    currentSelectElement = wrapper;
+    selectMode = true;
+    selectOptionIndex = 0;
+
+    const selectedOption = dropdown.querySelector('.custom-select-option.selected');
+    if (selectedOption) {
+      selectOptionIndex = parseInt(selectedOption.dataset.index);
+      updateDropdownFocus(dropdown);
+    }
+  }
+}
+
+function closeAllDropdowns() {
+  document.querySelectorAll('.custom-select-wrapper').forEach(wrapper => {
+    wrapper.classList.remove('active');
+  });
+  document.querySelectorAll('.custom-select-trigger').forEach(trigger => {
+    trigger.classList.remove('active');
+  });
+  document.querySelectorAll('.custom-select-dropdown').forEach(dropdown => {
+    dropdown.classList.remove('active');
+  });
+  selectMode = false;
+  currentSelectElement = null;
+}
+
+function selectOption(wrapper, nativeSelect, optionBtn, index) {
+  const trigger = wrapper.querySelector('.custom-select-trigger');
+  const selectedText = trigger.querySelector('.custom-select-text');
+  const dropdown = wrapper.querySelector('.custom-select-dropdown');
+
+  dropdown.querySelectorAll('.custom-select-option').forEach(opt => {
+    opt.classList.remove('selected');
+  });
+
+  optionBtn.classList.add('selected');
+  selectedText.textContent = optionBtn.textContent;
+
+  nativeSelect.selectedIndex = index;
+  nativeSelect.dispatchEvent(new Event('change'));
+
+  console.log(`${nativeSelect.id} changed to:`, nativeSelect.value);
+
+  closeAllDropdowns();
+}
+
+function updateDropdownFocus(dropdown) {
+  const options = dropdown.querySelectorAll('.custom-select-option');
+  options.forEach(opt => opt.classList.remove('focused'));
+
+  if (options[selectOptionIndex]) {
+    options[selectOptionIndex].classList.add('focused');
+    options[selectOptionIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
 function handleSettingsKeyboard(e) {
   const navItems = Array.from(document.querySelectorAll('.settings-nav-item'));
   const activeSection = document.querySelector('.settings-section.active');
@@ -158,32 +287,60 @@ function handleSettingsKeyboard(e) {
 
   // Handle select dropdown mode
   if (selectMode && currentSelectElement) {
+    const dropdown = currentSelectElement.querySelector('.custom-select-dropdown');
+    const options = dropdown.querySelectorAll('.custom-select-option');
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      selectOptionIndex = Math.min(selectOptionIndex + 1, currentSelectElement.options.length - 1);
-      currentSelectElement.selectedIndex = selectOptionIndex;
-      currentSelectElement.dispatchEvent(new Event('change'));
+      selectOptionIndex = Math.min(selectOptionIndex + 1, options.length - 1);
+      updateDropdownFocus(dropdown);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       selectOptionIndex = Math.max(selectOptionIndex - 1, 0);
-      currentSelectElement.selectedIndex = selectOptionIndex;
-      currentSelectElement.dispatchEvent(new Event('change'));
-    } else if (e.key === 'Enter' || e.key === 'Escape') {
+      updateDropdownFocus(dropdown);
+    } else if (e.key === 'Enter') {
       e.preventDefault();
-      exitSelectMode();
+      const selectedOption = options[selectOptionIndex];
+      if (selectedOption) {
+        const nativeSelect = currentSelectElement._nativeSelect;
+        selectOption(currentSelectElement, nativeSelect, selectedOption, selectOptionIndex);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeAllDropdowns();
     }
     return;
   }
 
-  if (focusedArea === 'nav') {
+  if (focusedArea === 'back') {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusedArea = 'nav';
+      focusedNavIndex = 0;
+      updateSettingsFocus();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      focusedArea = 'content';
+      focusedContentIndex = 0;
+      updateSettingsFocus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      window.location.href = 'index.html';
+    }
+  } else if (focusedArea === 'nav') {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       focusedNavIndex = (focusedNavIndex + 1) % navItems.length;
       updateSettingsFocus();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      focusedNavIndex = (focusedNavIndex - 1 + navItems.length) % navItems.length;
-      updateSettingsFocus();
+      if (focusedNavIndex === 0) {
+        focusedArea = 'back';
+        updateSettingsFocus();
+      } else {
+        focusedNavIndex = (focusedNavIndex - 1 + navItems.length) % navItems.length;
+        updateSettingsFocus();
+      }
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
       focusedArea = 'content';
@@ -220,8 +377,8 @@ function handleSettingsKeyboard(e) {
             checkbox.checked = !checkbox.checked;
             checkbox.dispatchEvent(new Event('change'));
           }
-        } else if (element.tagName === 'SELECT') {
-          enterSelectMode(element);
+        } else if (element.classList.contains('custom-select-wrapper')) {
+          toggleDropdown(element);
         } else if (element.tagName === 'BUTTON') {
           element.click();
         } else if (element.classList.contains('profile-card')) {
@@ -240,21 +397,7 @@ function handleSettingsKeyboard(e) {
   }
 }
 
-function enterSelectMode(selectElement) {
-  selectMode = true;
-  currentSelectElement = selectElement;
-  selectOptionIndex = selectElement.selectedIndex;
-  selectElement.classList.add('select-active');
-}
 
-function exitSelectMode() {
-  if (currentSelectElement) {
-    currentSelectElement.classList.remove('select-active');
-  }
-  selectMode = false;
-  currentSelectElement = null;
-  selectOptionIndex = 0;
-}
 
 let modalActive = false;
 let modalFocusIndex = 0;
@@ -357,8 +500,8 @@ function getInteractiveElements(section) {
 
   const elements = [];
 
-  // Get all selects
-  section.querySelectorAll('.settings-select').forEach(el => elements.push(el));
+  // Get all custom select wrappers
+  section.querySelectorAll('.custom-select-wrapper').forEach(el => elements.push(el));
 
   // Get all toggles
   section.querySelectorAll('.settings-toggle').forEach(el => elements.push(el));
@@ -372,9 +515,16 @@ function getInteractiveElements(section) {
 function updateSettingsFocus() {
   const navItems = Array.from(document.querySelectorAll('.settings-nav-item'));
   const activeSection = document.querySelector('.settings-section.active');
+  const backBtn = document.querySelector('.back-btn');
 
   // Clear all focus states
   navItems.forEach(item => item.classList.remove('focused'));
+  if (backBtn) backBtn.classList.remove('focused');
+
+  // Clear all settings groups z-index boost
+  document.querySelectorAll('.settings-group').forEach(group => {
+    group.style.zIndex = '';
+  });
 
   if (activeSection) {
     const interactiveElements = getInteractiveElements(activeSection);
@@ -382,10 +532,18 @@ function updateSettingsFocus() {
 
     if (focusedArea === 'content' && interactiveElements[focusedContentIndex]) {
       interactiveElements[focusedContentIndex].classList.add('focused');
+      
+      // Boost z-index of parent settings-group when dropdown is focused
+      const parentGroup = interactiveElements[focusedContentIndex].closest('.settings-group');
+      if (parentGroup) {
+        parentGroup.style.zIndex = '100';
+      }
     }
   }
 
-  if (focusedArea === 'nav') {
+  if (focusedArea === 'back' && backBtn) {
+    backBtn.classList.add('focused');
+  } else if (focusedArea === 'nav') {
     navItems[focusedNavIndex].classList.add('focused');
   }
 }
