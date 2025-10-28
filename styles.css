@@ -576,7 +576,7 @@ main {
   transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.6s ease;
   background: rgba(255, 255, 255, 0.04);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  transform-origin: left center;
+  transform-origin: right center; /* expand to the right */
 }
 
 .movie-card.expanded {
@@ -585,6 +585,7 @@ main {
   z-index: 10;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
 }
+
 
 
 .movie-poster {
