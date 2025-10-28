@@ -250,7 +250,7 @@ const MOVIES = [
     image: 'https://image.tmdb.org/t/p/w500/NNxYkU70HPurnNCSiCjYAmacwm.jpg',
     description: 'Ethan Hunt and his IMF team embark on their most dangerous mission yet: to track down a terrifying new weapon.',
   },
-  
+
   // Popular TV Series
   {
     title: 'Stranger Things',
@@ -603,12 +603,12 @@ function renderCards(filter) {
   movieHub.className = 'movie-hub';
 
   const filteredMovies = MOVIES.filter((movie) => filter === 'all' || movie.type === filter);
-  
+
   filteredMovies.forEach((movie, index) => {
     const movieCard = document.createElement('article');
     movieCard.className = 'movie-card';
     movieCard.dataset.index = index;
-    
+
     movieCard.innerHTML = `
       <div class="movie-poster-container">
         <img src="${movie.image}" alt="${movie.title}" class="movie-poster movie-poster-regular" loading="lazy" />
@@ -644,6 +644,13 @@ function setupMenu() {
       button.classList.add('active');
       switchCategory(button.dataset.hero);
     });
+
+    // Add hover event for search-home button to trigger ambilight
+    if (button.classList.contains('search-home')) {
+      button.addEventListener('mouseenter', () => {
+        updateAmbilightForCurrentSlide();
+      });
+    }
   });
 }
 
@@ -659,24 +666,25 @@ function setupTabs() {
 }
 
 function setupKeyboardNavigation() {
-  let focusedElement = 'hero';
+  let focusedElement = 'menu'; // Start with menu (search-home button)
   const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
   const tabs = Array.from(document.querySelectorAll('.tab'));
   const cards = () => Array.from(document.querySelectorAll('.movie-card'));
+  const profileButton = document.querySelector('.profile');
 
   function updateMovieCarousel() {
     const movieHub = document.querySelector('.movie-hub');
     const cardElements = cards();
-    
+
     if (movieHub && cardElements.length > 0) {
       // Get responsive card dimensions
       const isTablet = window.innerWidth <= 768;
       const isMobile = window.innerWidth <= 480;
-      
+
       const cardWidth = isMobile ? 120 : isTablet ? 140 : 180;
       const expandedCardWidth = isMobile ? 320 : isTablet ? 380 : 480;
       const gap = isMobile ? 12 : 16;
-      
+
       // Calculate total offset needed to position focused card at left
       let offset = 0;
       for (let i = 0; i < focusedCardIndex; i++) {
@@ -684,28 +692,30 @@ function setupKeyboardNavigation() {
         const isExpanded = card.classList.contains('expanded');
         offset += (isExpanded ? expandedCardWidth : cardWidth) + gap;
       }
-      
+
       // Apply transform to move the entire row
       movieHub.style.transform = `translateX(-${offset}px)`;
     }
   }
 
-  let focusedMenuIndex = 0;
+  let focusedMenuIndex = 1; // Start with Home button (index 1)
   let focusedTabIndex = 0;
   let focusedCardIndex = 0;
+  let lastMenuIndex = 1; // Track the last menu position
 
   function updateFocus() {
     const allHeros = document.querySelectorAll('.hero');
     allHeros.forEach(h => h.classList.remove('focused'));
     menuButtons.forEach((btn) => btn.classList.remove('focused'));
     tabs.forEach((tab) => tab.classList.remove('focused'));
-    
+    if (profileButton) profileButton.classList.remove('focused');
+
     // Remove focused and expanded from all cards
     const allCards = cards();
     allCards.forEach((card) => {
       card.classList.remove('focused');
       card.classList.remove('expanded');
-      
+
       // Remove ambilight effect from title
       const title = card.querySelector('.movie-title');
       if (title) {
@@ -719,6 +729,12 @@ function setupKeyboardNavigation() {
       }
     } else if (focusedElement === 'menu') {
       menuButtons[focusedMenuIndex].classList.add('focused');
+      // Trigger ambilight update when focusing on search-home button
+      if (focusedMenuIndex === 0 && menuButtons[0].classList.contains('search-home')) {
+        updateAmbilightForCurrentSlide();
+      }
+    } else if (focusedElement === 'profile') {
+      if (profileButton) profileButton.classList.add('focused');
     } else if (focusedElement === 'tabs') {
       tabs[focusedTabIndex].classList.add('focused');
     } else if (focusedElement === 'cards') {
@@ -727,7 +743,7 @@ function setupKeyboardNavigation() {
         const focusedCard = cardElements[focusedCardIndex];
         focusedCard.classList.add('focused');
         focusedCard.classList.add('expanded');
-        
+
         // Add ambilight effect to title
         const title = focusedCard.querySelector('.movie-title');
         if (title) {
@@ -737,7 +753,7 @@ function setupKeyboardNavigation() {
             0 0 60px rgba(255, 255, 255, 0.4)
           `;
         }
-        
+
         // Update the carousel position to keep focused card at left
         updateMovieCarousel();
       }
@@ -758,6 +774,7 @@ function setupKeyboardNavigation() {
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         focusedElement = 'menu';
+        focusedMenuIndex = lastMenuIndex; // Go back to where we last were
         updateFocus();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -767,12 +784,18 @@ function setupKeyboardNavigation() {
     } else if (focusedElement === 'menu') {
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        focusedMenuIndex = focusedMenuIndex > 0 ? focusedMenuIndex - 1 : menuButtons.length - 1;
-        // Automatically activate the focused menu item
-        menuButtons.forEach((btn) => btn.classList.remove('active'));
-        menuButtons[focusedMenuIndex].classList.add('active');
-        switchCategory(menuButtons[focusedMenuIndex].dataset.hero);
-        updateFocus();
+        if (focusedMenuIndex === 0) {
+          // If on search-home button, go to profile
+          focusedElement = 'profile';
+          updateFocus();
+        } else {
+          focusedMenuIndex = focusedMenuIndex > 0 ? focusedMenuIndex - 1 : menuButtons.length - 1;
+          // Automatically activate the focused menu item
+          menuButtons.forEach((btn) => btn.classList.remove('active'));
+          menuButtons[focusedMenuIndex].classList.add('active');
+          switchCategory(menuButtons[focusedMenuIndex].dataset.hero);
+          updateFocus();
+        }
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         focusedMenuIndex = focusedMenuIndex < menuButtons.length - 1 ? focusedMenuIndex + 1 : 0;
@@ -783,12 +806,29 @@ function setupKeyboardNavigation() {
         updateFocus();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
+        lastMenuIndex = focusedMenuIndex; // Remember where we were
         focusedElement = 'hero';
         updateFocus();
       } else if (e.key === 'Enter') {
         e.preventDefault();
+        lastMenuIndex = focusedMenuIndex; // Remember where we were
         focusedElement = 'hero';
         updateFocus();
+      }
+    } else if (focusedElement === 'profile') {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        focusedElement = 'menu';
+        focusedMenuIndex = 0; // Go to search-home button
+        updateFocus();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedElement = 'hero';
+        updateFocus();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        // Handle profile menu action here
+        console.log('Profile menu opened');
       }
     } else if (focusedElement === 'tabs') {
       if (e.key === 'ArrowLeft') {
@@ -832,6 +872,10 @@ function setupKeyboardNavigation() {
     }
   });
 
+  // Initialize the correct active state
+  menuButtons.forEach((btn) => btn.classList.remove('active'));
+  menuButtons[focusedMenuIndex].classList.add('active');
+  
   updateFocus();
 }
 
