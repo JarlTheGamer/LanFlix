@@ -1,5 +1,5 @@
 const HEROES = {
- home: [
+  home: [
     {
       background:
         'url(https://image.tmdb.org/t/p/original/8rpDcsfLJypbO6vREc0547VKqEv.jpg)',
@@ -228,7 +228,7 @@ function updateAmbilightForCurrentSlide() {
   if (root) {
     root.style.setProperty('--hero-bg-image', hero.background);
   }
-  
+
   // Crossfade between two layers for smooth transition
   if (activeAmbilightLayer === 1) {
     ambilightLayer2.style.backgroundImage = hero.background;
@@ -256,6 +256,7 @@ function switchCategory(category) {
   currentHeroIndex = 0;
 
   createCarouselItems();
+  updateCarouselPosition();
   updateAmbilightForCurrentSlide();
 }
 
