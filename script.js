@@ -91,54 +91,156 @@ const HEROES = {
   ],
 };
 
-const CARDS = [
+const MOVIES = [
+  {
+    title: 'Hit Man',
+    type: 'movies',
+    genre: 'Comedy',
+    duration: '1h 55m',
+    rating: 'R',
+    year: '2024',
+    image: 'https://image.tmdb.org/t/p/w500/1xwBbFBCP9Z5StdyJMWbFBZw2Tc.jpg',
+    description: 'A mild-mannered professor moonlighting as a fake hit man in police stings ignites a chain reaction of trouble when he falls for a potential client.',
+  },
+  {
+    title: 'Our Little Secret',
+    type: 'movies',
+    genre: 'Romance',
+    duration: '1h 39m',
+    rating: 'PG-13',
+    year: '2024',
+    image: 'https://image.tmdb.org/t/p/w500/9p9Ed2gOJvKSLdHhiRhNaEdsKgr.jpg',
+    description: 'Two ex-lovers discover they are both dating siblings and must keep their past relationship a secret during a chaotic family Christmas.',
+  },
+  {
+    title: 'Good Grief',
+    type: 'movies',
+    genre: 'Drama',
+    duration: '1h 40m',
+    rating: 'R',
+    year: '2023',
+    image: 'https://image.tmdb.org/t/p/w500/kOVKoTQzKOhGNjp7dOHoqMhun8E.jpg',
+    description: 'When his husband unexpectedly dies, Marc\'s world shatters, sending him and his two best friends on a soul-searching trip to Paris.',
+  },
+  {
+    title: 'Good on Paper',
+    type: 'movies',
+    genre: 'Comedy',
+    duration: '1h 32m',
+    rating: 'R',
+    year: '2021',
+    image: 'https://image.tmdb.org/t/p/w500/8pgKccb5PfE8LZ4Wy3JlboCjhzc.jpg',
+    description: 'After years of putting her career ahead of love, a stand-up comic meets a guy who seems perfect: smart, nice, successful... and possibly too good to be true.',
+  },
   {
     title: 'Arcane',
     type: 'series',
-    meta: 'Animated • 2021',
+    genre: 'Animation',
+    duration: '9 Episodes',
+    rating: 'TV-14',
+    year: '2021',
     image: 'https://image.tmdb.org/t/p/w500/8TRGKO5soNmp6QhZWc6Vz6E2kgg.jpg',
+    description: 'Set in utopian Piltover and the oppressed underground of Zaun, the story follows the origins of two iconic League champions-and the power that will tear them apart.',
   },
   {
     title: 'All of Us Are Dead',
     type: 'series',
-    meta: 'Horror • 2022',
+    genre: 'Horror',
+    duration: '12 Episodes',
+    rating: 'TV-MA',
+    year: '2022',
     image: 'https://image.tmdb.org/t/p/w500/mZjZgY6ObiKtVuKVDrnS9VnuNlE.jpg',
+    description: 'A high school becomes ground zero for a zombie virus outbreak. Trapped students must fight their way out — or turn into one of the rabid infected.',
   },
   {
     title: 'The Adam Project',
     type: 'movies',
-    meta: 'Sci-Fi • 2022',
+    genre: 'Sci-Fi',
+    duration: '1h 46m',
+    rating: 'PG-13',
+    year: '2022',
     image: 'https://image.tmdb.org/t/p/w500/wFjboE0aFZNbVOF05fzrka9Fqyx.jpg',
+    description: 'After accidentally crash-landing in 2022, time-traveling fighter pilot Adam Reed teams up with his 12-year-old self on a mission to save the future.',
   },
   {
     title: 'Bridgerton',
     type: 'series',
-    meta: 'Drama • 2020',
+    genre: 'Drama',
+    duration: '3 Seasons',
+    rating: 'TV-MA',
+    year: '2020',
     image: 'https://image.tmdb.org/t/p/w500/yYZTYdDbmblP60sGMgKkIYQ7oLD.jpg',
+    description: 'Wealth, lust, and betrayal set in the backdrop of Regency era England, seen through the eyes of the powerful Bridgerton family.',
   },
   {
     title: 'RRR',
     type: 'movies',
-    meta: 'Action • 2022',
+    genre: 'Action',
+    duration: '3h 7m',
+    rating: 'NR',
+    year: '2022',
     image: 'https://image.tmdb.org/t/p/w500/dVq7m1yMaA3Qn2VLAHrVwzn4F9R.jpg',
+    description: 'A fearless revolutionary and an officer in the British force, who once shared a deep bond, decide to join forces and chart out an inspirational path of freedom.',
   },
   {
     title: 'The Witcher',
     type: 'series',
-    meta: 'Fantasy • 2021',
+    genre: 'Fantasy',
+    duration: '3 Seasons',
+    rating: 'TV-MA',
+    year: '2019',
     image: 'https://image.tmdb.org/t/p/w500/7vjaCdMw15FEbXyLQTVa04URsPm.jpg',
+    description: 'Geralt of Rivia, a solitary monster hunter, struggles to find his place in a world where people often prove more wicked than beasts.',
   },
   {
     title: 'Extraction 2',
     type: 'movies',
-    meta: 'Thriller • 2023',
+    genre: 'Action',
+    duration: '2h 2m',
+    rating: 'R',
+    year: '2023',
     image: 'https://image.tmdb.org/t/p/w500/7gKI9hpEMcZUQpNgKrkDzJpbnNS.jpg',
+    description: 'Back from the brink of death, highly skilled commando Tyler Rake takes on another dangerous mission: saving the imprisoned family of a ruthless gangster.',
   },
   {
     title: 'Cyberpunk: Edgerunners',
     type: 'series',
-    meta: 'Anime • 2022',
+    genre: 'Anime',
+    duration: '10 Episodes',
+    rating: 'TV-MA',
+    year: '2022',
     image: 'https://image.tmdb.org/t/p/w500/7PH3R6c0h2ZEDQji0fyQhuKIBjZ.jpg',
+    description: 'A street kid trying to survive in a technology and body modification-obsessed city of the future. Having everything to lose, he chooses to stay alive by becoming an edgerunner.',
+  },
+  {
+    title: 'Wednesday',
+    type: 'series',
+    genre: 'Mystery',
+    duration: '8 Episodes',
+    rating: 'TV-14',
+    year: '2022',
+    image: 'https://image.tmdb.org/t/p/w500/9PFonBhy4cQy7Jz20NpMygczOkv.jpg',
+    description: 'Smart, sarcastic and a little dead inside, Wednesday Addams investigates a murder spree while making new friends — and foes — at Nevermore Academy.',
+  },
+  {
+    title: 'Stranger Things',
+    type: 'series',
+    genre: 'Sci-Fi',
+    duration: '4 Seasons',
+    rating: 'TV-14',
+    year: '2016',
+    image: 'https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg',
+    description: 'When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying supernatural forces, and one strange little girl.',
+  },
+  {
+    title: 'The Queen\'s Gambit',
+    type: 'series',
+    genre: 'Drama',
+    duration: '7 Episodes',
+    rating: 'TV-MA',
+    year: '2020',
+    image: 'https://image.tmdb.org/t/p/w500/zU0htwkhNvBQdVSIKB9s6hgVeFK.jpg',
+    description: 'In a 1950s orphanage, a young girl reveals an astonishing talent for chess and begins an unlikely journey to stardom while grappling with addiction.',
   },
 ];
 
@@ -275,18 +377,38 @@ function renderCards(filter) {
   const row = document.getElementById('spotlight-row');
   row.innerHTML = '';
 
-  CARDS.filter((card) => filter === 'all' || card.type === filter).forEach((card) => {
-    const cardElement = document.createElement('article');
-    cardElement.className = 'card';
-    cardElement.innerHTML = `
-      <img src="${card.image}" alt="${card.title}" loading="lazy" />
-      <div class="card-info">
-        <span class="card-title">${card.title}</span>
-        <span class="card-meta">${card.meta}</span>
+  const movieHub = document.createElement('div');
+  movieHub.className = 'movie-hub';
+
+  const filteredMovies = MOVIES.filter((movie) => filter === 'all' || movie.type === filter);
+  
+  filteredMovies.forEach((movie, index) => {
+    const movieCard = document.createElement('article');
+    movieCard.className = 'movie-card';
+    movieCard.dataset.index = index;
+    
+    movieCard.innerHTML = `
+      <img src="${movie.image}" alt="${movie.title}" class="movie-poster" loading="lazy" />
+      <div class="movie-overlay"></div>
+      <div class="movie-compact-title">${movie.title}</div>
+      <div class="movie-info">
+        <h3 class="movie-title">${movie.title}</h3>
+        <div class="movie-meta">
+          <span>${movie.genre}</span>
+          <span>${movie.year}</span>
+          <span>${movie.duration}</span>
+          <span>${movie.rating}</span>
+        </div>
+        <p class="movie-description">${movie.description}</p>
       </div>
     `;
-    row.appendChild(cardElement);
+
+    // No hover events for TV UI - expansion happens on focus via keyboard navigation
+
+    movieHub.appendChild(movieCard);
   });
+
+  row.appendChild(movieHub);
 }
 
 function setupMenu() {
@@ -315,7 +437,33 @@ function setupKeyboardNavigation() {
   let focusedElement = 'hero';
   const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
   const tabs = Array.from(document.querySelectorAll('.tab'));
-  const cards = () => Array.from(document.querySelectorAll('.card'));
+  const cards = () => Array.from(document.querySelectorAll('.movie-card'));
+
+  function updateMovieCarousel() {
+    const movieHub = document.querySelector('.movie-hub');
+    const cardElements = cards();
+    
+    if (movieHub && cardElements.length > 0) {
+      // Get responsive card dimensions
+      const isTablet = window.innerWidth <= 768;
+      const isMobile = window.innerWidth <= 480;
+      
+      const cardWidth = isMobile ? 120 : isTablet ? 140 : 180;
+      const expandedCardWidth = isMobile ? 320 : isTablet ? 380 : 480;
+      const gap = isMobile ? 12 : 16;
+      
+      // Calculate total offset needed to position focused card at left
+      let offset = 0;
+      for (let i = 0; i < focusedCardIndex; i++) {
+        const card = cardElements[i];
+        const isExpanded = card.classList.contains('expanded');
+        offset += (isExpanded ? expandedCardWidth : cardWidth) + gap;
+      }
+      
+      // Apply transform to move the entire row
+      movieHub.style.transform = `translateX(-${offset}px)`;
+    }
+  }
 
   let focusedMenuIndex = 0;
   let focusedTabIndex = 0;
@@ -326,7 +474,13 @@ function setupKeyboardNavigation() {
     allHeros.forEach(h => h.classList.remove('focused'));
     menuButtons.forEach((btn) => btn.classList.remove('focused'));
     tabs.forEach((tab) => tab.classList.remove('focused'));
-    cards().forEach((card) => card.classList.remove('focused'));
+    
+    // Remove focused and expanded from all cards
+    const allCards = cards();
+    allCards.forEach((card) => {
+      card.classList.remove('focused');
+      card.classList.remove('expanded');
+    });
 
     if (focusedElement === 'hero') {
       if (focusedHeroElement) {
@@ -339,7 +493,12 @@ function setupKeyboardNavigation() {
     } else if (focusedElement === 'cards') {
       const cardElements = cards();
       if (cardElements[focusedCardIndex]) {
-        cardElements[focusedCardIndex].classList.add('focused');
+        const focusedCard = cardElements[focusedCardIndex];
+        focusedCard.classList.add('focused');
+        focusedCard.classList.add('expanded');
+        
+        // Update the carousel position to keep focused card at left
+        updateMovieCarousel();
       }
     }
   }
@@ -415,7 +574,6 @@ function setupKeyboardNavigation() {
       }
     } else if (focusedElement === 'cards') {
       const cardElements = cards();
-      const cardsPerRow = 6;
 
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
@@ -427,20 +585,8 @@ function setupKeyboardNavigation() {
         updateFocus();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        if (focusedCardIndex < cardsPerRow) {
-          focusedElement = 'tabs';
-          updateFocus();
-        } else {
-          focusedCardIndex = Math.max(0, focusedCardIndex - cardsPerRow);
-          updateFocus();
-        }
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        const newIndex = focusedCardIndex + cardsPerRow;
-        if (newIndex < cardElements.length) {
-          focusedCardIndex = newIndex;
-          updateFocus();
-        }
+        focusedElement = 'tabs';
+        updateFocus();
       }
     }
   });
