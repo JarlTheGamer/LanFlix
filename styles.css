@@ -1142,11 +1142,10 @@ main {
   position: absolute;
   inset: 0;
   background: linear-gradient(90deg,
-      rgba(0, 0, 0, 0.95) 0%,
-      rgba(0, 0, 0, 0.8) 30%,
-      rgba(0, 0, 0, 0.4) 70%,
-      rgba(0, 0, 0, 0.1) 100%);
-  backdrop-filter: blur(1px);
+      rgba(0, 0, 0, 0.767) 0%,
+      rgba(0, 0, 0, 0.678) 30%,
+      rgba(0, 0, 0, 0.233) 70%,
+      rgba(0, 0, 0, 0) 100%);
 }
 
 .profile-selection-container {
