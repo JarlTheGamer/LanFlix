@@ -4,21 +4,23 @@ const PROFILES = [
     id: 1,
     name: 'Alex',
     avatar: { primary: '#ff6b6b', secondary: '#ee5a24' },
-    watchedShows: [
-      { title: 'Stranger Things', image: 'https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg', meta: 'S4 • Sci-Fi' },
-      { title: 'The Crown', image: 'https://image.tmdb.org/t/p/original/1M876KPjulVwppEpldhdc8V4o68.jpg', meta: 'S6 • Drama' },
-      { title: 'Wednesday', image: 'https://image.tmdb.org/t/p/original/qYeg0MP1LpPD5r5h9wxR83DMnyE.jpg', meta: 'S1 • Mystery' },
-      { title: 'The Witcher', image: 'https://image.tmdb.org/t/p/original/7vjaCdMw15FEbXyLQTVa04URsPm.jpg', meta: 'S3 • Fantasy' }
-    ]
+   watchedShows: [
+  { title: 'Stranger Things', image: 'https://image.tmdb.org/t/p/original/49WJfeN0moxb9IPfGn8AIqMGskD.jpg', meta: 'S4 • Sci-Fi' },
+  { title: 'The Crown', image: 'https://image.tmdb.org/t/p/original/1M876KPjulVwppEpldhdc8V4o68.jpg', meta: 'S6 • Drama' },
+  { title: 'Wednesday', image: 'https://m.media-amazon.com/images/M/MV5BNjkxNzlhMTAtZGQ3Mi00NDNmLWJkMWEtMWQ3ZjNiMWRjOGVlXkEyXkFqcGdeQWRvb2xpbmhk._V1_.jpg', meta: 'S1 • Mystery' },
+  { title: 'The Witcher', image: 'https://image.tmdb.org/t/p/original/7vjaCdMw15FEbXyLQTVa04URsPm.jpg', meta: 'S3 • Fantasy' },
+  // Added shows:
+  { title: 'Arcane', image: 'https://image.tmdb.org/t/p/original/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg', meta: 'S1 • Animation' },
+  { title: 'The Mandalorian', image: 'https://image.tmdb.org/t/p/original/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg', meta: 'S3 • Sci-Fi' },
+]
+
   },
   {
     id: 2,
     name: 'Sarah',
     avatar: { primary: '#4ecdc4', secondary: '#26d0ce' },
     watchedShows: [
-      { title: 'Bridgerton', image: 'https://image.tmdb.org/t/p/original/yYZTYdDbmblP60sGMgKkIYQ7oLD.jpg', meta: 'S3 • Romance' },
       { title: 'The Queen\'s Gambit', image: 'https://image.tmdb.org/t/p/original/zU0htwkhNvBQdVSIKB9s6hgVeFK.jpg', meta: 'Limited • Drama' },
-      { title: 'Emily in Paris', image: 'https://image.tmdb.org/t/p/original/3nVf0RmcHm5w0Lv6urMMyOGWC8T.jpg', meta: 'S3 • Comedy' },
       { title: 'Euphoria', image: 'https://image.tmdb.org/t/p/original/jtnfNzqZwN4E32FGGxx1YZaBWWf.jpg', meta: 'S2 • Drama' }
     ]
   },
@@ -28,8 +30,6 @@ const PROFILES = [
     avatar: { primary: '#a55eea', secondary: '#8854d0' },
     watchedShows: [
       { title: 'Breaking Bad', image: 'https://image.tmdb.org/t/p/original/3xnWaLQjelJDDF7LT1WBo6f4BRe.jpg', meta: 'S5 • Crime' },
-      { title: 'Better Call Saul', image: 'https://image.tmdb.org/t/p/original/fC2HDm5t0kHl7mTm7jxMR31cyEc.jpg', meta: 'S6 • Crime' },
-      { title: 'Ozark', image: 'https://image.tmdb.org/t/p/original/m73QiJOFMQWPMEjONLuOLNTlbpK.jpg', meta: 'S4 • Thriller' },
       { title: 'The Bear', image: 'https://image.tmdb.org/t/p/original/sHFlbKS3WLqMnp9t2ghADIJFnuQ.jpg', meta: 'S3 • Comedy' }
     ]
   },
@@ -41,7 +41,6 @@ const PROFILES = [
       { title: 'Arcane', image: 'https://image.tmdb.org/t/p/original/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg', meta: 'S1 • Animation' },
       { title: 'The Mandalorian', image: 'https://image.tmdb.org/t/p/original/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg', meta: 'S3 • Sci-Fi' },
       { title: 'Avatar: The Last Airbender', image: 'https://image.tmdb.org/t/p/original/cMD9Ygz11zjJzAovURpO75Qg7rT.jpg', meta: 'S3 • Animation' },
-      { title: 'Bluey', image: 'https://image.tmdb.org/t/p/original/3hxbOlpOTnCMrp4p6jgMONuyjzW.jpg', meta: 'S3 • Kids' }
     ]
   }
 ];
