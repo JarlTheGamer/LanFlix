@@ -132,6 +132,7 @@ main {
 .brand {
   display: flex;
   align-items: center;
+  gap: 12px;
 }
 
 .brand-name {
@@ -140,6 +141,38 @@ main {
   text-transform: uppercase;
   font-size: 0.82rem;
   color: rgba(255, 236, 225, 0.86);
+}
+
+.settings-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all var(--transition);
+  outline: 0px solid rgba(255, 255, 255, 0);
+  outline-offset: 4px;
+}
+
+.settings-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: rgba(255, 236, 225, 0.86);
+  transition: fill var(--transition);
+}
+
+.settings-btn:hover,
+.settings-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateY(-1px);
+}
+
+.settings-btn:hover svg,
+.settings-btn:focus-visible svg {
+  fill: rgba(0, 0, 0, 0.8);
 }
 
 .menu {
@@ -211,6 +244,8 @@ main {
   display: grid;
   place-items: center;
   margin-right: 8px;
+  position: relative;
+  z-index: 10;
 }
 
 .menu-item.search-home svg {
@@ -223,6 +258,10 @@ main {
 .menu-item.search-home.active svg,
 .menu-item.search-home.focused svg {
   fill: rgba(0, 0, 0, 0.8);
+}
+
+.menu-item.search-home:hover {
+  z-index: 15;
 }
 
 
@@ -239,6 +278,8 @@ main {
   background: rgba(0, 0, 0, 0.35);
   cursor: pointer;
   transition: transform var(--transition), background var(--transition), border-color var(--transition);
+  position: relative;
+  z-index: 5;
 }
 
 .profile-avatar {

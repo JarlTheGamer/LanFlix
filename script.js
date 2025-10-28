@@ -818,9 +818,8 @@ function updateMainFocus() {
       focusedHeroElement.classList.add('focused');
     }
   } else if (focusedElement === 'menu') {
-    menuButtons[focusedMenuIndex].classList.add('focused');
-    if (focusedMenuIndex === 0 && menuButtons[0].classList.contains('search-home')) {
-      updateAmbilightForCurrentSlide();
+    if (menuButtons[focusedMenuIndex]) {
+      menuButtons[focusedMenuIndex].classList.add('focused');
     }
   } else if (focusedElement === 'profile') {
     if (profileButton) profileButton.classList.add('focused');
@@ -1049,13 +1048,6 @@ function setupMenu() {
       button.classList.add('active');
       switchCategory(button.dataset.hero);
     });
-
-    // Add hover event for search-home button to trigger ambilight
-    if (button.classList.contains('search-home')) {
-      button.addEventListener('mouseenter', () => {
-        updateAmbilightForCurrentSlide();
-      });
-    }
   });
 }
 
