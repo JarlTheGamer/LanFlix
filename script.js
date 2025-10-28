@@ -4,15 +4,15 @@ const PROFILES = [
     id: 1,
     name: 'Alex',
     avatar: { primary: '#ff6b6b', secondary: '#ee5a24' },
-   watchedShows: [
-  { title: 'Stranger Things', image: 'https://image.tmdb.org/t/p/original/49WJfeN0moxb9IPfGn8AIqMGskD.jpg', meta: 'S4 • Sci-Fi' },
-  { title: 'The Crown', image: 'https://image.tmdb.org/t/p/original/1M876KPjulVwppEpldhdc8V4o68.jpg', meta: 'S6 • Drama' },
-  { title: 'Wednesday', image: 'https://m.media-amazon.com/images/M/MV5BNjkxNzlhMTAtZGQ3Mi00NDNmLWJkMWEtMWQ3ZjNiMWRjOGVlXkEyXkFqcGdeQWRvb2xpbmhk._V1_.jpg', meta: 'S1 • Mystery' },
-  { title: 'The Witcher', image: 'https://image.tmdb.org/t/p/original/7vjaCdMw15FEbXyLQTVa04URsPm.jpg', meta: 'S3 • Fantasy' },
-  // Added shows:
-  { title: 'Arcane', image: 'https://image.tmdb.org/t/p/original/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg', meta: 'S1 • Animation' },
-  { title: 'The Mandalorian', image: 'https://image.tmdb.org/t/p/original/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg', meta: 'S3 • Sci-Fi' },
-]
+    watchedShows: [
+      { title: 'Stranger Things', image: 'https://image.tmdb.org/t/p/original/49WJfeN0moxb9IPfGn8AIqMGskD.jpg', meta: 'S4 • Sci-Fi' },
+      { title: 'The Crown', image: 'https://image.tmdb.org/t/p/original/1M876KPjulVwppEpldhdc8V4o68.jpg', meta: 'S6 • Drama' },
+      { title: 'Wednesday', image: 'https://m.media-amazon.com/images/M/MV5BNjkxNzlhMTAtZGQ3Mi00NDNmLWJkMWEtMWQ3ZjNiMWRjOGVlXkEyXkFqcGdeQWRvb2xpbmhk._V1_.jpg', meta: 'S1 • Mystery' },
+      { title: 'The Witcher', image: 'https://image.tmdb.org/t/p/original/7vjaCdMw15FEbXyLQTVa04URsPm.jpg', meta: 'S3 • Fantasy' },
+      // Added shows:
+      { title: 'Arcane', image: 'https://image.tmdb.org/t/p/original/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg', meta: 'S1 • Animation' },
+      { title: 'The Mandalorian', image: 'https://image.tmdb.org/t/p/original/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg', meta: 'S3 • Sci-Fi' },
+    ]
 
   },
   {
@@ -80,6 +80,18 @@ const HEROES = {
       description:
         'The Targaryen dynasty rules Westeros — and the seeds of civil war begin to take root 200 years before the events of Game of Thrones.',
       secondary: 'New season coming in 2025',
+    },
+  ],
+   discover: [
+    {
+      background:
+        'url(https://images.unsplash.com/photo-1524985069026-dd778a71c7b4?auto=format&fit=crop&w=1400&q=80)',
+      tag: 'Because you watched',
+      title: 'Midnight Tales',
+      meta: ['Series', '2020', 'TV-MA', '3 Seasons'],
+      description:
+        'Dive back into the anthology of haunting stories where every episode unlocks a new mystery, curated from your personal watch history.',
+      secondary: 'Continue watching S3:E4',
     },
   ],
   shows: [
@@ -549,15 +561,15 @@ function initializeProfileSelection() {
 function createBackgroundTiles() {
   const backgroundAnimation = document.getElementById('profile-background-animation');
   const allShows = PROFILES.flatMap(profile => profile.watchedShows);
-  
+
   // Create rows of tiles
   const rowCount = 25;
   const tilesPerRow = 30;
-  
+
   for (let row = 0; row < rowCount; row++) {
     const rowElement = document.createElement('div');
     rowElement.className = 'background-row';
-    
+
     // Create enough tiles for seamless looping (double the amount)
     for (let tile = 0; tile < tilesPerRow * 2; tile++) {
       const tileElement = document.createElement('div');
@@ -566,7 +578,7 @@ function createBackgroundTiles() {
       tileElement.style.backgroundImage = `url(${randomShow.image})`;
       rowElement.appendChild(tileElement);
     }
-    
+
     backgroundAnimation.appendChild(rowElement);
   }
 }
@@ -685,7 +697,7 @@ function handleMainKeyboard(e) {
   const cards = () => Array.from(document.querySelectorAll('.movie-card'));
   const profileButton = document.querySelector('.profile');
 
-  
+
   if (focusedElement === 'hero') {
     const heroes = HEROES[currentCategory];
     if (e.key === 'ArrowLeft') {
@@ -768,8 +780,7 @@ function handleMainKeyboard(e) {
       updateMainFocus();
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      // Settings button action can be added here
-      console.log('Settings button clicked');
+      window.location.href = 'settings.html';
     }
   } else if (focusedElement === 'tabs') {
     if (e.key === 'ArrowLeft') {
