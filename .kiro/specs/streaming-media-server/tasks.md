@@ -61,7 +61,12 @@
   - Add search result parsing and normalization
   - _Requirements: 2.3, 2.4_
 
-- [ ] 4. Implement caching system
+- [x] 4. Implement caching system
+
+
+
+
+
   - Create CacheManager class with memory and Redis cache layers
   - Implement cache key generation and TTL management
   - Add cache warming for popular content
@@ -69,8 +74,13 @@
   - Create RateLimiter class for API rate limiting
   - _Requirements: 13.2, 13.4_
 
-- [ ] 5. Build core backend services
-- [ ] 5.1 Implement MetadataService
+- [x] 5. Build core backend services
+
+
+
+- [x] 5.1 Implement MetadataService
+
+
   - Create methods to fetch movie and series metadata from TMDB
   - Implement poster and backdrop image downloading
   - Add metadata saving to media folder as JSON files
@@ -78,14 +88,18 @@
   - Add metadata refresh logic with staleness check (7 days)
   - _Requirements: 12.1, 12.2, 12.3, 12.5_
 
-- [ ] 5.2 Implement ContentService
+- [x] 5.2 Implement ContentService
+
+
   - Create methods for content search using Prowlarr and TMDB
   - Implement trending and popular content fetching with caching
   - Add content details retrieval with metadata enrichment
   - Implement content type detection (movie vs series)
   - _Requirements: 3.2, 3.3, 3.4, 3.6_
 
-- [ ] 5.3 Implement LibraryService
+
+- [x] 5.3 Implement LibraryService
+
   - Create methods to get library items with filtering by type
   - Implement library scanning to detect new media files
   - Add methods to add and remove content from library
@@ -93,7 +107,9 @@
   - Add watch progress integration for library items
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
-- [ ] 5.4 Implement DownloadManager
+- [x] 5.4 Implement DownloadManager
+
+
   - Create methods to queue downloads via Sonarr/Radarr
   - Implement download status tracking and progress polling
   - Add download completion handler to update library
@@ -101,7 +117,9 @@
   - Add methods to cancel downloads
   - _Requirements: 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
 
-- [ ] 5.5 Implement NotificationService
+- [x] 5.5 Implement NotificationService
+
+
   - Create push notification sending using Firebase Cloud Messaging
   - Implement keep-watching notification generation (7 days before deletion)
   - Add device token registration and management
@@ -169,12 +187,14 @@
   - _Requirements: 2.6, 2.7, 12.6_
 
 - [ ] 8. Refactor frontend JavaScript into modules
+
 - [ ] 8.1 Create API client module
   - Extract all backend communication into api-client.js module
   - Implement typed methods for all API endpoints
   - Add request/response interceptors for error handling
   - Implement authentication token management
   - Add request retry logic for failed requests
+  - Make all the frontend work. if you reload it doesnt refresh everything, rather it will save stuff and you open the same page.
   - _Requirements: 14.4, 14.5_
 
 - [ ] 8.2 Create navigation module
