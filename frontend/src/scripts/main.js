@@ -6,6 +6,12 @@ import stateManager from '../modules/data.js';
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    // Check if we have a saved profile, if not redirect to profiles page
+    if (!stateManager.currentProfileId) {
+      window.location.href = 'profiles.html';
+      return;
+    }
+
     // Create instances
     const profileManager = new ProfileManager();
     const contentDisplay = new ContentDisplay(profileManager);
@@ -13,13 +19,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize modules
     await profileManager.initialize();
+    
+    // Set the selected profile from state
+    profileManager.selectedProfileId = stateManager.currentProfileId;
+    const selectedProfile = profileManager.profiles.find(p => p.id === stateManager.currentProfileId);
+    if (selectedProfile) {
+      const profileAvatar = document.querySelector('.profile-avatar');
+      if (profileAvatar) {
+        profileAvatar.style.background = `linear-gradient(135deg, ${selectedProfile.avatarColorPrimary}, ${selectedProfile.avatarColorSecondary})`;
+      }
+    }
+    
     await contentDisplay.initialize();
     navigation.initialize();
 
-    // Check if we have a saved profile, if not show profile selection
-    if (!stateManager.currentProfileId) {
-      profileManager.show();
-    }
   } catch (error) {
     console.error('Failed to initialize application:', error);
     // Show error message to user

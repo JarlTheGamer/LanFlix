@@ -1,0 +1,45 @@
+import { ProfileManager } from '../modules/profile-manager.js';
+import stateManager from '../modules/data.js';
+
+// Initialize profiles page
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const profileManager = new ProfileManager();
+
+    // Override selectProfile to not call hide() during initialization
+    const originalSelectProfile = profileManager.selectProfile.bind(profileManager);
+    profileManager.selectProfile = function (profileId) {
+      this.selectedProfileId = profileId;
+      const selectedProfile = this.profiles.find(p => p.id === profileId);
+
+      // Save selected profile to state
+      stateManager.currentProfileId = profileId;
+      stateManager.saveState();
+
+      // Redirect to home page instead of hiding
+      window.location.href = 'index.html';
+    };
+
+    await profileManager.initialize();
+
+    // Always show profile selection on this page
+    profileManager.show();
+
+    // Add keyboard event listener
+    document.addEventListener('keydown', (e) => profileManager.handleKeyboard(e));
+
+  } catch (error) {
+    console.error('Failed to initialize profiles:', error);
+    document.body.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: center; height: 100vh; color: white; text-align: center; padding: 20px;">
+        <div>
+          <h1>Failed to load profiles</h1>
+          <p>Please check your connection and try again.</p>
+          <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; font-size: 16px; cursor: pointer;">
+            Retry
+          </button>
+        </div>
+      </div>
+    `;
+  }
+});

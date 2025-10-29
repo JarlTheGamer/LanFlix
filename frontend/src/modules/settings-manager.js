@@ -147,6 +147,11 @@ export class SettingsManager {
     const selects = document.querySelectorAll('.settings-select');
 
     selects.forEach(select => {
+      // Skip if already wrapped
+      if (select.parentElement?.classList.contains('custom-select-wrapper')) {
+        return;
+      }
+
       const wrapper = document.createElement('div');
       wrapper.className = 'custom-select-wrapper';
 
@@ -155,7 +160,7 @@ export class SettingsManager {
 
       const selectedText = document.createElement('span');
       selectedText.className = 'custom-select-text';
-      selectedText.textContent = select.options[select.selectedIndex].text;
+      selectedText.textContent = select.options?.[select.selectedIndex]?.text || 'Select...';
 
       const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       arrow.setAttribute('class', 'custom-select-arrow');

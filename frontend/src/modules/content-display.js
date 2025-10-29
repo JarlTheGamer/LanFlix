@@ -51,19 +51,19 @@ export class ContentDisplay {
 
       switch (this.currentCategory) {
         case 'home':
-          const [recentlyAdded, movies, series] = await Promise.all([
+          // Home shows downloaded content + small discovery carousel
+          const [recentlyAdded, discoverPreview] = await Promise.all([
             stateManager.getRecentlyAdded(20),
-            stateManager.getLibraryMovies({ limit: 20 }),
-            stateManager.getLibrarySeries({ limit: 20 })
+            stateManager.getDiscoverContent(profileId).catch(() => ({ trending: [] }))
           ]);
           this.contentData = {
             recentlyAdded: recentlyAdded.items || [],
-            movies: movies.items || [],
-            series: series.items || []
+            discoverPreview: (discoverPreview.trending || []).slice(0, 10) // Only 10 items for preview
           };
           break;
 
         case 'discover':
+          // Discovery shows only online content for downloading
           const discoverData = await stateManager.getDiscoverContent(profileId);
           this.contentData = {
             trending: discoverData.trending || [],
@@ -73,20 +73,23 @@ export class ContentDisplay {
           break;
 
         case 'shows':
-          const seriesData = await stateManager.getLibrarySeries({ limit: 50 });
+          // Shows page displays downloaded series only
+          const seriesData = await stateManager.getLibrarySeries({ limit: 100 });
           this.contentData = {
             series: seriesData.items || []
           };
           break;
 
         case 'movies':
-          const moviesData = await stateManager.getLibraryMovies({ limit: 50 });
+          // Movies page displays downloaded movies only
+          const moviesData = await stateManager.getLibraryMovies({ limit: 100 });
           this.contentData = {
             movies: moviesData.items || []
           };
           break;
 
         case 'my':
+          // My List shows downloaded content from watchlist
           const watchlist = await stateManager.getWatchlist(profileId);
           this.contentData = {
             watchlist: watchlist.items?.map(item => item.content) || []
@@ -217,17 +220,34 @@ export class ContentDisplay {
     const row = document.getElementById('spotlight-row');
     row.innerHTML = '';
 
+    // Check if we're offline and on discovery page
+    if (this.currentCategory === 'discover' && stateManager.isOffline) {
+      row.innerHTML = `
+        <div style="text-align: center; padding: 60px 20px; color: #999;">
+          <h2 style="color: #fff; margin-bottom: 20px;">We're Currently Offline</h2>
+          <p style="font-size: 18px; margin-bottom: 10px;">Discovery features require an internet connection.</p>
+          <p style="font-size: 16px;">Check back later to browse and download new content.</p>
+          <p style="font-size: 14px; margin-top: 30px;">Your downloaded content is still available in Home, Movies, Series, and My List.</p>
+        </div>
+      `;
+      return;
+    }
+
     const movieHub = document.createElement('div');
     movieHub.className = 'movie-hub';
 
     let contentItems = [];
+    let showDiscoveryCarousel = false;
 
     // Get content based on current category
     switch (this.currentCategory) {
       case 'home':
+        // Home shows downloaded content
         contentItems = this.contentData.recentlyAdded || [];
+        showDiscoveryCarousel = true;
         break;
       case 'discover':
+        // Discovery shows online content for downloading
         contentItems = [
           ...(this.contentData.trending || []),
           ...(this.contentData.popularMovies || []),
@@ -235,16 +255,19 @@ export class ContentDisplay {
         ];
         break;
       case 'shows':
+        // Shows page - downloaded series only
         contentItems = this.contentData.series || [];
         break;
       case 'movies':
+        // Movies page - downloaded movies only
         contentItems = this.contentData.movies || [];
         break;
       case 'my':
+        // My List - downloaded content from watchlist
         contentItems = this.contentData.watchlist || [];
         break;
       default:
-        contentItems = MOVIES; // Fallback to mock data
+        contentItems = [];
     }
 
     // Filter by type if needed
@@ -252,7 +275,74 @@ export class ContentDisplay {
       ? contentItems 
       : contentItems.filter(item => item.type === filter);
 
+    // Show discovery carousel on home page if available
+    if (showDiscoveryCarousel && this.contentData.discoverPreview?.length > 0 && !stateManager.isOffline) {
+      const discoverySection = document.createElement('div');
+      discoverySection.className = 'discovery-carousel-section';
+      discoverySection.innerHTML = `
+        <h2 style="color: #fff; margin: 20px 0 10px 0; font-size: 24px;">Discover New Content</h2>
+      `;
+      
+      const discoveryHub = document.createElement('div');
+      discoveryHub.className = 'movie-hub';
+      
+      this.contentData.discoverPreview.forEach((item, index) => {
+        const card = this.createContentCard(item, index, true);
+        discoveryHub.appendChild(card);
+      });
+      
+      discoverySection.appendChild(discoveryHub);
+      row.appendChild(discoverySection);
+      
+      // Add separator
+      const separator = document.createElement('h2');
+      separator.style.cssText = 'color: #fff; margin: 40px 0 10px 0; font-size: 24px;';
+      separator.textContent = 'Your Library';
+      row.appendChild(separator);
+    }
+
+    // Show main content
+    if (filteredContent.length === 0) {
+      const emptyMessage = document.createElement('div');
+      emptyMessage.style.cssText = 'text-align: center; padding: 60px 20px; color: #999;';
+      
+      if (this.currentCategory === 'home') {
+        emptyMessage.innerHTML = `
+          <h2 style="color: #fff; margin-bottom: 20px;">Your Library is Empty</h2>
+          <p style="font-size: 18px;">Go to Discovery to find and download content!</p>
+        `;
+      } else if (this.currentCategory === 'my') {
+        emptyMessage.innerHTML = `
+          <h2 style="color: #fff; margin-bottom: 20px;">Your List is Empty</h2>
+          <p style="font-size: 18px;">Add content to your list to see it here.</p>
+        `;
+      } else {
+        emptyMessage.innerHTML = `
+          <h2 style="color: #fff; margin-bottom: 20px;">No Content Found</h2>
+          <p style="font-size: 18px;">Download some content to see it here!</p>
+        `;
+      }
+      
+      row.appendChild(emptyMessage);
+      return;
+    }
+
     filteredContent.forEach((item, index) => {
+      const card = this.createContentCard(item, index, this.currentCategory === 'discover');
+      movieHub.appendChild(card);
+    });
+
+    row.appendChild(movieHub);
+
+    // Setup lazy loading and card handlers
+    this.setupLazyLoading();
+    this.setupCardHandlers();
+  }
+
+  /**
+   * Create a content card element
+   */
+  createContentCard(item, index, isDiscoveryContent = false) {
       const movieCard = document.createElement('article');
       movieCard.className = 'movie-card';
       movieCard.dataset.index = index;
@@ -292,7 +382,7 @@ export class ContentDisplay {
       `;
 
       movieHub.appendChild(movieCard);
-    });
+    ;
 
     row.appendChild(movieHub);
 
@@ -315,6 +405,52 @@ export class ContentDisplay {
 
     handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
+  }
+
+  /**
+   * Create a content card element
+   */
+  createContentCard(item, index, isDiscoveryContent = false) {
+    const movieCard = document.createElement('article');
+    movieCard.className = 'movie-card';
+    movieCard.dataset.index = index;
+    movieCard.dataset.contentId = item.id || item.tmdbId;
+    movieCard.dataset.contentType = item.type;
+    movieCard.dataset.isDiscovery = isDiscoveryContent;
+
+    const posterUrl = item.posterPath 
+      ? `https://image.tmdb.org/t/p/w500${item.posterPath}`
+      : item.image || 'https://via.placeholder.com/300x450?text=No+Image';
+
+    const backdropUrl = item.backdropPath
+      ? `https://image.tmdb.org/t/p/original${item.backdropPath}`
+      : item.expandedImage || posterUrl;
+
+    const genres = Array.isArray(item.genres) ? item.genres.join(', ') : (item.genre || 'Unknown');
+    const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : (item.year || 'N/A');
+    const duration = item.runtime ? `${item.runtime}m` : (item.duration || 'N/A');
+    const rating = item.voteAverage ? `★ ${item.voteAverage.toFixed(1)}` : (item.rating || 'N/A');
+
+    movieCard.innerHTML = `
+      <div class="movie-poster-container">
+        <img data-src="${posterUrl}" alt="${item.title}" class="movie-poster movie-poster-regular" loading="lazy" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 450'%3E%3Crect fill='%23333' width='300' height='450'/%3E%3C/svg%3E" />
+        <img data-src="${backdropUrl}" alt="${item.title}" class="movie-poster movie-poster-expanded" loading="lazy" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1920 1080'%3E%3Crect fill='%23333' width='1920' height='1080'/%3E%3C/svg%3E" />
+      </div>
+      <div class="movie-overlay"></div>
+      <div class="movie-compact-title">${item.title}</div>
+      <div class="movie-info">
+        <h3 class="movie-title">${item.title}</h3>
+        <div class="movie-meta">
+          <span>${genres}</span>
+          <span>${year}</span>
+          <span>${duration}</span>
+          <span>${rating}</span>
+        </div>
+        <p class="movie-description">${item.overview || item.description || 'No description available.'}</p>
+      </div>
+    `;
+
+    return movieCard;
   }
 
   /**
@@ -393,19 +529,31 @@ export class ContentDisplay {
     const movieInfo = card.querySelector('.movie-info');
     if (!movieInfo) return;
 
+    const isDiscoveryContent = card.dataset.isDiscovery === 'true';
+    
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'card-actions';
-    actionsDiv.innerHTML = `
-      <button class="card-action-btn play-btn" data-action="play">
-        <span>▶</span> Play
-      </button>
-      <button class="card-action-btn queue-btn" data-action="queue">
-        <span>+</span> Watch in a bit
-      </button>
-      <button class="card-action-btn info-btn" data-action="info">
-        <span>ℹ</span> More Info
-      </button>
-    `;
+    
+    // Show different buttons based on whether it's discovery or library content
+    if (isDiscoveryContent) {
+      actionsDiv.innerHTML = `
+        <button class="card-action-btn queue-btn" data-action="queue">
+          <span>+</span> Watch in a bit
+        </button>
+        <button class="card-action-btn info-btn" data-action="info">
+          <span>ℹ</span> More Info
+        </button>
+      `;
+    } else {
+      actionsDiv.innerHTML = `
+        <button class="card-action-btn play-btn" data-action="play">
+          <span>▶</span> Play
+        </button>
+        <button class="card-action-btn info-btn" data-action="info">
+          <span>ℹ</span> More Info
+        </button>
+      `;
+    }
 
     movieInfo.appendChild(actionsDiv);
 

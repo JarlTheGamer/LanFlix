@@ -206,7 +206,7 @@ export class Navigation {
         this.updateFocus();
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        this.profileManager.show();
+        window.location.href = 'profiles.html';
       }
     } else if (this.focusedElement === 'settings') {
       if (e.key === 'ArrowLeft') {

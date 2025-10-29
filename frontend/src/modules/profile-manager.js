@@ -14,7 +14,11 @@ export class ProfileManager {
     await this.loadProfiles();
 
     const profilesBar = document.getElementById('profiles-vertical-bar');
-    const backgroundAnimation = document.getElementById('profile-background-animation');
+    
+    // Only initialize UI if profile elements exist (on profiles page)
+    if (!profilesBar) {
+      return;
+    }
 
     // Create profile items
     this.profiles.forEach((profile, index) => {
@@ -34,18 +38,18 @@ export class ProfileManager {
 
     this.createBackgroundTiles();
     this.updateFocus();
-    
+
     if (this.profiles.length > 0) {
       this.updateBackground(this.profiles[0]);
     }
 
-    // Check if we have a saved profile
+    // Check if we have a saved profile and set focus to it
     const savedProfileId = stateManager.currentProfileId;
     if (savedProfileId) {
       const profileIndex = this.profiles.findIndex(p => p.id === savedProfileId);
       if (profileIndex >= 0) {
         this.focusedProfileIndex = profileIndex;
-        this.selectProfile(savedProfileId);
+        this.updateFocus();
       }
     }
   }
@@ -62,6 +66,8 @@ export class ProfileManager {
   createBackgroundTiles() {
     const backgroundAnimation = document.getElementById('profile-background-animation');
     
+    if (!backgroundAnimation) return;
+
     // Use placeholder images for background tiles
     const placeholderImages = [
       'https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg',
@@ -138,9 +144,9 @@ export class ProfileManager {
     const main = document.querySelector('main');
     const header = document.querySelector('header');
 
-    overlay.classList.remove('hidden');
-    main.style.display = 'none';
-    header.style.display = 'none';
+    if (overlay) overlay.classList.remove('hidden');
+    if (main) main.style.display = 'none';
+    if (header) header.style.display = 'none';
 
     this.updateFocus();
   }
@@ -151,9 +157,9 @@ export class ProfileManager {
     const main = document.querySelector('main');
     const header = document.querySelector('header');
 
-    overlay.classList.add('hidden');
-    main.style.display = 'block';
-    header.style.display = 'block';
+    if (overlay) overlay.classList.add('hidden');
+    if (main) main.style.display = 'block';
+    if (header) header.style.display = 'block';
   }
 
   handleKeyboard(e) {
@@ -191,11 +197,11 @@ export class ProfileManager {
    */
   async refreshProfiles() {
     await this.loadProfiles(true);
-    
+
     // Re-render profile items
     const profilesBar = document.getElementById('profiles-vertical-bar');
     profilesBar.innerHTML = '';
-    
+
     this.profiles.forEach((profile, index) => {
       const profileItem = document.createElement('div');
       profileItem.className = 'profile-item';
@@ -220,10 +226,10 @@ export class ProfileManager {
   async createProfile(name, avatarColorPrimary, avatarColorSecondary) {
     try {
       const response = await apiClient.createProfile(name, avatarColorPrimary, avatarColorSecondary);
-      
+
       // Refresh profiles
       await this.refreshProfiles();
-      
+
       return response.profile;
     } catch (error) {
       console.error('Failed to create profile:', error);
@@ -237,10 +243,10 @@ export class ProfileManager {
   async updateProfile(profileId, updates) {
     try {
       const response = await apiClient.updateProfile(profileId, updates);
-      
+
       // Refresh profiles
       await this.refreshProfiles();
-      
+
       // Update UI if this is the selected profile
       if (profileId === this.selectedProfileId) {
         const profileButton = document.querySelector('.profile');
@@ -249,7 +255,7 @@ export class ProfileManager {
           profileAvatar.style.background = `linear-gradient(135deg, ${updates.avatarColorPrimary}, ${updates.avatarColorSecondary})`;
         }
       }
-      
+
       return response.profile;
     } catch (error) {
       console.error('Failed to update profile:', error);
@@ -263,17 +269,17 @@ export class ProfileManager {
   async deleteProfile(profileId) {
     try {
       await apiClient.deleteProfile(profileId);
-      
+
       // If deleted profile was selected, clear selection
       if (profileId === this.selectedProfileId) {
         this.selectedProfileId = null;
         stateManager.currentProfileId = null;
         stateManager.saveState();
       }
-      
+
       // Refresh profiles
       await this.refreshProfiles();
-      
+
       return true;
     } catch (error) {
       console.error('Failed to delete profile:', error);

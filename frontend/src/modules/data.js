@@ -18,6 +18,7 @@ class StateManager {
     
     this.cacheTimestamps = {};
     this.cacheDuration = 5 * 60 * 1000; // 5 minutes
+    this.isOffline = false;
     
     // Load state from localStorage
     this.loadState();
@@ -81,9 +82,11 @@ class StateManager {
     try {
       const response = await apiClient.getProfiles();
       this.setCache('profiles', response.profiles);
+      this.isOffline = false;
       return response.profiles;
     } catch (error) {
       console.error('Failed to fetch profiles:', error);
+      this.isOffline = true;
       // Return cached data if available
       return this.cache.profiles || [];
     }
@@ -102,9 +105,11 @@ class StateManager {
       const data = await apiClient.getDiscoverContent(profileId);
       this.cache[cacheKey] = data;
       this.setCache('discoverContent', data);
+      this.isOffline = false;
       return data;
     } catch (error) {
       console.error('Failed to fetch discover content:', error);
+      this.isOffline = true;
       return this.cache[cacheKey] || { trending: [], popular: { movies: [], series: [] } };
     }
   }
@@ -120,9 +125,11 @@ class StateManager {
     try {
       const data = await apiClient.getLibraryMovies(filters);
       this.setCache('libraryMovies', data);
+      this.isOffline = false;
       return data;
     } catch (error) {
       console.error('Failed to fetch library movies:', error);
+      this.isOffline = true;
       return this.cache.libraryMovies || { count: 0, items: [] };
     }
   }
@@ -138,9 +145,11 @@ class StateManager {
     try {
       const data = await apiClient.getLibrarySeries(filters);
       this.setCache('librarySeries', data);
+      this.isOffline = false;
       return data;
     } catch (error) {
       console.error('Failed to fetch library series:', error);
+      this.isOffline = true;
       return this.cache.librarySeries || { count: 0, items: [] };
     }
   }
@@ -156,9 +165,11 @@ class StateManager {
     try {
       const data = await apiClient.getRecentlyAdded(limit);
       this.setCache('recentlyAdded', data);
+      this.isOffline = false;
       return data;
     } catch (error) {
       console.error('Failed to fetch recently added:', error);
+      this.isOffline = true;
       return this.cache.recentlyAdded || { count: 0, items: [] };
     }
   }
@@ -176,9 +187,11 @@ class StateManager {
       const data = await apiClient.getWatchlist(profileId);
       this.cache[cacheKey] = data;
       this.setCache('watchlist', data);
+      this.isOffline = false;
       return data;
     } catch (error) {
       console.error('Failed to fetch watchlist:', error);
+      this.isOffline = true;
       return this.cache[cacheKey] || { count: 0, items: [] };
     }
   }

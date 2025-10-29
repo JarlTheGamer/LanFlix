@@ -210,6 +210,7 @@
 
 
 
+
 - [x] 8.1 Create API client module
 
   - Extract all backend communication into api-client.js module
