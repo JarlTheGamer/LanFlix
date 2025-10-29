@@ -529,21 +529,51 @@ export class LibraryService {
         const movieFolder = path.join(moviesPath, entry.name);
 
         try {
-          // Find video file
-          const files = await fs.readdir(movieFolder);
-          const videoFile = files.find(f =>
+          // Find video file - check for nested folder first (qBittorrent issue)
+          let files = await fs.readdir(movieFolder);
+          let videoFile = files.find(f =>
             this.videoExtensions.some(ext => f.toLowerCase().endsWith(ext))
           );
+          let actualMovieFolder = movieFolder;
+
+          // If no video file found, check if there's a single subfolder with the same name
+          if (!videoFile) {
+            const subfolders = files.filter(f => {
+              const fullPath = path.join(movieFolder, f);
+              try {
+                return require('fs').statSync(fullPath).isDirectory();
+              } catch {
+                return false;
+              }
+            });
+
+            // If there's exactly one subfolder, check inside it
+            if (subfolders.length === 1) {
+              const subfolderPath = path.join(movieFolder, subfolders[0]);
+              const subfolderFiles = await fs.readdir(subfolderPath);
+              videoFile = subfolderFiles.find(f =>
+                this.videoExtensions.some(ext => f.toLowerCase().endsWith(ext))
+              );
+
+              if (videoFile) {
+                actualMovieFolder = subfolderPath;
+                logger.info(`Found video in nested folder: ${subfolderPath}`);
+              }
+            }
+          }
 
           if (!videoFile) {
             logger.debug(`No video file found in ${movieFolder}`);
             continue;
           }
 
-          const filePath = path.join(movieFolder, videoFile);
+          const filePath = path.join(actualMovieFolder, videoFile);
 
-          // Try to load metadata from folder
-          const metadata = await this.metadataService.loadMetadataFromMediaFolder(movieFolder);
+          // Try to load metadata from the top-level folder first, then nested
+          let metadata = await this.metadataService.loadMetadataFromMediaFolder(movieFolder);
+          if (!metadata && actualMovieFolder !== movieFolder) {
+            metadata = await this.metadataService.loadMetadataFromMediaFolder(actualMovieFolder);
+          }
 
           if (metadata && metadata.tmdbId) {
             // Check if already in library

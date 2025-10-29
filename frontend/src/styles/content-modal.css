@@ -1,0 +1,484 @@
+/* Content Modal Styles */
+
+.content-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.content-modal.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Ambilight background effect */
+.modal-ambilight {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  right: -50%;
+  bottom: -50%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(80px) brightness(0.6);
+  transform: scale(1.2);
+  z-index: 1;
+}
+
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.1;
+  z-index: 2;
+}
+
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  z-index: 3;
+  cursor: pointer;
+}
+
+.modal-content {
+  position: relative;
+  z-index: 4;
+  background: rgba(20, 20, 20, 0.95);
+  border-radius: 12px;
+  max-width: 900px;
+  max-height: 90vh;
+  width: 90%;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.content-modal.visible .modal-content {
+  transform: scale(1);
+}
+
+/* Scrollbar styling */
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Close button */
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, transform 0.2s ease;
+  z-index: 10;
+}
+
+.modal-close:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(1.1);
+}
+
+.modal-close svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+/* Modal header */
+.modal-header {
+  display: flex;
+  gap: 24px;
+  padding: 40px;
+}
+
+.modal-poster {
+  flex-shrink: 0;
+  width: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.modal-poster img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.modal-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.modal-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: #999;
+}
+
+.modal-meta span {
+  display: flex;
+  align-items: center;
+}
+
+.modal-meta span:not(:last-child)::after {
+  content: '•';
+  margin-left: 12px;
+  color: #666;
+}
+
+.modal-genres {
+  font-size: 14px;
+  color: #ccc;
+  font-weight: 500;
+}
+
+.modal-description {
+  font-size: 16px;
+  line-height: 1.6;
+  color: #ddd;
+  margin: 8px 0;
+}
+
+/* Modal actions */
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.modal-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 6px;
+  border: none;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.modal-btn.primary {
+  background: #e50914;
+  color: white;
+}
+
+.modal-btn.primary:hover {
+  background: #f40612;
+  transform: scale(1.05);
+}
+
+.modal-btn.secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.modal-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.modal-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Episodes section */
+.modal-episodes {
+  padding: 0 40px 40px 40px;
+}
+
+.modal-episodes h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 20px;
+}
+
+.episodes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.season-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.season-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.season-header h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.season-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.season-download-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.season-download-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.episodes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.episode-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: transform 0.2s ease, background 0.2s ease;
+  cursor: pointer;
+}
+
+.episode-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.episode-thumbnail {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%; /* 16:9 aspect ratio */
+  background: #222;
+  overflow: hidden;
+}
+
+.episode-thumbnail img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.watched-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  background: rgba(76, 175, 80, 0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.episode-play-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 50px;
+  height: 50px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid white;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.episode-card:hover .episode-play-btn {
+  opacity: 1;
+}
+
+.episode-play-btn:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+  background: rgba(0, 0, 0, 0.9);
+}
+
+.episode-play-btn svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+  margin-left: 3px;
+}
+
+.episode-info {
+  padding: 12px;
+}
+
+.episode-number {
+  font-size: 12px;
+  color: #999;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.episode-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 4px 0;
+  line-height: 1.3;
+}
+
+.episode-overview {
+  font-size: 14px;
+  color: #aaa;
+  line-height: 1.4;
+  margin: 8px 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.episode-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(229, 9, 20, 0.8);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background 0.2s ease;
+}
+
+.episode-download-btn:hover {
+  background: rgba(229, 9, 20, 1);
+}
+
+.episode-download-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .modal-header {
+    flex-direction: column;
+    padding: 24px;
+  }
+
+  .modal-poster {
+    width: 150px;
+    margin: 0 auto;
+  }
+
+  .modal-title {
+    font-size: 24px;
+  }
+
+  .modal-episodes {
+    padding: 0 24px 24px 24px;
+  }
+
+  .episodes-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+  }
+
+  .modal-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

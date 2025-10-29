@@ -1,10 +1,12 @@
 import { HEROES, MOVIES } from './data.js';
 import stateManager from './data.js';
 import apiClient from './api-client.js';
+import ContentModal from './content-modal.js';
 
 export class ContentDisplay {
   constructor(profileManager) {
     this.profileManager = profileManager;
+    this.contentModal = new ContentModal(profileManager);
     this.currentCategory = 'home';
     this.currentHeroIndex = 0;
     this.activeAmbilightLayer = 1;
@@ -1027,47 +1029,19 @@ export class ContentDisplay {
    * Handle queue action (Watch in a bit)
    */
   async handleQueueAction(contentId, contentType) {
-    try {
-      const profileId = this.profileManager.selectedProfileId;
-      if (!profileId) {
-        alert('Please select a profile first');
-        return;
-      }
-
-      // Get content details first
-      const content = await apiClient.getContentDetails(contentId, contentType, profileId);
-
-      // Queue the download
-      await apiClient.queueDownload(
-        contentId,
-        profileId,
-        contentType,
-        content.title,
-        content.releaseDate ? new Date(content.releaseDate).getFullYear() : null
-      );
-
-      alert(`"${content.title}" has been added to your download queue!`);
-    } catch (error) {
-      console.error('Failed to queue download:', error);
-      alert('Failed to add to download queue. Please try again.');
-    }
+    // Show modal instead of directly queuing
+    await this.contentModal.show(contentId, contentType, true);
   }
 
   /**
    * Handle info action
    */
   async handleInfoAction(contentId, contentType) {
-    try {
-      const profileId = this.profileManager.selectedProfileId;
-      const content = await apiClient.getContentDetails(contentId, contentType, profileId);
-
-      // Show detailed info modal (to be implemented)
-      console.log('Show info for:', content);
-      alert(`Title: ${content.title}\n\nOverview: ${content.overview || 'No description available.'}`);
-    } catch (error) {
-      console.error('Failed to get content details:', error);
-      alert('Failed to load content details.');
-    }
+    // Determine if this is discovery content or library content
+    const card = document.querySelector(`[data-content-id="${contentId}"]`);
+    const isDiscovery = card?.dataset.isDiscovery === 'true';
+    
+    await this.contentModal.show(contentId, contentType, isDiscovery);
   }
 
   getFocusedHeroElement() {
