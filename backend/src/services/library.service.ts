@@ -7,6 +7,7 @@ import { config } from '../config/env';
 import logger from '../utils/logger';
 import fs from 'fs/promises';
 import path from 'path';
+import { getPosterUrl, getBackdropUrl } from '../utils/image-url';
 
 interface LibraryItem {
   id: number;
@@ -161,12 +162,8 @@ export class LibraryService {
             originalTitle: content.originalTitle,
             overview: content.overview,
             releaseDate: content.releaseDate?.toISOString(),
-            posterUrl: content.posterPath
-              ? `${this.imageBaseUrl}/${this.posterSize}${content.posterPath}`
-              : undefined,
-            backdropUrl: content.backdropPath
-              ? `${this.imageBaseUrl}/${this.backdropSize}${content.backdropPath}`
-              : undefined,
+            posterUrl: getPosterUrl(content.posterPath, content.id),
+            backdropUrl: getBackdropUrl(content.backdropPath, content.id),
             voteAverage: content.voteAverage ? parseFloat(content.voteAverage.toString()) : undefined,
             voteCount: content.voteCount,
             genres: content.genres ? JSON.parse(content.genres) : [],
@@ -260,12 +257,8 @@ export class LibraryService {
         originalTitle: content.originalTitle,
         overview: content.overview,
         releaseDate: content.releaseDate?.toISOString(),
-        posterUrl: content.posterPath
-          ? `${this.imageBaseUrl}/${this.posterSize}${content.posterPath}`
-          : undefined,
-        backdropUrl: content.backdropPath
-          ? `${this.imageBaseUrl}/${this.backdropSize}${content.backdropPath}`
-          : undefined,
+        posterUrl: getPosterUrl(content.posterPath, content.id),
+        backdropUrl: getBackdropUrl(content.backdropPath, content.id),
         voteAverage: content.voteAverage ? parseFloat(content.voteAverage.toString()) : undefined,
         voteCount: content.voteCount,
         genres: content.genres ? JSON.parse(content.genres) : [],

@@ -284,11 +284,9 @@ export class ContentDisplay {
     heroSection.dataset.contentId = item.id;
     heroSection.dataset.contentType = item.type;
 
-    const backdropUrl = item.backdropPath
-      ? `https://image.tmdb.org/t/p/original${item.backdropPath}`
-      : item.posterPath
-        ? `https://image.tmdb.org/t/p/original${item.posterPath}`
-        : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"%3E%3Crect fill="%23222" width="1920" height="1080"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="48" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
+    const backdropUrl = item.backdropUrl
+      || item.posterUrl
+      || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"%3E%3Crect fill="%23222" width="1920" height="1080"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="48" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
 
     const genres = Array.isArray(item.genres) ? item.genres.join(' • ') : (item.genre || 'Unknown');
     const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : (item.year || '');
@@ -711,13 +709,13 @@ export class ContentDisplay {
     movieCard.dataset.contentId = item.id || item.tmdbId;
     movieCard.dataset.contentType = item.type;
 
-    const posterUrl = item.posterPath
-      ? `https://image.tmdb.org/t/p/w500${item.posterPath}`
-      : item.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450"%3E%3Crect fill="%23222" width="300" height="450"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="24" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
+    const posterUrl = item.posterUrl
+      || item.image
+      || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450"%3E%3Crect fill="%23222" width="300" height="450"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="24" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
 
-    const backdropUrl = item.backdropPath
-      ? `https://image.tmdb.org/t/p/original${item.backdropPath}`
-      : item.expandedImage || posterUrl;
+    const backdropUrl = item.backdropUrl
+      || item.expandedImage
+      || posterUrl;
 
     const genres = Array.isArray(item.genres) ? item.genres.join(', ') : (item.genre || 'Unknown');
     const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : (item.year || 'N/A');
@@ -780,13 +778,13 @@ export class ContentDisplay {
     movieCard.dataset.contentType = item.type;
     movieCard.dataset.isDiscovery = isDiscoveryContent;
 
-    const posterUrl = item.posterPath
-      ? `https://image.tmdb.org/t/p/w500${item.posterPath}`
-      : item.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450"%3E%3Crect fill="%23222" width="300" height="450"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="24" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
+    const posterUrl = item.posterUrl
+      || item.image
+      || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450"%3E%3Crect fill="%23222" width="300" height="450"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="24" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
 
-    const backdropUrl = item.backdropPath
-      ? `https://image.tmdb.org/t/p/original${item.backdropPath}`
-      : item.expandedImage || posterUrl;
+    const backdropUrl = item.backdropUrl
+      || item.expandedImage
+      || posterUrl;
 
     const genres = Array.isArray(item.genres) ? item.genres.join(', ') : (item.genre || 'Unknown');
     const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : (item.year || 'N/A');

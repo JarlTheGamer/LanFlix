@@ -17,6 +17,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve cached images as static files
+app.use('/images/posters', express.static(config.media.posterCachePath));
+app.use('/images/backdrops', express.static(config.media.backdropCachePath));
+
 // Inject API status into all responses
 app.use(injectApiStatus);
 

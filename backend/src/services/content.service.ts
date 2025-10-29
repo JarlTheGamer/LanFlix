@@ -76,18 +76,18 @@ export class ContentService {
 
       // Search TMDB for metadata - gracefully handle API failures
       const [movieResults, tvResults] = await Promise.all([
-        type === 'series' 
-          ? Promise.resolve({ results: [] }) 
+        type === 'series'
+          ? Promise.resolve({ results: [] })
           : this.tmdbClient.searchMovie(query).catch((error) => {
-              logger.warn('TMDB API unavailable for movie search:', error.message);
-              return { results: [] };
-            }),
-        type === 'movie' 
-          ? Promise.resolve({ results: [] }) 
+            logger.warn('TMDB API unavailable for movie search:', error.message);
+            return { results: [] };
+          }),
+        type === 'movie'
+          ? Promise.resolve({ results: [] })
           : this.tmdbClient.searchTV(query).catch((error) => {
-              logger.warn('TMDB API unavailable for TV search:', error.message);
-              return { results: [] };
-            })
+            logger.warn('TMDB API unavailable for TV search:', error.message);
+            return { results: [] };
+          })
       ]);
 
       // Get library content to mark what's already available
@@ -291,7 +291,7 @@ export class ContentService {
         logger.info(`Fetching popular ${type} from TMDB, page ${page}`);
 
         const tmdbType = type === 'series' ? 'tv' : 'movie';
-        
+
         // Gracefully handle API failures
         const response = await this.tmdbClient.getPopular(tmdbType, page).catch((error) => {
           logger.warn(`TMDB API unavailable for popular ${type}:`, error.message);
@@ -369,7 +369,7 @@ export class ContentService {
         logger.warn(`TMDB API unavailable for content details ${type} ${tmdbId}:`, error.message);
         return null;
       });
-      
+
       if (!metadata) {
         return null;
       }
