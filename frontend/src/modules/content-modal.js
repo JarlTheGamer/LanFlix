@@ -24,19 +24,19 @@ export class ContentModal {
                 ? await apiClient.getContentDetails(contentId, contentType, profileId)
                 : await apiClient.getLibraryItem(contentId, profileId);
 
-            // Fetch episodes for series
+            // Fetch season metadata for series (episodes loaded on demand)
             if (contentType === 'series' && isDiscovery) {
                 try {
                     const episodesData = await apiClient.getSeriesEpisodes(contentId);
-                    // Flatten episodes from all seasons
-                    content.episodes = [];
-                    episodesData.seasons.forEach(season => {
-                        content.episodes.push(...season.episodes);
-                    });
+                    // Store season metadata, episodes will be loaded when season is selected
+                    content.seasons = episodesData.seasons;
                     content.numberOfSeasons = episodesData.numberOfSeasons;
                     content.numberOfEpisodes = episodesData.numberOfEpisodes;
+                    content.episodes = []; // Will be populated progressively
+                    content.tmdbId = contentId; // Store for later episode fetching
                 } catch (error) {
-                    console.error('Failed to fetch episodes:', error);
+                    console.error('Failed to fetch season metadata:', error);
+                    content.seasons = [];
                     content.episodes = [];
                 }
             }
@@ -75,7 +75,7 @@ export class ContentModal {
         const genres = Array.isArray(content.genres) ? content.genres.join(', ') : '';
         const year = content.releaseDate ? new Date(content.releaseDate).getFullYear() : '';
         const rating = content.voteAverage ? `★ ${content.voteAverage.toFixed(1)}` : '';
-        
+
         // Format runtime properly
         let runtime = '';
         if (content.runtime && content.runtime > 0) {
@@ -91,7 +91,8 @@ export class ContentModal {
         // For series, show episode list
         const episodes = content.episodes || [];
         const episodeCount = content.numberOfEpisodes || episodes.length;
-        const hasEpisodes = content.type === 'series' && episodes.length > 0;
+        // Show episodes section if it's a series (even if episodes not loaded yet)
+        const hasEpisodes = content.type === 'series' && (content.seasons?.length > 0 || episodes.length > 0);
 
         modal.innerHTML = `
       <div class="modal-backdrop" style="background-image: url(${backdropUrl})"></div>
@@ -163,54 +164,195 @@ export class ContentModal {
     }
 
     /**
-     * Render episode list
+     * Render episode list with seasons sidebar (progressive loading)
      */
     renderEpisodes(episodes, isDiscovery) {
         const episodesList = document.getElementById('episodes-list');
         if (!episodesList) return;
 
-        // Group by season
-        const seasons = {};
-        episodes.forEach(ep => {
-            if (!seasons[ep.seasonNumber]) {
-                seasons[ep.seasonNumber] = [];
-            }
-            seasons[ep.seasonNumber].push(ep);
-        });
+        // Use seasons from content metadata if available (for discovery content)
+        const seasons = this.currentContent.seasons || [];
+        const hasSeasonMetadata = seasons.length > 0;
 
-        // Render each season
-        Object.keys(seasons).sort((a, b) => a - b).forEach(seasonNum => {
-            const seasonEpisodes = seasons[seasonNum];
+        // If we have season metadata but no episodes yet, use that
+        let seasonNumbers;
+        if (hasSeasonMetadata) {
+            seasonNumbers = seasons.map(s => s.seasonNumber.toString()).sort((a, b) => parseInt(a) - parseInt(b));
+        } else {
+            // Group existing episodes by season (for library content)
+            const seasonMap = {};
+            episodes.forEach(ep => {
+                if (!seasonMap[ep.seasonNumber]) {
+                    seasonMap[ep.seasonNumber] = [];
+                }
+                seasonMap[ep.seasonNumber].push(ep);
+            });
+            seasonNumbers = Object.keys(seasonMap).sort((a, b) => parseInt(a) - parseInt(b));
+        }
 
-            const seasonSection = document.createElement('div');
-            seasonSection.className = 'season-section';
-            seasonSection.innerHTML = `
-        <div class="season-header">
-          <h3>Season ${seasonNum}</h3>
-          ${isDiscovery ? `
-            <button class="season-download-btn" data-season="${seasonNum}">
-              <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-              Download Season
+        // Create layout with sidebar
+        episodesList.innerHTML = `
+      <div class="episodes-layout">
+        <div class="seasons-sidebar">
+          ${seasonNumbers.map((seasonNum, index) => {
+            const season = hasSeasonMetadata ? seasons.find(s => s.seasonNumber.toString() === seasonNum) : null;
+            const episodeCount = season ? season.episodeCount : (episodes.filter(e => e.seasonNumber.toString() === seasonNum).length);
+            return `
+            <button class="season-tab ${index === 0 ? 'active' : ''}" data-season="${seasonNum}">
+              <div class="season-tab-title">Season ${seasonNum}</div>
+              <div class="season-tab-count">${episodeCount} episodes</div>
             </button>
-          ` : ''}
+          `;
+        }).join('')}
         </div>
-        <div class="episodes-grid"></div>
-      `;
+        <div class="episodes-content">
+          ${seasonNumbers.map((seasonNum, index) => `
+            <div class="season-episodes ${index === 0 ? 'active' : ''}" data-season="${seasonNum}">
+              <div class="season-header">
+                <h3>Season ${seasonNum}</h3>
+                ${isDiscovery ? `
+                  <button class="season-download-btn" data-season="${seasonNum}">
+                    <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    Download Season
+                  </button>
+                ` : ''}
+              </div>
+              <div class="episodes-list-vertical" data-season="${seasonNum}">
+                ${index === 0 ? '' : '<div class="loading-placeholder">Loading episodes...</div>'}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
 
-            const episodesGrid = seasonSection.querySelector('.episodes-grid');
+        // Load all seasons progressively starting with Season 1
+        if (seasonNumbers.length > 0) {
+            this.loadAllSeasonsProgressively(seasonNumbers, isDiscovery);
+        }
 
+        // Setup season tab switching with progressive loading
+        const seasonTabs = episodesList.querySelectorAll('.season-tab');
+        seasonTabs.forEach(tab => {
+            tab.addEventListener('click', async () => {
+                const seasonNum = tab.dataset.season;
+
+                // Update active tab
+                seasonTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Update active season content
+                const seasonContents = episodesList.querySelectorAll('.season-episodes');
+                seasonContents.forEach(content => {
+                    content.classList.remove('active');
+                    if (content.dataset.season === seasonNum) {
+                        content.classList.add('active');
+                    }
+                });
+
+                // Load episodes for this season if not already loaded
+                await this.loadSeasonEpisodes(seasonNum, isDiscovery);
+            });
+        });
+    }
+
+    /**
+     * Load all seasons progressively (one at a time to avoid rate limits)
+     */
+    async loadAllSeasonsProgressively(seasonNumbers, isDiscovery) {
+        // For library content, load all at once since episodes are already available
+        if (!isDiscovery) {
+            for (const seasonNum of seasonNumbers) {
+                try {
+                    await this.loadSeasonEpisodes(seasonNum, isDiscovery);
+                } catch (error) {
+                    console.error(`Failed to load season ${seasonNum}:`, error);
+                }
+            }
+            return;
+        }
+
+        // For discovery content, load progressively to avoid rate limits
+        for (const seasonNum of seasonNumbers) {
+            try {
+                await this.loadSeasonEpisodes(seasonNum, isDiscovery);
+                // Small delay between seasons to be nice to the API
+                await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (error) {
+                console.error(`Failed to load season ${seasonNum}:`, error);
+                // Continue with next season even if one fails
+            }
+        }
+    }
+
+    /**
+     * Load episodes for a specific season
+     */
+    async loadSeasonEpisodes(seasonNum, isDiscovery) {
+        const episodesContainer = document.querySelector(`.episodes-list-vertical[data-season="${seasonNum}"]`);
+        if (!episodesContainer) return;
+
+        // Check if already loaded
+        if (episodesContainer.querySelector('.episode-card-horizontal')) {
+            return; // Already loaded
+        }
+
+        // Show loading state
+        episodesContainer.innerHTML = '<div class="loading-placeholder">Loading episodes...</div>';
+
+        try {
+            let seasonEpisodes = [];
+
+            // For discovery content, fetch from API
+            if (isDiscovery && this.currentContent.tmdbId) {
+                const seasonData = await apiClient.getSeasonEpisodes(this.currentContent.tmdbId, parseInt(seasonNum));
+                seasonEpisodes = seasonData.season.episodes;
+            } else {
+                // For library content, use existing episodes
+                const seasonNumInt = parseInt(seasonNum);
+                seasonEpisodes = (this.currentContent.episodes || []).filter(ep =>
+                    parseInt(ep.seasonNumber) === seasonNumInt
+                );
+            }
+
+            // Clear loading state
+            episodesContainer.innerHTML = '';
+
+            // Render episodes
             seasonEpisodes.forEach(episode => {
-                const episodeCard = document.createElement('div');
-                episodeCard.className = 'episode-card';
-                episodeCard.dataset.episodeId = episode.id;
-                episodeCard.dataset.seasonNumber = episode.seasonNumber;
-                episodeCard.dataset.episodeNumber = episode.episodeNumber;
+                const episodeCard = this.createEpisodeCard(episode, isDiscovery);
+                episodesContainer.appendChild(episodeCard);
+            });
 
-                const stillUrl = episode.stillPath || this.currentContent.backdropUrl || '';
-                const watched = episode.watched || false;
+            // Add season download handler
+            if (isDiscovery) {
+                const seasonDownloadBtn = document.querySelector(`.season-download-btn[data-season="${seasonNum}"]`);
+                seasonDownloadBtn?.addEventListener('click', () => {
+                    this.downloadSeason(seasonNum);
+                });
+            }
+        } catch (error) {
+            console.error(`Failed to load season ${seasonNum}:`, error);
+            episodesContainer.innerHTML = '<div class="error-placeholder">Failed to load episodes</div>';
+        }
+    }
 
-                episodeCard.innerHTML = `
-          <div class="episode-thumbnail">
+    /**
+     * Create episode card element
+     */
+    createEpisodeCard(episode, isDiscovery) {
+        const episodeCard = document.createElement('div');
+        episodeCard.className = 'episode-card-horizontal';
+        episodeCard.dataset.episodeId = episode.id;
+        episodeCard.dataset.seasonNumber = episode.seasonNumber;
+        episodeCard.dataset.episodeNumber = episode.episodeNumber;
+
+        const stillUrl = episode.stillPath || this.currentContent.backdropUrl || '';
+        const watched = episode.watched || false;
+        const runtime = episode.runtime ? `${episode.runtime}m` : '';
+
+        episodeCard.innerHTML = `
+          <div class="episode-thumbnail-horizontal">
             <img src="${stillUrl}" alt="Episode ${episode.episodeNumber}" />
             ${watched ? '<div class="watched-badge">✓</div>' : ''}
             ${!isDiscovery ? `
@@ -219,50 +361,43 @@ export class ContentModal {
               </button>
             ` : ''}
           </div>
-          <div class="episode-info">
-            <div class="episode-number">Episode ${episode.episodeNumber}</div>
-            <div class="episode-title">${episode.title || `Episode ${episode.episodeNumber}`}</div>
+          <div class="episode-info-horizontal">
+            <div class="episode-header-row">
+              <div class="episode-number-title">
+                <span class="episode-number">${episode.episodeNumber}.</span>
+                <span class="episode-title">${episode.title || `Episode ${episode.episodeNumber}`}</span>
+              </div>
+              ${runtime ? `<span class="episode-runtime">${runtime}</span>` : ''}
+            </div>
             <div class="episode-overview">${episode.overview || 'No description available.'}</div>
             ${isDiscovery ? `
               <button class="episode-download-btn" data-episode-id="${episode.id}">
                 <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                Download
+                Download Episode
               </button>
             ` : ''}
           </div>
         `;
 
-                episodesGrid.appendChild(episodeCard);
-
-                // Add play handler for library content
-                if (!isDiscovery) {
-                    const playBtn = episodeCard.querySelector('.episode-play-btn');
-                    playBtn?.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this.playEpisode(episode.id);
-                    });
-                }
-
-                // Add download handler for discovery content
-                if (isDiscovery) {
-                    const downloadBtn = episodeCard.querySelector('.episode-download-btn');
-                    downloadBtn?.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this.downloadEpisode(episode.seasonNumber, episode.episodeNumber);
-                    });
-                }
+        // Add play handler for library content
+        if (!isDiscovery) {
+            const playBtn = episodeCard.querySelector('.episode-play-btn');
+            playBtn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.playEpisode(episode.id);
             });
+        }
 
-            episodesList.appendChild(seasonSection);
+        // Add download handler for discovery content
+        if (isDiscovery) {
+            const downloadBtn = episodeCard.querySelector('.episode-download-btn');
+            downloadBtn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.downloadEpisode(episode.seasonNumber, episode.episodeNumber);
+            });
+        }
 
-            // Add season download handler
-            if (isDiscovery) {
-                const seasonDownloadBtn = seasonSection.querySelector('.season-download-btn');
-                seasonDownloadBtn?.addEventListener('click', () => {
-                    this.downloadSeason(seasonNum);
-                });
-            }
-        });
+        return episodeCard;
     }
 
     /**

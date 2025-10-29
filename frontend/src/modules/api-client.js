@@ -42,7 +42,7 @@ class ApiClient {
    */
   async request(endpoint, options = {}, retryCount = 0) {
     const url = `${this.baseURL}${endpoint}`;
-    
+
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers
@@ -75,11 +75,11 @@ class ApiClient {
 
       // Parse JSON response
       const data = await response.json();
-      
+
       // Check for server status message (offline mode)
       if (data._serverStatus && data._serverStatus.offlineMode) {
         console.warn('⚠️ Server Status:', data._serverStatus.message);
-        
+
         // Dispatch event for UI to show notification
         window.dispatchEvent(new CustomEvent('server-limited-mode', {
           detail: { message: data._serverStatus.message }
@@ -112,10 +112,10 @@ class ApiClient {
       this.isOffline = true;
       this.lastOfflineCheck = Date.now();
       console.warn('🔴 API is offline - switching to local mode');
-      
+
       // Dispatch event for UI to react
       window.dispatchEvent(new CustomEvent('api-offline'));
-      
+
       // Schedule automatic retry
       this.scheduleOfflineRetry();
     }
@@ -128,10 +128,10 @@ class ApiClient {
     if (this.isOffline) {
       this.isOffline = false;
       console.log('🟢 API is back online');
-      
+
       // Dispatch event for UI to react
       window.dispatchEvent(new CustomEvent('api-online'));
-      
+
       // Clear retry timer
       if (this.offlineCheckTimer) {
         clearTimeout(this.offlineCheckTimer);
@@ -166,7 +166,7 @@ class ApiClient {
         method: 'HEAD',
         headers: this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}
       });
-      
+
       if (response.ok) {
         this.markOnline();
         return true;
@@ -249,10 +249,18 @@ class ApiClient {
 
   /**
    * GET /api/content/:id/episodes
-   * Get episodes for a TV series
+   * Get episodes for a TV series (all seasons metadata)
    */
   async getSeriesEpisodes(tmdbId) {
     return this.request(`/content/${tmdbId}/episodes`);
+  }
+
+  /**
+   * GET /api/content/:id/episodes?season=X
+   * Get episodes for a specific season
+   */
+  async getSeasonEpisodes(tmdbId, seasonNumber) {
+    return this.request(`/content/${tmdbId}/episodes?season=${seasonNumber}`);
   }
 
   /**
@@ -313,7 +321,7 @@ class ApiClient {
   async getLibraryItem(id, profileId = null) {
     const params = new URLSearchParams();
     if (profileId) params.append('profileId', profileId);
-    
+
     const queryString = params.toString();
     return this.request(`/library/${id}${queryString ? '?' + queryString : ''}`);
   }
@@ -415,7 +423,7 @@ class ApiClient {
   getStreamUrl(contentId, episodeId = null) {
     const params = new URLSearchParams();
     if (episodeId) params.append('episodeId', episodeId);
-    
+
     return `${this.baseURL}/stream/${contentId}?${params.toString()}`;
   }
 
@@ -429,7 +437,7 @@ class ApiClient {
       progressSeconds,
       durationSeconds
     };
-    
+
     if (episodeId) {
       body.episodeId = episodeId;
     }
