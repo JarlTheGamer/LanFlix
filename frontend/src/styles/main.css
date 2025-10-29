@@ -600,7 +600,7 @@ main {
   position: relative;
   overflow-x: auto;
   overflow-y: visible;
-  padding: 20px 0 40px;
+  padding: 20px 0 20px;
   scrollbar-width: none;
   -ms-overflow-style: none;
   overscroll-behavior-x: contain;
@@ -617,7 +617,7 @@ main {
   display: flex;
   gap: 16px;
   padding: 0 20px;
-  min-height: 400px;
+  min-height: 320px;
   align-items: flex-start;
   transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   transform-origin: left center;
