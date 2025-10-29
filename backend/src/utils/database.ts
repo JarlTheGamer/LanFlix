@@ -23,8 +23,12 @@ export const initializeDatabase = async (): Promise<void> => {
     await sequelize.authenticate();
     logger.info('Database connection established successfully');
     
-    await sequelize.sync({ alter: false });
-    logger.info('Database models synchronized');
+    // Import models to ensure they're registered
+    await import('../models');
+    
+    // Note: We use migrations instead of sync in production
+    // await sequelize.sync({ alter: false });
+    logger.info('Database models loaded');
   } catch (error) {
     logger.error('Unable to connect to database:', error);
     throw error;
