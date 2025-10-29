@@ -16,32 +16,46 @@
 
 
 
+
   - Create Sequelize models for Profiles, Content, Series_Episodes, Watch_History, Watchlist tables
   - Create Sequelize models for Download_Queue, Settings, Auto_Delete_Schedule, Device_Tokens tables
   - Write database migration scripts for all tables with proper indexes
   - Implement database seeding for initial settings and test data
   - _Requirements: 1.3, 8.1, 8.4, 8.5_
+-
 
-- [ ] 3. Build external service API clients
-- [ ] 3.1 Implement TMDB API client
+- [x] 3. Build external service API clients
+
+
+
+
+- [x] 3.1 Implement TMDB API client
+
+
   - Create TMDBClient class with methods for search, movie details, TV details, trending, and popular content
   - Implement error handling and retry logic with exponential backoff
   - Add request rate limiting (40 requests per 10 seconds)
   - _Requirements: 12.1, 13.5_
 
-- [ ] 3.2 Implement Sonarr API client
+- [x] 3.2 Implement Sonarr API client
+
+
   - Create SonarrClient class with methods for search, add series, get series, get queue, delete series
   - Implement authentication with API key
   - Add connection testing and health check methods
   - _Requirements: 2.1, 2.5, 2.6_
 
-- [ ] 3.3 Implement Radarr API client
+- [x] 3.3 Implement Radarr API client
+
+
   - Create RadarrClient class with methods for search, add movie, get movies, get queue, delete movie
   - Implement authentication with API key
   - Add connection testing and health check methods
   - _Requirements: 2.2, 2.5, 2.6_
 
-- [ ] 3.4 Implement Prowlarr API client
+- [x] 3.4 Implement Prowlarr API client
+
+
   - Create ProwlarrClient class with methods for search and get indexers
   - Implement authentication with API key
   - Add search result parsing and normalization
