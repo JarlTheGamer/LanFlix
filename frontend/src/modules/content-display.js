@@ -860,10 +860,15 @@ export class ContentDisplay {
       || item.expandedImage
       || posterUrl;
 
-    const genres = Array.isArray(item.genres) ? item.genres.join(', ') : (item.genre || 'Unknown');
-    const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : (item.year || 'N/A');
-    const duration = item.runtime ? `${item.runtime}m` : (item.duration || 'N/A');
-    const rating = item.voteAverage ? `★ ${item.voteAverage.toFixed(1)}` : (item.rating || 'N/A');
+    const genres = Array.isArray(item.genres) && item.genres.length > 0 
+      ? item.genres.slice(0, 2).join(', ') 
+      : (item.genre || '');
+    const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : (item.year || '');
+    const duration = item.runtime ? `${item.runtime}m` : (item.duration || '');
+    const rating = item.voteAverage ? `★ ${item.voteAverage.toFixed(1)}` : (item.rating || '');
+
+    // Build meta array with only non-empty values
+    const metaItems = [genres, year, duration, rating].filter(Boolean);
 
     movieCard.innerHTML = `
       <div class="movie-poster-container">
@@ -875,10 +880,7 @@ export class ContentDisplay {
       <div class="movie-info">
         <h3 class="movie-title">${item.title}</h3>
         <div class="movie-meta">
-          <span>${genres}</span>
-          <span>${year}</span>
-          <span>${duration}</span>
-          <span>${rating}</span>
+          ${metaItems.map(item => `<span>${item}</span>`).join('')}
         </div>
         <p class="movie-description">${item.overview || item.description || 'No description available.'}</p>
       </div>
@@ -930,89 +932,50 @@ export class ContentDisplay {
   setupCardHandlers() {
     const cards = document.querySelectorAll('.movie-card');
 
-    cards.forEach(card => {
+    cards.forEach((card, index) => {
+      // Make cards focusable
+      card.setAttribute('tabindex', '0');
+      card.dataset.cardIndex = index;
+
+      // Click handler - open modal directly
       card.addEventListener('click', () => {
-        this.handleCardClick(card);
+        const contentId = card.dataset.contentId;
+        const contentType = card.dataset.contentType;
+        const isDiscovery = card.dataset.isDiscovery === 'true';
+        this.contentModal.show(contentId, contentType, isDiscovery);
+      });
+
+      // Enter key handler
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const contentId = card.dataset.contentId;
+          const contentType = card.dataset.contentType;
+          const isDiscovery = card.dataset.isDiscovery === 'true';
+          this.contentModal.show(contentId, contentType, isDiscovery);
+        }
       });
     });
   }
 
   /**
    * Handle card click for expansion and actions
+   * @deprecated - Now opens modal directly instead of expanding
    */
   handleCardClick(card) {
+    // This method is deprecated - cards now open modal directly
     const contentId = card.dataset.contentId;
     const contentType = card.dataset.contentType;
-
-    // Toggle expansion
-    const wasExpanded = card.classList.contains('expanded');
-
-    // Collapse all other cards
-    document.querySelectorAll('.movie-card').forEach(c => {
-      c.classList.remove('expanded');
-    });
-
-    // Expand this card if it wasn't expanded
-    if (!wasExpanded) {
-      card.classList.add('expanded');
-
-      // Add action buttons if not already present
-      if (!card.querySelector('.card-actions')) {
-        this.addCardActions(card, contentId, contentType);
-      }
-    }
+    const isDiscovery = card.dataset.isDiscovery === 'true';
+    this.contentModal.show(contentId, contentType, isDiscovery);
   }
 
   /**
    * Add action buttons to expanded card
+   * @deprecated - Cards now open modal directly, no expansion needed
    */
   addCardActions(card, contentId, contentType) {
-    const movieInfo = card.querySelector('.movie-info');
-    if (!movieInfo) return;
-
-    const isDiscoveryContent = card.dataset.isDiscovery === 'true';
-
-    const actionsDiv = document.createElement('div');
-    actionsDiv.className = 'card-actions';
-
-    // Show different buttons based on whether it's discovery or library content
-    if (isDiscoveryContent) {
-      actionsDiv.innerHTML = `
-        <button class="card-action-btn queue-btn" data-action="queue">
-          <span>+</span> Watch in a bit
-        </button>
-        <button class="card-action-btn info-btn" data-action="info">
-          <span>ℹ</span> More Info
-        </button>
-      `;
-    } else {
-      actionsDiv.innerHTML = `
-        <button class="card-action-btn play-btn" data-action="play">
-          <span>▶</span> Play
-        </button>
-        <button class="card-action-btn info-btn" data-action="info">
-          <span>ℹ</span> More Info
-        </button>
-      `;
-    }
-
-    movieInfo.appendChild(actionsDiv);
-
-    // Add event listeners
-    actionsDiv.querySelector('.play-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.handlePlayAction(contentId, contentType);
-    });
-
-    actionsDiv.querySelector('.queue-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.handleQueueAction(contentId, contentType);
-    });
-
-    actionsDiv.querySelector('.info-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.handleInfoAction(contentId, contentType);
-    });
+    // This method is deprecated - cards now open modal directly
   }
 
   /**

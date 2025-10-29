@@ -248,6 +248,14 @@ class ApiClient {
   }
 
   /**
+   * GET /api/content/:id/episodes
+   * Get episodes for a TV series
+   */
+  async getSeriesEpisodes(tmdbId) {
+    return this.request(`/content/${tmdbId}/episodes`);
+  }
+
+  /**
    * POST /api/content/:id/queue
    * Add content to download queue
    */

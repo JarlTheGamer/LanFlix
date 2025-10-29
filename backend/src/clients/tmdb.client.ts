@@ -246,6 +246,16 @@ export class TMDBClient {
   }
 
   /**
+   * Get TV season details with episodes
+   */
+  async getSeasonDetails(tvId: number, seasonNumber: number): Promise<any> {
+    return this.retryRequest(async () => {
+      const response = await this.client.get(`/tv/${tvId}/season/${seasonNumber}`);
+      return response.data;
+    });
+  }
+
+  /**
    * Get trending content
    */
   async getTrending(

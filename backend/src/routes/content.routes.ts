@@ -108,6 +108,66 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
 });
 
 /**
+ * GET /api/content/:id/episodes
+ * Get episodes for a TV series
+ */
+router.get('/:id/episodes', validatePathParam('id'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tmdbId = parseInt(req.params.id, 10);
+
+    // Import tmdbClient here to avoid circular dependency
+    const { tmdbClient } = await import('../clients');
+
+    // Get TV details first to know how many seasons
+    const tvDetails = await tmdbClient.getTVDetails(tmdbId);
+
+    // Fetch all seasons with episodes
+    const seasonsWithEpisodes = await Promise.all(
+      tvDetails.seasons
+        .filter(season => season.season_number > 0) // Skip season 0 (specials)
+        .map(async (season) => {
+          try {
+            const seasonDetails = await tmdbClient.getSeasonDetails(tmdbId, season.season_number);
+            return {
+              seasonNumber: season.season_number,
+              episodeCount: season.episode_count,
+              airDate: season.air_date,
+              episodes: seasonDetails.episodes.map((ep: any) => ({
+                id: ep.id,
+                seasonNumber: ep.season_number,
+                episodeNumber: ep.episode_number,
+                title: ep.name,
+                overview: ep.overview,
+                airDate: ep.air_date,
+                stillPath: ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : null,
+                runtime: ep.runtime
+              }))
+            };
+          } catch (error) {
+            console.error(`Failed to fetch season ${season.season_number}:`, error);
+            return {
+              seasonNumber: season.season_number,
+              episodeCount: season.episode_count,
+              airDate: season.air_date,
+              episodes: []
+            };
+          }
+        })
+    );
+
+    res.json({
+      tmdbId,
+      title: tvDetails.name,
+      numberOfSeasons: tvDetails.number_of_seasons,
+      numberOfEpisodes: tvDetails.number_of_episodes,
+      seasons: seasonsWithEpisodes
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/content/:id/queue
  * Add content to download queue
  */

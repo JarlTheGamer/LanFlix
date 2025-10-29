@@ -24,6 +24,23 @@ export class ContentModal {
                 ? await apiClient.getContentDetails(contentId, contentType, profileId)
                 : await apiClient.getLibraryItem(contentId, profileId);
 
+            // Fetch episodes for series
+            if (contentType === 'series' && isDiscovery) {
+                try {
+                    const episodesData = await apiClient.getSeriesEpisodes(contentId);
+                    // Flatten episodes from all seasons
+                    content.episodes = [];
+                    episodesData.seasons.forEach(season => {
+                        content.episodes.push(...season.episodes);
+                    });
+                    content.numberOfSeasons = episodesData.numberOfSeasons;
+                    content.numberOfEpisodes = episodesData.numberOfEpisodes;
+                } catch (error) {
+                    console.error('Failed to fetch episodes:', error);
+                    content.episodes = [];
+                }
+            }
+
             this.currentContent = content;
 
             // Create modal
@@ -58,10 +75,22 @@ export class ContentModal {
         const genres = Array.isArray(content.genres) ? content.genres.join(', ') : '';
         const year = content.releaseDate ? new Date(content.releaseDate).getFullYear() : '';
         const rating = content.voteAverage ? `★ ${content.voteAverage.toFixed(1)}` : '';
-        const runtime = content.runtime ? `${Math.floor(content.runtime / 60)}h ${content.runtime % 60}m` : '';
+        
+        // Format runtime properly
+        let runtime = '';
+        if (content.runtime && content.runtime > 0) {
+            const hours = Math.floor(content.runtime / 60);
+            const minutes = content.runtime % 60;
+            if (hours > 0) {
+                runtime = `${hours}h ${minutes}m`;
+            } else {
+                runtime = `${minutes}m`;
+            }
+        }
 
         // For series, show episode list
         const episodes = content.episodes || [];
+        const episodeCount = content.numberOfEpisodes || episodes.length;
         const hasEpisodes = content.type === 'series' && episodes.length > 0;
 
         modal.innerHTML = `
@@ -84,7 +113,7 @@ export class ContentModal {
               ${year ? `<span>${year}</span>` : ''}
               ${rating ? `<span>${rating}</span>` : ''}
               ${runtime ? `<span>${runtime}</span>` : ''}
-              ${content.type === 'series' ? `<span>${episodes.length} Episodes</span>` : ''}
+              ${content.type === 'series' && episodeCount > 0 ? `<span>${episodeCount} Episodes</span>` : ''}
             </div>
             <div class="modal-genres">${genres}</div>
             <p class="modal-description">${content.overview || 'No description available.'}</p>
