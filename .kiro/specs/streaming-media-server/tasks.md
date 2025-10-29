@@ -128,7 +128,8 @@
   - Add Web Push API support for browser notifications
   - _Requirements: 4.6_
 
-- [x] 6. Build REST API routes
+- [ ] 6. Build REST API routes
+
 
 
 
@@ -192,7 +193,11 @@
   - Create GET /api/notifications/:profileId endpoint for notification history
   - _Requirements: 4.6_
 
-- [ ] 7. Implement background jobs and scheduled tasks
+- [x] 7. Implement background jobs and scheduled tasks
+
+
+
+
   - Create job scheduler using node-cron
   - Implement download queue polling job (every 60 seconds)
   - Implement auto-delete check job (daily at 2 AM)

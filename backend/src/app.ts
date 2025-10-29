@@ -4,6 +4,7 @@ import { config } from './config/env';
 import logger from './utils/logger';
 import { initializeDatabase } from './utils/database';
 import { cacheManager } from './utils/cache-manager';
+import { jobScheduler } from './jobs/scheduler';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
 import apiRoutes from './routes';
 import fs from 'fs';
@@ -50,6 +51,9 @@ const startServer = async () => {
     // Initialize cache manager
     await cacheManager.initialize();
     
+    // Start job scheduler
+    jobScheduler.start();
+    
     app.listen(config.server.port, () => {
       logger.info(`Server running on port ${config.server.port}`);
       logger.info(`Environment: ${config.server.nodeEnv}`);
@@ -63,12 +67,14 @@ const startServer = async () => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM signal received: closing HTTP server');
+  jobScheduler.stop();
   await cacheManager.shutdown();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT signal received: closing HTTP server');
+  jobScheduler.stop();
   await cacheManager.shutdown();
   process.exit(0);
 });
