@@ -1,0 +1,196 @@
+.admin-main {
+  min-height: 100vh;
+  background: #141414;
+  padding: 100px 20px 40px;
+}
+
+.admin-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.admin-container h1 {
+  color: #fff;
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.admin-subtitle {
+  color: #999;
+  font-size: 16px;
+  margin-bottom: 40px;
+}
+
+.admin-section {
+  margin-bottom: 40px;
+}
+
+.admin-section h2 {
+  color: #fff;
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+.admin-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.admin-card h3 {
+  color: #fff;
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+
+.admin-field {
+  margin-bottom: 20px;
+}
+
+.admin-field label {
+  display: block;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.field-desc {
+  color: #999;
+  font-size: 13px;
+  margin: 4px 0 8px;
+}
+
+.field-desc a {
+  color: #e50914;
+  text-decoration: none;
+}
+
+.field-desc a:hover {
+  text-decoration: underline;
+}
+
+.admin-field input[type="text"],
+.admin-field input[type="password"],
+.admin-field select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 12px;
+  color: #fff;
+  font-size: 14px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.admin-field input[type="text"]:focus,
+.admin-field input[type="password"]:focus,
+.admin-field select:focus {
+  outline: none;
+  border-color: #e50914;
+}
+
+.admin-field input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.input-group input {
+  flex: 1;
+}
+
+.input-group button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0 16px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.input-group button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.test-btn {
+  background: rgba(33, 150, 243, 0.2);
+  border: 1px solid rgba(33, 150, 243, 0.5);
+  border-radius: 4px;
+  padding: 10px 20px;
+  color: #2196f3;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 12px;
+}
+
+.test-btn:hover {
+  background: rgba(33, 150, 243, 0.3);
+}
+
+.admin-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 40px;
+}
+
+.save-btn {
+  background: linear-gradient(135deg, #e50914 0%, #b20710 100%);
+  border: none;
+  border-radius: 4px;
+  padding: 14px 32px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.save-btn:hover {
+  transform: scale(1.02);
+}
+
+.cancel-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 14px 32px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+#status {
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  display: none;
+}
+
+#status.success {
+  display: block;
+  background: rgba(76, 175, 80, 0.2);
+  border: 1px solid rgba(76, 175, 80, 0.5);
+  color: #4caf50;
+}
+
+#status.error {
+  display: block;
+  background: rgba(244, 67, 54, 0.2);
+  border: 1px solid rgba(244, 67, 54, 0.5);
+  color: #f44336;
+}

@@ -73,7 +73,12 @@ export class MetadataService {
       cacheKey,
       async () => {
         logger.info(`Fetching movie metadata from TMDB: ${tmdbId}`);
-        const details = await this.tmdbClient.getMovieDetails(tmdbId);
+        
+        // Gracefully handle API failures
+        const details = await this.tmdbClient.getMovieDetails(tmdbId).catch((error) => {
+          logger.error(`TMDB API unavailable for movie ${tmdbId}:`, error.message);
+          throw new Error('TMDB API unavailable - cannot fetch metadata');
+        });
 
         const metadata: MovieMetadata = {
           tmdbId: details.id,
@@ -111,7 +116,12 @@ export class MetadataService {
       cacheKey,
       async () => {
         logger.info(`Fetching series metadata from TMDB: ${tmdbId}`);
-        const details = await this.tmdbClient.getTVDetails(tmdbId);
+        
+        // Gracefully handle API failures
+        const details = await this.tmdbClient.getTVDetails(tmdbId).catch((error) => {
+          logger.error(`TMDB API unavailable for series ${tmdbId}:`, error.message);
+          throw new Error('TMDB API unavailable - cannot fetch metadata');
+        });
 
         const metadata: SeriesMetadata = {
           tmdbId: details.id,

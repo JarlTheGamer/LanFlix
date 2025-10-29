@@ -158,34 +158,21 @@ export class TMDBClient {
    */
   private async retryRequest<T>(
     requestFn: () => Promise<T>,
-    maxRetries = 3,
+    maxRetries = 0,
     baseDelay = 1000
   ): Promise<T> {
-    let lastError: Error | undefined;
-
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        return await requestFn();
-      } catch (error) {
-        lastError = error as Error;
-        
-        // Don't retry on 4xx errors (except 429 rate limit)
-        if (axios.isAxiosError(error)) {
-          const status = error.response?.status;
-          if (status && status >= 400 && status < 500 && status !== 429) {
-            throw error;
-          }
-        }
-
-        if (attempt < maxRetries - 1) {
-          const delay = baseDelay * Math.pow(2, attempt);
-          logger.warn(`TMDB request failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+    try {
+      return await requestFn();
+    } catch (error) {
+      // Don't retry - fail fast
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        if (status === 401) {
+          logger.error('TMDB API authentication failed - check your API key in .env');
         }
       }
+      throw error;
     }
-
-    throw lastError;
   }
 
   /**

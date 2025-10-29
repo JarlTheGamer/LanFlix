@@ -6,6 +6,7 @@ import { initializeDatabase } from './utils/database';
 import { cacheManager } from './utils/cache-manager';
 import { jobScheduler } from './jobs/scheduler';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
+import { injectApiStatus } from './middleware/api-status.middleware';
 import apiRoutes from './routes';
 import fs from 'fs';
 import path from 'path';
@@ -15,6 +16,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Inject API status into all responses
+app.use(injectApiStatus);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

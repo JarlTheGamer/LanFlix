@@ -22,6 +22,22 @@ class StateManager {
     
     // Load state from localStorage
     this.loadState();
+    
+    // Load cached data from localStorage
+    this.loadCacheFromStorage();
+    
+    // Listen for API status changes
+    window.addEventListener('api-offline', () => {
+      this.isOffline = true;
+      console.log('📦 Switching to offline mode - using cached data');
+    });
+    
+    window.addEventListener('api-online', () => {
+      this.isOffline = false;
+      console.log('🌐 Back online - refreshing data');
+      // Optionally refresh data when back online
+      this.refreshAllData();
+    });
   }
 
   /**
@@ -43,9 +59,10 @@ class StateManager {
     const savedState = localStorage.getItem('appState');
     if (savedState) {
       const state = JSON.parse(savedState);
-      this.currentPage = state.currentPage || 'home';
+      // Always default to home page on load
+      this.currentPage = 'home';
       this.currentProfileId = state.currentProfileId || null;
-      this.scrollPosition = state.scrollPosition || 0;
+      this.scrollPosition = 0; // Reset scroll on page load
     } else {
       this.currentPage = 'home';
       this.currentProfileId = null;
@@ -64,17 +81,71 @@ class StateManager {
   }
 
   /**
-   * Set cache with timestamp
+   * Set cache with timestamp and persist to localStorage
    */
   setCache(key, data) {
     this.cache[key] = data;
     this.cacheTimestamps[key] = Date.now();
+    
+    // Persist to localStorage for offline access
+    this.saveCacheToStorage(key, data);
+  }
+
+  /**
+   * Save cache to localStorage
+   */
+  saveCacheToStorage(key, data) {
+    try {
+      const cacheData = {
+        data: data,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(`cache_${key}`, JSON.stringify(cacheData));
+    } catch (error) {
+      console.warn('Failed to save cache to localStorage:', error);
+    }
+  }
+
+  /**
+   * Load cache from localStorage
+   */
+  loadCacheFromStorage() {
+    try {
+      Object.keys(this.cache).forEach(key => {
+        const cached = localStorage.getItem(`cache_${key}`);
+        if (cached) {
+          const cacheData = JSON.parse(cached);
+          this.cache[key] = cacheData.data;
+          this.cacheTimestamps[key] = cacheData.timestamp;
+        }
+      });
+      console.log('📦 Loaded cached data from localStorage');
+    } catch (error) {
+      console.warn('Failed to load cache from localStorage:', error);
+    }
+  }
+
+  /**
+   * Refresh all data when back online
+   */
+  async refreshAllData() {
+    // Clear cache timestamps to force refresh
+    this.cacheTimestamps = {};
+    
+    // Dispatch event for UI to refresh
+    window.dispatchEvent(new CustomEvent('data-refresh-needed'));
   }
 
   /**
    * Get profiles from backend or cache
    */
   async getProfiles(forceRefresh = false) {
+    // If offline, return cached data immediately
+    if (apiClient.isOffline && !forceRefresh) {
+      console.log('📦 Using cached profiles (offline mode)');
+      return this.cache.profiles || [];
+    }
+    
     if (!forceRefresh && this.isCacheValid('profiles')) {
       return this.cache.profiles;
     }
@@ -88,7 +159,9 @@ class StateManager {
       console.error('Failed to fetch profiles:', error);
       this.isOffline = true;
       // Return cached data if available
-      return this.cache.profiles || [];
+      const cachedData = this.cache.profiles || [];
+      console.log('📦 Using cached profiles due to error');
+      return cachedData;
     }
   }
 
@@ -97,6 +170,13 @@ class StateManager {
    */
   async getDiscoverContent(profileId, forceRefresh = false) {
     const cacheKey = `discover_${profileId}`;
+    
+    // If offline, return cached data immediately
+    if (apiClient.isOffline && !forceRefresh) {
+      console.log('📦 Using cached discover content (offline mode)');
+      return this.cache[cacheKey] || { trending: [], popular: { movies: [], series: [] } };
+    }
+    
     if (!forceRefresh && this.cache[cacheKey] && this.isCacheValid('discoverContent')) {
       return this.cache[cacheKey];
     }
@@ -110,7 +190,10 @@ class StateManager {
     } catch (error) {
       console.error('Failed to fetch discover content:', error);
       this.isOffline = true;
-      return this.cache[cacheKey] || { trending: [], popular: { movies: [], series: [] } };
+      // Return cached data if available
+      const cachedData = this.cache[cacheKey] || { trending: [], popular: { movies: [], series: [] } };
+      console.log('📦 Using cached discover content due to error');
+      return cachedData;
     }
   }
 
@@ -118,6 +201,12 @@ class StateManager {
    * Get library movies from backend or cache
    */
   async getLibraryMovies(filters = {}, forceRefresh = false) {
+    // If offline, return cached data immediately
+    if (apiClient.isOffline && !forceRefresh) {
+      console.log('📦 Using cached library movies (offline mode)');
+      return this.cache.libraryMovies || { count: 0, items: [] };
+    }
+    
     if (!forceRefresh && this.isCacheValid('libraryMovies')) {
       return this.cache.libraryMovies;
     }
@@ -130,7 +219,9 @@ class StateManager {
     } catch (error) {
       console.error('Failed to fetch library movies:', error);
       this.isOffline = true;
-      return this.cache.libraryMovies || { count: 0, items: [] };
+      const cachedData = this.cache.libraryMovies || { count: 0, items: [] };
+      console.log('📦 Using cached library movies due to error');
+      return cachedData;
     }
   }
 
@@ -138,6 +229,12 @@ class StateManager {
    * Get library series from backend or cache
    */
   async getLibrarySeries(filters = {}, forceRefresh = false) {
+    // If offline, return cached data immediately
+    if (apiClient.isOffline && !forceRefresh) {
+      console.log('📦 Using cached library series (offline mode)');
+      return this.cache.librarySeries || { count: 0, items: [] };
+    }
+    
     if (!forceRefresh && this.isCacheValid('librarySeries')) {
       return this.cache.librarySeries;
     }
@@ -150,7 +247,9 @@ class StateManager {
     } catch (error) {
       console.error('Failed to fetch library series:', error);
       this.isOffline = true;
-      return this.cache.librarySeries || { count: 0, items: [] };
+      const cachedData = this.cache.librarySeries || { count: 0, items: [] };
+      console.log('📦 Using cached library series due to error');
+      return cachedData;
     }
   }
 
@@ -158,6 +257,12 @@ class StateManager {
    * Get recently added content from backend or cache
    */
   async getRecentlyAdded(limit = 20, forceRefresh = false) {
+    // If offline, return cached data immediately
+    if (apiClient.isOffline && !forceRefresh) {
+      console.log('📦 Using cached recently added (offline mode)');
+      return this.cache.recentlyAdded || { count: 0, items: [] };
+    }
+    
     if (!forceRefresh && this.isCacheValid('recentlyAdded')) {
       return this.cache.recentlyAdded;
     }
@@ -170,7 +275,9 @@ class StateManager {
     } catch (error) {
       console.error('Failed to fetch recently added:', error);
       this.isOffline = true;
-      return this.cache.recentlyAdded || { count: 0, items: [] };
+      const cachedData = this.cache.recentlyAdded || { count: 0, items: [] };
+      console.log('📦 Using cached recently added due to error');
+      return cachedData;
     }
   }
 
@@ -179,6 +286,13 @@ class StateManager {
    */
   async getWatchlist(profileId, forceRefresh = false) {
     const cacheKey = `watchlist_${profileId}`;
+    
+    // If offline, return cached data immediately
+    if (apiClient.isOffline && !forceRefresh) {
+      console.log('📦 Using cached watchlist (offline mode)');
+      return this.cache[cacheKey] || { count: 0, items: [] };
+    }
+    
     if (!forceRefresh && this.cache[cacheKey] && this.isCacheValid('watchlist')) {
       return this.cache[cacheKey];
     }
@@ -192,7 +306,34 @@ class StateManager {
     } catch (error) {
       console.error('Failed to fetch watchlist:', error);
       this.isOffline = true;
-      return this.cache[cacheKey] || { count: 0, items: [] };
+      const cachedData = this.cache[cacheKey] || { count: 0, items: [] };
+      console.log('📦 Using cached watchlist due to error');
+      return cachedData;
+    }
+  }
+
+  /**
+   * Get popular content
+   */
+  async getPopularContent(type, page = 1, profileId = null, forceRefresh = false) {
+    const cacheKey = `popular_${type}_${page}`;
+    
+    // If offline, return cached data immediately
+    if (apiClient.isOffline && !forceRefresh) {
+      console.log(`📦 Using cached popular ${type} (offline mode)`);
+      return this.cache[cacheKey] || [];
+    }
+    
+    try {
+      const data = await apiClient.getPopularContent(type, page, profileId);
+      this.cache[cacheKey] = data;
+      this.setCache(`popular_${type}`, data);
+      return data;
+    } catch (error) {
+      console.error(`Failed to fetch popular ${type}:`, error);
+      const cachedData = this.cache[cacheKey] || [];
+      console.log(`📦 Using cached popular ${type} due to error`);
+      return cachedData;
     }
   }
 

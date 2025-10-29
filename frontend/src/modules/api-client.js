@@ -7,8 +7,12 @@ class ApiClient {
   constructor(baseURL = 'http://localhost:3000/api') {
     this.baseURL = baseURL;
     this.authToken = null;
-    this.retryAttempts = 3;
+    this.retryAttempts = 0; // No retries - fail fast
     this.retryDelay = 1000; // ms
+    this.isOffline = false;
+    this.offlineRetryInterval = 10 * 60 * 1000; // 10 minutes
+    this.lastOfflineCheck = null;
+    this.offlineCheckTimer = null;
   }
 
   /**
@@ -66,8 +70,24 @@ class ApiClient {
         throw error;
       }
 
+      // Successful response - mark as online
+      this.markOnline();
+
+      // Parse JSON response
+      const data = await response.json();
+      
+      // Check for server status message (offline mode)
+      if (data._serverStatus && data._serverStatus.offlineMode) {
+        console.warn('⚠️ Server Status:', data._serverStatus.message);
+        
+        // Dispatch event for UI to show notification
+        window.dispatchEvent(new CustomEvent('server-limited-mode', {
+          detail: { message: data._serverStatus.message }
+        }));
+      }
+
       // Return parsed JSON
-      return await response.json();
+      return data;
     } catch (error) {
       // Retry logic for network errors
       if (retryCount < this.retryAttempts && this.isRetryableError(error)) {
@@ -75,9 +95,88 @@ class ApiClient {
         return this.request(endpoint, options, retryCount + 1);
       }
 
+      // Mark as offline after all retries failed
+      this.markOffline();
+
       // Log error
       console.error(`API Error [${endpoint}]:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Mark API as offline and schedule retry
+   */
+  markOffline() {
+    if (!this.isOffline) {
+      this.isOffline = true;
+      this.lastOfflineCheck = Date.now();
+      console.warn('🔴 API is offline - switching to local mode');
+      
+      // Dispatch event for UI to react
+      window.dispatchEvent(new CustomEvent('api-offline'));
+      
+      // Schedule automatic retry
+      this.scheduleOfflineRetry();
+    }
+  }
+
+  /**
+   * Mark API as online and clear retry timer
+   */
+  markOnline() {
+    if (this.isOffline) {
+      this.isOffline = false;
+      console.log('🟢 API is back online');
+      
+      // Dispatch event for UI to react
+      window.dispatchEvent(new CustomEvent('api-online'));
+      
+      // Clear retry timer
+      if (this.offlineCheckTimer) {
+        clearTimeout(this.offlineCheckTimer);
+        this.offlineCheckTimer = null;
+      }
+    }
+  }
+
+  /**
+   * Schedule automatic retry when offline
+   */
+  scheduleOfflineRetry() {
+    // Clear existing timer
+    if (this.offlineCheckTimer) {
+      clearTimeout(this.offlineCheckTimer);
+    }
+
+    // Schedule next check
+    this.offlineCheckTimer = setTimeout(async () => {
+      console.log('🔄 Attempting to reconnect to API...');
+      await this.checkConnection();
+    }, this.offlineRetryInterval);
+  }
+
+  /**
+   * Check if API is available
+   */
+  async checkConnection() {
+    try {
+      // Try a lightweight endpoint
+      const response = await fetch(`${this.baseURL}/settings`, {
+        method: 'HEAD',
+        headers: this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}
+      });
+      
+      if (response.ok) {
+        this.markOnline();
+        return true;
+      } else {
+        this.scheduleOfflineRetry();
+        return false;
+      }
+    } catch (error) {
+      this.scheduleOfflineRetry();
+      return false;
     }
   }
 
@@ -121,6 +220,19 @@ class ApiClient {
     if (profileId) params.append('profileId', profileId);
 
     return this.request(`/content/search?${params.toString()}`);
+  }
+
+  /**
+   * GET /api/content/popular
+   * Get popular content
+   */
+  async getPopularContent(type, page = 1, profileId = null) {
+    const params = new URLSearchParams();
+    params.append('type', type);
+    params.append('page', page);
+    if (profileId) params.append('profileId', profileId);
+
+    return this.request(`/content/popular?${params.toString()}`);
   }
 
   /**
@@ -344,7 +456,7 @@ class ApiClient {
   async updateSettings(settings) {
     return this.request('/settings', {
       method: 'PUT',
-      body: JSON.stringify(settings)
+      body: JSON.stringify({ settings })
     });
   }
 
@@ -354,6 +466,17 @@ class ApiClient {
    */
   async getServiceStatus() {
     return this.request('/settings/services');
+  }
+
+  /**
+   * POST /api/settings/test-connection
+   * Test connection to external service
+   */
+  async testServiceConnection(service) {
+    return this.request('/settings/test-connection', {
+      method: 'POST',
+      body: JSON.stringify({ service })
+    });
   }
 
   // ==================== NOTIFICATION ENDPOINTS ====================

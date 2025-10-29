@@ -2,13 +2,13 @@ export class Navigation {
   constructor(contentDisplay, profileManager) {
     this.contentDisplay = contentDisplay;
     this.profileManager = profileManager;
-    
+
     this.focusedElement = 'menu';
     this.focusedMenuIndex = 1;
     this.focusedTabIndex = 0;
     this.focusedCardIndex = 0;
     this.lastMenuIndex = 1;
-    
+
     // Page transition state
     this.isTransitioning = false;
     this.transitionDuration = 300; // ms
@@ -18,6 +18,111 @@ export class Navigation {
     this.setupMenu();
     this.setupTabs();
     this.setupKeyboardNavigation();
+    this.setupServerStatusListener();
+  }
+
+  /**
+   * Setup listener for server status messages
+   */
+  setupServerStatusListener() {
+    let notificationShown = false;
+
+    window.addEventListener('server-limited-mode', (event) => {
+      // Only show notification once per session
+      if (notificationShown) return;
+      notificationShown = true;
+
+      const message = event.detail.message;
+      this.showNotification(message, 'warning', 8000);
+    });
+  }
+
+  /**
+   * Show a notification banner
+   */
+  showNotification(message, type = 'info', duration = 5000) {
+    // Remove existing notification if any
+    const existing = document.querySelector('.server-notification');
+    if (existing) {
+      existing.remove();
+    }
+
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `server-notification ${type}`;
+    notification.innerHTML = `
+      <div class="notification-content">
+        <span class="notification-icon">${type === 'warning' ? '⚠️' : 'ℹ️'}</span>
+        <span class="notification-message">${message}</span>
+      </div>
+    `;
+
+    // Add styles
+    notification.style.cssText = `
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: ${type === 'warning' ? 'rgba(255, 193, 7, 0.95)' : 'rgba(33, 150, 243, 0.95)'};
+      color: ${type === 'warning' ? '#000' : '#fff'};
+      padding: 16px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 10000;
+      font-size: 14px;
+      max-width: 600px;
+      animation: slideDown 0.3s ease-out;
+    `;
+
+    // Add animation keyframes
+    if (!document.querySelector('#notification-styles')) {
+      const style = document.createElement('style');
+      style.id = 'notification-styles';
+      style.textContent = `
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+        @keyframes slideUp {
+          from {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+          to {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-20px);
+          }
+        }
+        .notification-content {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .notification-icon {
+          font-size: 20px;
+        }
+        .notification-message {
+          flex: 1;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(notification);
+
+    // Auto-remove after duration
+    if (duration > 0) {
+      setTimeout(() => {
+        notification.style.animation = 'slideUp 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+      }, duration);
+    }
   }
 
   setupMenu() {
@@ -25,12 +130,28 @@ export class Navigation {
     menuButtons.forEach((button) => {
       button.addEventListener('click', async () => {
         if (this.isTransitioning) return;
-        
+
         menuButtons.forEach((btn) => btn.classList.remove('active'));
         button.classList.add('active');
         await this.navigateToPage(button.dataset.hero);
       });
     });
+
+    // Setup profile button click handler
+    const profileButton = document.querySelector('.profile');
+    if (profileButton) {
+      profileButton.addEventListener('click', () => {
+        window.location.href = 'profiles.html';
+      });
+    }
+
+    // Setup settings button click handler (backup for inline onclick)
+    const settingsButton = document.querySelector('.settings-btn');
+    if (settingsButton) {
+      settingsButton.addEventListener('click', () => {
+        window.location.href = 'settings.html';
+      });
+    }
   }
 
   /**
@@ -38,30 +159,40 @@ export class Navigation {
    */
   async navigateToPage(category) {
     if (this.isTransitioning) return;
-    
+
     this.isTransitioning = true;
     const main = document.querySelector('main');
-    
-    // Fade out
-    if (main) {
-      main.style.transition = `opacity ${this.transitionDuration}ms ease-out`;
-      main.style.opacity = '0';
+
+    try {
+      // Fade out
+      if (main) {
+        main.style.transition = `opacity ${this.transitionDuration}ms ease-out`;
+        main.style.opacity = '0';
+      }
+
+      // Wait for fade out
+      await this.delay(this.transitionDuration);
+
+      // Switch content
+      await this.contentDisplay.switchCategory(category);
+
+      // Fade in
+      if (main) {
+        main.style.opacity = '1';
+      }
+
+      // Reset transition state
+      await this.delay(this.transitionDuration);
+    } catch (error) {
+      console.error('Navigation error:', error);
+      // Ensure main is visible even if navigation fails
+      if (main) {
+        main.style.opacity = '1';
+      }
+    } finally {
+      // Always reset transition state
+      this.isTransitioning = false;
     }
-    
-    // Wait for fade out
-    await this.delay(this.transitionDuration);
-    
-    // Switch content
-    await this.contentDisplay.switchCategory(category);
-    
-    // Fade in
-    if (main) {
-      main.style.opacity = '1';
-    }
-    
-    // Reset transition state
-    await this.delay(this.transitionDuration);
-    this.isTransitioning = false;
   }
 
   /**
@@ -88,10 +219,10 @@ export class Navigation {
     menuButtons[this.focusedMenuIndex].classList.add('active');
 
     document.addEventListener('keydown', (e) => this.handleKeyboard(e));
-    
+
     // Add support for Android TV remote control buttons
     this.setupRemoteControlSupport();
-    
+
     this.updateFocus();
   }
 
@@ -126,6 +257,11 @@ export class Navigation {
   }
 
   handleKeyboard(e) {
+    // Prevent default for arrow keys to avoid page scrolling
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      e.preventDefault();
+    }
+
     // If profile selection is active, let profile manager handle it
     if (this.profileManager.profileSelectionActive) {
       this.profileManager.handleKeyboard(e);
@@ -135,32 +271,26 @@ export class Navigation {
     const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
     const tabs = Array.from(document.querySelectorAll('.tab'));
     const cards = () => Array.from(document.querySelectorAll('.movie-card'));
-    const profileButton = document.querySelector('.profile');
 
     if (this.focusedElement === 'hero') {
       if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        const newIndex = this.contentDisplay.currentHeroIndex > 0 
-          ? this.contentDisplay.currentHeroIndex - 1 
+        const newIndex = this.contentDisplay.currentHeroIndex > 0
+          ? this.contentDisplay.currentHeroIndex - 1
           : this.contentDisplay.currentHeroIndex;
         this.contentDisplay.goToSlide(newIndex);
       } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
         const newIndex = this.contentDisplay.currentHeroIndex + 1;
         this.contentDisplay.goToSlide(newIndex);
       } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
         this.focusedElement = 'menu';
         this.focusedMenuIndex = this.lastMenuIndex;
         this.updateFocus();
       } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
         this.focusedElement = 'tabs';
         this.updateFocus();
       }
     } else if (this.focusedElement === 'menu') {
       if (e.key === 'ArrowLeft') {
-        e.preventDefault();
         if (this.focusedMenuIndex === 0) {
           this.focusedElement = 'profile';
           this.updateFocus();
@@ -172,7 +302,6 @@ export class Navigation {
           this.updateFocus();
         }
       } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
         if (this.focusedMenuIndex === menuButtons.length - 1) {
           this.focusedElement = 'settings';
           this.updateFocus();
@@ -184,79 +313,63 @@ export class Navigation {
           this.updateFocus();
         }
       } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
         this.lastMenuIndex = this.focusedMenuIndex;
         this.focusedElement = 'hero';
         this.updateFocus();
       } else if (e.key === 'Enter') {
-        e.preventDefault();
         this.lastMenuIndex = this.focusedMenuIndex;
         this.focusedElement = 'hero';
         this.updateFocus();
       }
     } else if (this.focusedElement === 'profile') {
       if (e.key === 'ArrowRight') {
-        e.preventDefault();
         this.focusedElement = 'menu';
         this.focusedMenuIndex = 0;
         this.updateFocus();
       } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
         this.focusedElement = 'hero';
         this.updateFocus();
       } else if (e.key === 'Enter') {
-        e.preventDefault();
         window.location.href = 'profiles.html';
       }
     } else if (this.focusedElement === 'settings') {
       if (e.key === 'ArrowLeft') {
-        e.preventDefault();
         this.focusedElement = 'menu';
         this.focusedMenuIndex = menuButtons.length - 1;
         this.updateFocus();
       } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
         this.focusedElement = 'hero';
         this.updateFocus();
       } else if (e.key === 'Enter') {
-        e.preventDefault();
         window.location.href = 'settings.html';
       }
     } else if (this.focusedElement === 'tabs') {
       if (e.key === 'ArrowLeft') {
-        e.preventDefault();
         this.focusedTabIndex = this.focusedTabIndex > 0 ? this.focusedTabIndex - 1 : tabs.length - 1;
         this.updateFocus();
       } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
         this.focusedTabIndex = this.focusedTabIndex < tabs.length - 1 ? this.focusedTabIndex + 1 : 0;
         this.updateFocus();
       } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
         this.focusedElement = 'hero';
         this.updateFocus();
       } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
         this.focusedElement = 'cards';
         this.focusedCardIndex = 0;
         this.updateFocus();
       } else if (e.key === 'Enter') {
-        e.preventDefault();
         tabs[this.focusedTabIndex].click();
         this.updateFocus();
       }
     } else if (this.focusedElement === 'cards') {
       const cardElements = cards();
       if (e.key === 'ArrowLeft') {
-        e.preventDefault();
         this.focusedCardIndex = this.focusedCardIndex > 0 ? this.focusedCardIndex - 1 : cardElements.length - 1;
         this.updateFocus();
       } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
         this.focusedCardIndex = this.focusedCardIndex < cardElements.length - 1 ? this.focusedCardIndex + 1 : 0;
         this.updateFocus();
       } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
         this.focusedElement = 'tabs';
         this.updateFocus();
       }

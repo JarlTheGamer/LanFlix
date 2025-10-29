@@ -36,6 +36,24 @@ router.get('/discover', async (req: Request, res: Response, next: NextFunction) 
 });
 
 /**
+ * GET /api/content/popular
+ * Get popular content
+ */
+router.get('/popular', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const type = (req.query.type as 'movie' | 'series') || 'movie';
+    const page = parseInt(req.query.page as string) || 1;
+    const profileId = req.query.profileId ? parseInt(req.query.profileId as string) : undefined;
+
+    const results = await contentService.getPopularContent(type, page, profileId);
+
+    res.json(results);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/content/search
  * Search for content
  */

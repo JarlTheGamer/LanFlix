@@ -75,10 +75,20 @@ export class ContentService {
     try {
       logger.info(`Searching for content: ${query}, type: ${type}`);
 
-      // Search TMDB for metadata
+      // Search TMDB for metadata - gracefully handle API failures
       const [movieResults, tvResults] = await Promise.all([
-        type === 'series' ? Promise.resolve({ results: [] }) : this.tmdbClient.searchMovie(query),
-        type === 'movie' ? Promise.resolve({ results: [] }) : this.tmdbClient.searchTV(query)
+        type === 'series' 
+          ? Promise.resolve({ results: [] }) 
+          : this.tmdbClient.searchMovie(query).catch((error) => {
+              logger.warn('TMDB API unavailable for movie search:', error.message);
+              return { results: [] };
+            }),
+        type === 'movie' 
+          ? Promise.resolve({ results: [] }) 
+          : this.tmdbClient.searchTV(query).catch((error) => {
+              logger.warn('TMDB API unavailable for TV search:', error.message);
+              return { results: [] };
+            })
       ]);
 
       // Get library content to mark what's already available
@@ -161,7 +171,8 @@ export class ContentService {
       return results;
     } catch (error) {
       logger.error('Failed to search content:', error);
-      throw error;
+      // Return empty results instead of throwing - allows UI to continue working
+      return [];
     }
   }
 
@@ -176,9 +187,16 @@ export class ContentService {
       async () => {
         logger.info('Fetching trending content from TMDB');
 
+        // Fetch with error handling - return empty results if TMDB fails
         const [trendingMovies, trendingSeries] = await Promise.all([
-          this.tmdbClient.getTrending('movie', 'week'),
-          this.tmdbClient.getTrending('tv', 'week')
+          this.tmdbClient.getTrending('movie', 'week').catch((error) => {
+            logger.error('Failed to fetch trending movies from TMDB:', error.message);
+            return { results: [] };
+          }),
+          this.tmdbClient.getTrending('tv', 'week').catch((error) => {
+            logger.error('Failed to fetch trending TV from TMDB:', error.message);
+            return { results: [] };
+          })
         ]);
 
         // Get library content
@@ -274,7 +292,12 @@ export class ContentService {
         logger.info(`Fetching popular ${type} from TMDB, page ${page}`);
 
         const tmdbType = type === 'series' ? 'tv' : 'movie';
-        const response = await this.tmdbClient.getPopular(tmdbType, page);
+        
+        // Gracefully handle API failures
+        const response = await this.tmdbClient.getPopular(tmdbType, page).catch((error) => {
+          logger.warn(`TMDB API unavailable for popular ${type}:`, error.message);
+          return { results: [] };
+        });
 
         // Get library content
         const libraryContent = await Content.findAll({
@@ -338,12 +361,19 @@ export class ContentService {
     tmdbId: number,
     type: 'movie' | 'series',
     profileId?: number
-  ): Promise<ContentDetails> {
+  ): Promise<ContentDetails | null> {
     try {
       logger.info(`Fetching content details: ${type} ${tmdbId}`);
 
-      // Fetch metadata
-      const metadata = await this.metadataService.getMetadata(tmdbId, type);
+      // Fetch metadata - gracefully handle API failures
+      const metadata = await this.metadataService.getMetadata(tmdbId, type).catch((error) => {
+        logger.warn(`TMDB API unavailable for content details ${type} ${tmdbId}:`, error.message);
+        return null;
+      });
+      
+      if (!metadata) {
+        return null;
+      }
 
       // Check if in library
       const libraryContent = await Content.findOne({
