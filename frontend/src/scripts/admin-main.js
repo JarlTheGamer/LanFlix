@@ -98,8 +98,47 @@ function showStatus(message, type) {
   }
 }
 
-// Make testConnection available globally
+// Scan library
+async function scanLibrary() {
+  const scanBtn = document.getElementById('scan-library-btn');
+  const scanStatus = document.getElementById('scan-status');
+  
+  scanBtn.textContent = '⏳ Scanning...';
+  scanBtn.disabled = true;
+  scanStatus.textContent = 'Scanning media folders for new content...';
+  scanStatus.className = '';
+  scanStatus.style.color = '#666';
+
+  try {
+    const response = await fetch('/api/jobs/library-scan/trigger', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to trigger library scan');
+    }
+
+    const result = await response.json();
+    
+    scanStatus.textContent = '✅ Library scan completed! Refresh the page to see new content.';
+    scanStatus.style.color = '#4caf50';
+    scanBtn.textContent = '🔍 Scan Library Now';
+    scanBtn.disabled = false;
+  } catch (error) {
+    console.error('Failed to scan library:', error);
+    scanStatus.textContent = '❌ Failed to scan library: ' + error.message;
+    scanStatus.style.color = '#f44336';
+    scanBtn.textContent = '🔍 Scan Library Now';
+    scanBtn.disabled = false;
+  }
+}
+
+// Make functions available globally
 window.testConnection = testConnection;
+window.scanLibrary = scanLibrary;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {

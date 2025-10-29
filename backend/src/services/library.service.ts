@@ -638,7 +638,7 @@ export class LibraryService {
 
               // Parse episode number from filename (e.g., S01E01, 1x01, etc.)
               const episodeMatch = episodeFile.match(/[SE](\d+)[EX](\d+)/i) ||
-                                   episodeFile.match(/(\d+)x(\d+)/);
+                episodeFile.match(/(\d+)x(\d+)/);
 
               if (!episodeMatch) continue;
 
