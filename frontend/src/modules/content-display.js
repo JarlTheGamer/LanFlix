@@ -223,13 +223,23 @@ export class ContentDisplay {
   createCarouselItems() {
     this.heroCarouselTrack.innerHTML = '';
 
-    // For discovery page, use mock heroes (offline handled in switchCategory)
+    // For discovery page, use trending content
     if (this.currentCategory === 'discover') {
-      const heroes = HEROES[this.currentCategory] || [];
-      heroes.forEach((hero, index) => {
-        const heroSection = this.createHeroFromMock(hero, index);
-        this.heroCarouselTrack.appendChild(heroSection);
-      });
+      const trending = this.contentData.trending || { movies: [], series: [] };
+      const trendingItems = [
+        ...(trending.movies || []),
+        ...(trending.series || [])
+      ].slice(0, 5);
+
+      if (trendingItems.length === 0) {
+        const emptyHero = this.createEmptyHero();
+        this.heroCarouselTrack.appendChild(emptyHero);
+      } else {
+        trendingItems.forEach((item, index) => {
+          const heroSection = this.createDiscoveryHero(item, index);
+          this.heroCarouselTrack.appendChild(heroSection);
+        });
+      }
     } else {
       // For all other pages, use LOCAL downloaded content
       const localContent = this.getLocalContentForHero();
@@ -331,6 +341,68 @@ export class ContentDisplay {
     if (infoBtn) {
       infoBtn.addEventListener('click', () => {
         this.handleInfoAction(item.id, item.type);
+      });
+    }
+
+    return heroSection;
+  }
+
+  /**
+   * Create hero section for discovery page from trending content
+   */
+  createDiscoveryHero(item, index) {
+    const heroSection = document.createElement('section');
+    heroSection.className = 'hero';
+    heroSection.dataset.index = index;
+    heroSection.dataset.contentId = item.tmdbId || item.id;
+    heroSection.dataset.contentType = item.type;
+
+    const backdropUrl = item.backdropUrl
+      || item.posterUrl
+      || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"%3E%3Crect fill="%23222" width="1920" height="1080"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="48" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
+
+    const genres = Array.isArray(item.genres) && item.genres.length > 0 ? item.genres.join(' • ') : 'Trending';
+    const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : '';
+    const rating = item.voteAverage ? `★ ${item.voteAverage.toFixed(1)}` : '';
+    const type = item.type === 'movie' ? 'Movie' : 'Series';
+
+    const meta = [type, year, rating].filter(Boolean);
+
+    heroSection.innerHTML = `
+      <div class="hero-background" style="background-image: url(${backdropUrl})"></div>
+      <div class="hero-overlay"></div>
+      <div class="hero-body">
+        <div class="hero-content">
+          <div class="hero-tag">🔥 Trending • ${genres}</div>
+          <h1 class="hero-title">${item.title}</h1>
+          <div class="hero-meta">${meta.map((m) => `<span>${m}</span>`).join('')}</div>
+          <p class="hero-description">${item.overview || 'No description available.'}</p>
+          <div class="hero-actions">
+            <button class="cta primary" data-action="queue">
+              <span>+ Add to Queue</span>
+            </button>
+            <button class="cta ghost" data-action="info">
+              <span>More Info</span>
+            </button>
+          </div>
+        </div>
+        <div class="hero-secondary"><span>Discover</span> Available to download</div>
+      </div>
+    `;
+
+    // Add event listeners
+    const queueBtn = heroSection.querySelector('[data-action="queue"]');
+    const infoBtn = heroSection.querySelector('[data-action="info"]');
+
+    if (queueBtn) {
+      queueBtn.addEventListener('click', () => {
+        this.handleQueueAction(item.tmdbId || item.id, item.type);
+      });
+    }
+
+    if (infoBtn) {
+      infoBtn.addEventListener('click', () => {
+        this.handleInfoAction(item.tmdbId || item.id, item.type);
       });
     }
 
@@ -1222,13 +1294,19 @@ export class ContentDisplay {
   }
 
   /**
-   * Render DISCOVER page - Horizontal carousels with categories
+   * Render DISCOVER page - Hero carousel + Horizontal carousels with categories
    */
   async renderDiscoverPage() {
     const heroStage = document.querySelector('.hero-stage');
     const contentShell = document.querySelector('.content-shell');
 
-    heroStage.style.display = 'none';
+    // Show hero carousel with trending content
+    heroStage.style.display = '';
+
+    // Create hero carousel from trending content
+    this.createCarouselItems();
+    this.updateCarouselPosition();
+    this.updateAmbilightForCurrentSlide();
 
     const trending = this.contentData.trending || { movies: [], series: [] };
     const popularMovies = Array.isArray(this.contentData.popularMovies)
@@ -1239,9 +1317,7 @@ export class ContentDisplay {
       : (this.contentData.popularSeries?.items || []);
 
     contentShell.innerHTML = `
-      <div style="padding: 100px 40px 40px; max-width: 1600px; margin: 0 auto;">
-        <h1 style="color: #fff; font-size: 48px; font-weight: 700; margin-bottom: 10px;">Discover</h1>
-        <p style="color: #999; font-size: 18px; margin-bottom: 60px;">Browse and download new content to watch</p>
+      <div style="margin-top: 80px;">
 
         ${trending.movies.length > 0 ? `
           <section class="spotlight">
