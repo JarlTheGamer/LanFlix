@@ -7,6 +7,7 @@ export class Navigation {
     this.focusedMenuIndex = 1;
     this.focusedTabIndex = 0;
     this.focusedCardIndex = 0;
+    this.focusedCarouselIndex = 0; // Track which carousel is focused
     this.lastMenuIndex = 1;
 
     // Page transition state
@@ -356,24 +357,50 @@ export class Navigation {
       } else if (e.key === 'ArrowDown') {
         this.focusedElement = 'cards';
         this.focusedCardIndex = 0;
+        this.focusedCarouselIndex = 0; // Start at first carousel
         this.updateFocus();
       } else if (e.key === 'Enter') {
         tabs[this.focusedTabIndex].click();
         this.updateFocus();
       }
     } else if (this.focusedElement === 'cards') {
-      const cardElements = cards();
+      const carousels = this.getCarousels();
+      const currentCarousel = carousels[this.focusedCarouselIndex];
+
+      if (!currentCarousel) return;
+
+      const carouselCards = Array.from(currentCarousel.querySelectorAll('.movie-card'));
+
       if (e.key === 'ArrowLeft') {
-        this.focusedCardIndex = this.focusedCardIndex > 0 ? this.focusedCardIndex - 1 : cardElements.length - 1;
+        this.focusedCardIndex = this.focusedCardIndex > 0 ? this.focusedCardIndex - 1 : carouselCards.length - 1;
         this.updateFocus();
       } else if (e.key === 'ArrowRight') {
-        this.focusedCardIndex = this.focusedCardIndex < cardElements.length - 1 ? this.focusedCardIndex + 1 : 0;
+        this.focusedCardIndex = this.focusedCardIndex < carouselCards.length - 1 ? this.focusedCardIndex + 1 : 0;
         this.updateFocus();
       } else if (e.key === 'ArrowUp') {
-        this.focusedElement = 'tabs';
-        this.updateFocus();
+        // Move to previous carousel or tabs
+        if (this.focusedCarouselIndex > 0) {
+          this.focusedCarouselIndex--;
+          this.focusedCardIndex = 0; // Reset to first card in new carousel
+          this.updateFocus();
+        } else {
+          this.focusedElement = 'tabs';
+          this.updateFocus();
+        }
+      } else if (e.key === 'ArrowDown') {
+        // Move to next carousel
+        if (this.focusedCarouselIndex < carousels.length - 1) {
+          this.focusedCarouselIndex++;
+          this.focusedCardIndex = 0; // Reset to first card in new carousel
+          this.updateFocus();
+        }
       }
     }
+  }
+
+  getCarousels() {
+    // Get all movie-hub elements (carousels)
+    return Array.from(document.querySelectorAll('.movie-hub'));
   }
 
   updateFocus() {
@@ -418,32 +445,38 @@ export class Navigation {
         tabs[this.focusedTabIndex].classList.add('focused');
       }
     } else if (this.focusedElement === 'cards') {
-      const cardElements = cards();
-      if (cardElements[this.focusedCardIndex]) {
-        const focusedCard = cardElements[this.focusedCardIndex];
-        focusedCard.classList.add('focused');
-        focusedCard.classList.add('expanded');
+      const carousels = this.getCarousels();
+      const currentCarousel = carousels[this.focusedCarouselIndex];
 
-        const title = focusedCard.querySelector('.movie-title');
-        if (title) {
-          title.style.textShadow = `
-            0 0 20px rgba(255, 255, 255, 0.8),
-            0 0 40px rgba(255, 255, 255, 0.6),
-            0 0 60px rgba(255, 255, 255, 0.4)
-          `;
+      if (currentCarousel) {
+        const carouselCards = Array.from(currentCarousel.querySelectorAll('.movie-card'));
+
+        if (carouselCards[this.focusedCardIndex]) {
+          const focusedCard = carouselCards[this.focusedCardIndex];
+          focusedCard.classList.add('focused');
+          focusedCard.classList.add('expanded');
+
+          const title = focusedCard.querySelector('.movie-title');
+          if (title) {
+            title.style.textShadow = `
+              0 0 20px rgba(255, 255, 255, 0.8),
+              0 0 40px rgba(255, 255, 255, 0.6),
+              0 0 60px rgba(255, 255, 255, 0.4)
+            `;
+          }
+
+          this.updateMovieCarousel(currentCarousel);
         }
-
-        this.updateMovieCarousel();
       }
     }
   }
 
-  updateMovieCarousel() {
-    const movieHub = document.querySelector('.movie-hub');
-    const cards = () => Array.from(document.querySelectorAll('.movie-card'));
-    const cardElements = cards();
+  updateMovieCarousel(carousel) {
+    if (!carousel) return;
 
-    if (movieHub && cardElements.length > 0) {
+    const cardElements = Array.from(carousel.querySelectorAll('.movie-card'));
+
+    if (cardElements.length > 0) {
       const isTablet = window.innerWidth <= 768;
       const isMobile = window.innerWidth <= 480;
 
@@ -458,7 +491,7 @@ export class Navigation {
         offset += (isExpanded ? expandedCardWidth : cardWidth) + gap;
       }
 
-      movieHub.style.transform = `translateX(-${offset}px)`;
+      carousel.style.transform = `translateX(-${offset}px)`;
     }
   }
 }
