@@ -500,14 +500,27 @@ function getInteractiveElements(section) {
 
   const elements = [];
 
-  // Get all custom select wrappers
-  section.querySelectorAll('.custom-select-wrapper').forEach(el => elements.push(el));
+  // Get all settings items in DOM order
+  const settingsItems = section.querySelectorAll('.settings-item');
+  
+  settingsItems.forEach((item) => {
+    // Find interactive elements within each settings item (wrapper or toggle)
+    const wrapper = item.querySelector('.custom-select-wrapper');
+    const toggle = item.querySelector('.settings-toggle');
+    
+    if (wrapper) {
+      elements.push(wrapper);
+    } else if (toggle) {
+      elements.push(toggle);
+    }
+  });
 
-  // Get all toggles
-  section.querySelectorAll('.settings-toggle').forEach(el => elements.push(el));
-
-  // Get all buttons
-  section.querySelectorAll('.settings-link-btn, .profile-card-btn, .device-remove, .profile-card').forEach(el => elements.push(el));
+  // Add other buttons that aren't in settings-item containers
+  section.querySelectorAll('.settings-link-btn, .profile-card-btn, .device-remove, .profile-card').forEach(el => {
+    if (!elements.includes(el)) {
+      elements.push(el);
+    }
+  });
 
   return elements;
 }
