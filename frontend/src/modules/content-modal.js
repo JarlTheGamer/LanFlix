@@ -463,17 +463,58 @@ export class ContentModal {
      * Download specific episode
      */
     async downloadEpisode(seasonNumber, episodeNumber) {
-        console.log(`Download episode S${seasonNumber}E${episodeNumber}`);
-        // This would trigger a specific episode download
-        alert(`Downloading Season ${seasonNumber} Episode ${episodeNumber}`);
+        try {
+            const profileId = this.profileManager.selectedProfileId;
+            if (!profileId) {
+                alert('Please select a profile first');
+                return;
+            }
+
+            const content = this.currentContent;
+
+            // Queue the series download (Sonarr/Radarr will handle episode selection)
+            await apiClient.queueDownload(
+                content.tmdbId || content.id,
+                profileId,
+                'series',
+                content.title,
+                content.releaseDate ? new Date(content.releaseDate).getFullYear() : null
+            );
+
+            alert(`"${content.title}" S${seasonNumber}E${episodeNumber} has been added to your download queue!\n\nNote: The entire series will be monitored. You can configure episode selection in Sonarr.`);
+        } catch (error) {
+            console.error('Failed to queue episode download:', error);
+            alert('Failed to add episode to download queue.');
+        }
     }
 
     /**
      * Download entire season
      */
     async downloadSeason(seasonNumber) {
-        console.log(`Download season ${seasonNumber}`);
-        alert(`Downloading Season ${seasonNumber}`);
+        try {
+            const profileId = this.profileManager.selectedProfileId;
+            if (!profileId) {
+                alert('Please select a profile first');
+                return;
+            }
+
+            const content = this.currentContent;
+
+            // Queue the series download
+            await apiClient.queueDownload(
+                content.tmdbId || content.id,
+                profileId,
+                'series',
+                content.title,
+                content.releaseDate ? new Date(content.releaseDate).getFullYear() : null
+            );
+
+            alert(`"${content.title}" Season ${seasonNumber} has been added to your download queue!\n\nNote: The entire series will be monitored. You can configure season selection in Sonarr.`);
+        } catch (error) {
+            console.error('Failed to queue season download:', error);
+            alert('Failed to add season to download queue.');
+        }
     }
 
     /**
