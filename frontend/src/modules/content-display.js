@@ -33,6 +33,10 @@ export class ContentDisplay {
     }
 
     await this.loadContent();
+    
+    // Show normal UI
+    this.showNormalUI();
+    
     this.createCarouselItems();
     this.updateCarouselPosition();
     this.updateAmbilightForCurrentSlide();
