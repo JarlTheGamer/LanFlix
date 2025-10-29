@@ -117,16 +117,25 @@ router.put('/', validateBody(['settings']), async (req: Request, res: Response, 
       }
     }
     if (settings.sonarrUrl || settings.sonarrApiKey) {
-      // Sonarr client would need similar update method
-      logger.info('Sonarr settings updated - restart server to apply');
+      sonarrClient.updateConfig(
+        settings.sonarrUrl?.trim() || undefined,
+        settings.sonarrApiKey?.trim() || undefined
+      );
+      logger.info('Sonarr configuration updated');
     }
     if (settings.radarrUrl || settings.radarrApiKey) {
-      // Radarr client would need similar update method
-      logger.info('Radarr settings updated - restart server to apply');
+      radarrClient.updateConfig(
+        settings.radarrUrl?.trim() || undefined,
+        settings.radarrApiKey?.trim() || undefined
+      );
+      logger.info('Radarr configuration updated');
     }
     if (settings.prowlarrUrl || settings.prowlarrApiKey) {
-      // Prowlarr client would need similar update method
-      logger.info('Prowlarr settings updated - restart server to apply');
+      prowlarrClient.updateConfig(
+        settings.prowlarrUrl?.trim() || undefined,
+        settings.prowlarrApiKey?.trim() || undefined
+      );
+      logger.info('Prowlarr configuration updated');
     }
 
     res.json({

@@ -27,8 +27,8 @@ export const initializeDatabase = async (): Promise<void> => {
     const models = await import('../models');
 
     // Sync database schema (creates tables if they don't exist)
-    // Use alter: true in development to update existing tables
-    await sequelize.sync({ alter: config.server.nodeEnv === 'development' });
+    // Don't use alter to avoid SQLite constraint issues
+    await sequelize.sync();
     logger.info('Database models synchronized');
 
     // Create default profiles if none exist

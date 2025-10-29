@@ -11,6 +11,7 @@ export class ContentDisplay {
     this.focusedHeroElement = null;
     this.contentData = {};
     this.isLoading = false;
+    this.imageObserver = null;
 
     this.root = document.documentElement;
     this.heroCarouselTrack = document.getElementById('hero-carousel-track');
@@ -33,10 +34,10 @@ export class ContentDisplay {
     }
 
     await this.loadContent();
-    
+
     // Render home page with unique layout
     await this.renderHomePage();
-    
+
     this.setupScrollHandler();
     this.setupOfflineHandlers();
   }
@@ -287,7 +288,7 @@ export class ContentDisplay {
       ? `https://image.tmdb.org/t/p/original${item.backdropPath}`
       : item.posterPath
         ? `https://image.tmdb.org/t/p/original${item.posterPath}`
-        : 'https://via.placeholder.com/1920x1080?text=No+Image';
+        : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"%3E%3Crect fill="%23222" width="1920" height="1080"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="48" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
 
     const genres = Array.isArray(item.genres) ? item.genres.join(' • ') : (item.genre || 'Unknown');
     const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : (item.year || '');
@@ -476,7 +477,7 @@ export class ContentDisplay {
     if (category === 'discover') {
       // Check if we can reach the API
       const isOnline = await apiClient.checkConnection();
-      
+
       if (!isOnline) {
         console.log('Discovery page - API is offline, showing offline message');
         this.showDiscoveryOfflinePage();
@@ -588,15 +589,15 @@ export class ContentDisplay {
         // Combine all discovery content but remove duplicates by ID
         const trendingMovies = this.contentData.trending?.movies || [];
         const trendingSeries = this.contentData.trending?.series || [];
-        
+
         // Handle both array and object with items property
-        const popularMovies = Array.isArray(this.contentData.popularMovies) 
-          ? this.contentData.popularMovies 
+        const popularMovies = Array.isArray(this.contentData.popularMovies)
+          ? this.contentData.popularMovies
           : (this.contentData.popularMovies?.items || []);
         const popularSeries = Array.isArray(this.contentData.popularSeries)
           ? this.contentData.popularSeries
           : (this.contentData.popularSeries?.items || []);
-        
+
         const allDiscovery = [
           ...trendingMovies,
           ...trendingSeries,
@@ -712,7 +713,7 @@ export class ContentDisplay {
 
     const posterUrl = item.posterPath
       ? `https://image.tmdb.org/t/p/w500${item.posterPath}`
-      : item.image || 'https://via.placeholder.com/300x450?text=No+Image';
+      : item.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450"%3E%3Crect fill="%23222" width="300" height="450"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="24" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
 
     const backdropUrl = item.backdropPath
       ? `https://image.tmdb.org/t/p/original${item.backdropPath}`
@@ -781,7 +782,7 @@ export class ContentDisplay {
 
     const posterUrl = item.posterPath
       ? `https://image.tmdb.org/t/p/w500${item.posterPath}`
-      : item.image || 'https://via.placeholder.com/300x450?text=No+Image';
+      : item.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450"%3E%3Crect fill="%23222" width="300" height="450"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="24" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
 
     const backdropUrl = item.backdropPath
       ? `https://image.tmdb.org/t/p/original${item.backdropPath}`
@@ -818,13 +819,19 @@ export class ContentDisplay {
    * Setup lazy loading for images using Intersection Observer
    */
   setupLazyLoading() {
-    const imageObserver = new IntersectionObserver((entries, observer) => {
+    // Disconnect existing observer if any
+    if (this.imageObserver) {
+      this.imageObserver.disconnect();
+    }
+
+    this.imageObserver = new IntersectionObserver((entries, observer) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
           const img = entry.target;
           const src = img.dataset.src;
 
           if (src) {
+            // Load the image
             img.src = src;
             img.removeAttribute('data-src');
             observer.unobserve(img);
@@ -832,16 +839,17 @@ export class ContentDisplay {
         }
       });
     }, {
-      rootMargin: '50px 0px',
+      rootMargin: '200px 200px',
       threshold: 0.01
     });
 
     // Observe all images with data-src attribute
-    document.querySelectorAll('img[data-src]').forEach(img => {
-      imageObserver.observe(img);
+    const images = document.querySelectorAll('img[data-src]');
+    images.forEach(img => {
+      this.imageObserver.observe(img);
     });
 
-    return imageObserver;
+    return this.imageObserver;
   }
 
   /**
@@ -1129,7 +1137,7 @@ export class ContentDisplay {
           <div class="spotlight-row" id="spotlight-row"></div>
         </section>
       `;
-      
+
       // Re-setup tabs
       this.setupTabs();
     }
@@ -1157,9 +1165,9 @@ export class ContentDisplay {
   async renderHomePage() {
     const heroStage = document.querySelector('.hero-stage');
     const contentShell = document.querySelector('.content-shell');
-    
+
     heroStage.style.display = '';
-    
+
     // Create hero carousel
     this.createCarouselItems();
     this.updateCarouselPosition();
@@ -1170,41 +1178,45 @@ export class ContentDisplay {
     const discoverPreview = this.contentData.discoverPreview || [];
 
     contentShell.innerHTML = `
-      <section class="home-section">
-        <h2 class="section-title">Recently Added</h2>
-        <div class="movie-hub" id="recently-added-hub"></div>
-      </section>
+      ${recentlyAdded.length > 0 ? `
+        <section class="spotlight" style="margin-top: 80px;">
+          <div class="spotlight-header">
+            <h2>Recently Added</h2>
+          </div>
+          <div class="spotlight-row">
+            <div class="movie-hub" id="recently-added-hub"></div>
+          </div>
+        </section>
+      ` : ''}
       ${discoverPreview.length > 0 ? `
-        <section class="home-section">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 class="section-title">Discover New Content</h2>
+        <section class="spotlight" style="margin-top: 80px;">
+          <div class="spotlight-header" style="justify-content: space-between;">
+            <h2>Discover New Content</h2>
             <button class="browse-all-btn" onclick="document.querySelector('[data-hero=\\'discover\\']').click()">
               Browse All →
             </button>
           </div>
-          <div class="movie-hub" id="discover-preview-hub"></div>
+          <div class="spotlight-row">
+            <div class="movie-hub" id="discover-preview-hub"></div>
+          </div>
         </section>
+      ` : ''}
+      ${recentlyAdded.length === 0 && discoverPreview.length === 0 ? `
+        <div style="text-align: center; padding: 60px 20px; color: #999;">
+          <h2 style="color: #fff; margin-bottom: 20px;">Your Library is Empty</h2>
+          <p style="font-size: 18px;">Go to Discovery to find and download content!</p>
+        </div>
       ` : ''}
     `;
 
     // Render recently added
-    const recentHub = document.getElementById('recently-added-hub');
-    if (recentHub) {
-      recentlyAdded.forEach((item, index) => {
-        const card = this.createContentCard(item, index, false);
-        recentHub.appendChild(card);
-      });
+    if (recentlyAdded.length > 0) {
+      this.renderCarouselHub('recently-added-hub', recentlyAdded, false);
     }
 
     // Render discovery preview
     if (discoverPreview.length > 0) {
-      const discoverHub = document.getElementById('discover-preview-hub');
-      if (discoverHub) {
-        discoverPreview.forEach((item, index) => {
-          const card = this.createContentCard(item, index, true);
-          discoverHub.appendChild(card);
-        });
-      }
+      this.renderCarouselHub('discover-preview-hub', discoverPreview, true);
     }
 
     this.setupLazyLoading();
@@ -1212,76 +1224,92 @@ export class ContentDisplay {
   }
 
   /**
-   * Render DISCOVER page - Grid layout with categories
+   * Render DISCOVER page - Horizontal carousels with categories
    */
   async renderDiscoverPage() {
     const heroStage = document.querySelector('.hero-stage');
     const contentShell = document.querySelector('.content-shell');
-    
+
     heroStage.style.display = 'none';
 
     const trending = this.contentData.trending || { movies: [], series: [] };
-    const popularMovies = Array.isArray(this.contentData.popularMovies) 
-      ? this.contentData.popularMovies 
+    const popularMovies = Array.isArray(this.contentData.popularMovies)
+      ? this.contentData.popularMovies
       : (this.contentData.popularMovies?.items || []);
     const popularSeries = Array.isArray(this.contentData.popularSeries)
       ? this.contentData.popularSeries
       : (this.contentData.popularSeries?.items || []);
 
     contentShell.innerHTML = `
-      <div class="discover-layout">
-        <h1 class="discover-title">Discover</h1>
-        <p class="discover-subtitle">Browse and download new content to watch</p>
+      <div style="padding: 100px 40px 40px; max-width: 1600px; margin: 0 auto;">
+        <h1 style="color: #fff; font-size: 48px; font-weight: 700; margin-bottom: 10px;">Discover</h1>
+        <p style="color: #999; font-size: 18px; margin-bottom: 60px;">Browse and download new content to watch</p>
 
         ${trending.movies.length > 0 ? `
-          <section class="discover-section">
-            <h2 class="section-title">🔥 Trending Movies</h2>
-            <div class="discover-grid" id="trending-movies-grid"></div>
+          <section class="spotlight">
+            <div class="spotlight-header">
+              <h2>🔥 Trending Movies</h2>
+            </div>
+            <div class="spotlight-row">
+              <div class="movie-hub" id="trending-movies-hub"></div>
+            </div>
           </section>
         ` : ''}
 
         ${trending.series.length > 0 ? `
-          <section class="discover-section">
-            <h2 class="section-title">📺 Trending Series</h2>
-            <div class="discover-grid" id="trending-series-grid"></div>
+          <section class="spotlight">
+            <div class="spotlight-header">
+              <h2>📺 Trending Series</h2>
+            </div>
+            <div class="spotlight-row">
+              <div class="movie-hub" id="trending-series-hub"></div>
+            </div>
           </section>
         ` : ''}
 
         ${popularMovies.length > 0 ? `
-          <section class="discover-section">
-            <h2 class="section-title">⭐ Popular Movies</h2>
-            <div class="discover-grid" id="popular-movies-grid"></div>
+          <section class="spotlight">
+            <div class="spotlight-header">
+              <h2>⭐ Popular Movies</h2>
+            </div>
+            <div class="spotlight-row">
+              <div class="movie-hub" id="popular-movies-hub"></div>
+            </div>
           </section>
         ` : ''}
 
         ${popularSeries.length > 0 ? `
-          <section class="discover-section">
-            <h2 class="section-title">🎬 Popular Series</h2>
-            <div class="discover-grid" id="popular-series-grid"></div>
+          <section class="spotlight">
+            <div class="spotlight-header">
+              <h2>🎬 Popular Series</h2>
+            </div>
+            <div class="spotlight-row">
+              <div class="movie-hub" id="popular-series-hub"></div>
+            </div>
           </section>
         ` : ''}
       </div>
     `;
 
-    // Render grids
-    this.renderDiscoverGrid('trending-movies-grid', trending.movies);
-    this.renderDiscoverGrid('trending-series-grid', trending.series);
-    this.renderDiscoverGrid('popular-movies-grid', popularMovies);
-    this.renderDiscoverGrid('popular-series-grid', popularSeries);
+    // Render carousels
+    this.renderCarouselHub('trending-movies-hub', trending.movies, true);
+    this.renderCarouselHub('trending-series-hub', trending.series, true);
+    this.renderCarouselHub('popular-movies-hub', popularMovies, true);
+    this.renderCarouselHub('popular-series-hub', popularSeries, true);
 
     this.setupLazyLoading();
     this.setupCardHandlers();
   }
 
   /**
-   * Render MOVIES page - Large poster grid
+   * Render MOVIES page - Horizontal carousel
    */
   async renderMoviesPage() {
     const heroStage = document.querySelector('.hero-stage');
     const contentShell = document.querySelector('.content-shell');
-    
+
     heroStage.style.display = '';
-    
+
     this.createCarouselItems();
     this.updateCarouselPosition();
     this.updateAmbilightForCurrentSlide();
@@ -1289,36 +1317,32 @@ export class ContentDisplay {
     const movies = this.contentData.movies || [];
 
     contentShell.innerHTML = `
-      <section class="movies-layout">
-        <div class="movies-header">
-          <h1 class="page-title">Your Movies</h1>
-          <div class="movies-stats">${movies.length} movies in your library</div>
+      <section class="spotlight" style="margin-top: 80px;">
+        <div class="spotlight-header" style="flex-direction: column; align-items: flex-start; margin-bottom: 20px;">
+          <h2 style="font-size: 36px; font-weight: 700;">Your Movies</h2>
+          <div style="color: #999; font-size: 16px;">${movies.length} movies in your library</div>
         </div>
-        <div class="movies-grid" id="movies-grid"></div>
+        <div class="spotlight-row">
+          <div class="movie-hub" id="movies-hub"></div>
+        </div>
       </section>
     `;
 
-    const grid = document.getElementById('movies-grid');
-    if (grid) {
-      movies.forEach((item, index) => {
-        const card = this.createContentCard(item, index, false);
-        grid.appendChild(card);
-      });
-    }
+    this.renderCarouselHub('movies-hub', movies, false);
 
     this.setupLazyLoading();
     this.setupCardHandlers();
   }
 
   /**
-   * Render SHOWS page - Series with seasons info
+   * Render SHOWS page - Horizontal carousel
    */
   async renderShowsPage() {
     const heroStage = document.querySelector('.hero-stage');
     const contentShell = document.querySelector('.content-shell');
-    
+
     heroStage.style.display = '';
-    
+
     this.createCarouselItems();
     this.updateCarouselPosition();
     this.updateAmbilightForCurrentSlide();
@@ -1326,36 +1350,32 @@ export class ContentDisplay {
     const series = this.contentData.series || [];
 
     contentShell.innerHTML = `
-      <section class="shows-layout">
-        <div class="shows-header">
-          <h1 class="page-title">Your Series</h1>
-          <div class="shows-stats">${series.length} series in your library</div>
+      <section class="spotlight" style="margin-top: 80px;">
+        <div class="spotlight-header" style="flex-direction: column; align-items: flex-start; margin-bottom: 20px;">
+          <h2 style="font-size: 36px; font-weight: 700;">Your Series</h2>
+          <div style="color: #999; font-size: 16px;">${series.length} series in your library</div>
         </div>
-        <div class="shows-grid" id="shows-grid"></div>
+        <div class="spotlight-row">
+          <div class="movie-hub" id="shows-hub"></div>
+        </div>
       </section>
     `;
 
-    const grid = document.getElementById('shows-grid');
-    if (grid) {
-      series.forEach((item, index) => {
-        const card = this.createContentCard(item, index, false);
-        grid.appendChild(card);
-      });
-    }
+    this.renderCarouselHub('shows-hub', series, false);
 
     this.setupLazyLoading();
     this.setupCardHandlers();
   }
 
   /**
-   * Render MY LIST page - Watchlist with continue watching
+   * Render MY LIST page - Horizontal carousel
    */
   async renderMyListPage() {
     const heroStage = document.querySelector('.hero-stage');
     const contentShell = document.querySelector('.content-shell');
-    
+
     heroStage.style.display = '';
-    
+
     this.createCarouselItems();
     this.updateCarouselPosition();
     this.updateAmbilightForCurrentSlide();
@@ -1363,37 +1383,36 @@ export class ContentDisplay {
     const watchlist = this.contentData.watchlist || [];
 
     contentShell.innerHTML = `
-      <section class="mylist-layout">
-        <div class="mylist-header">
-          <h1 class="page-title">My List</h1>
-          <div class="mylist-stats">${watchlist.length} items in your list</div>
+      <section class="spotlight" style="margin-top: 80px;">
+        <div class="spotlight-header" style="flex-direction: column; align-items: flex-start; margin-bottom: 20px;">
+          <h2 style="font-size: 36px; font-weight: 700;">My List</h2>
+          <div style="color: #999; font-size: 16px;">${watchlist.length} items in your list</div>
         </div>
-        <div class="mylist-grid" id="mylist-grid"></div>
+        <div class="spotlight-row">
+          <div class="movie-hub" id="mylist-hub"></div>
+        </div>
       </section>
     `;
 
-    const grid = document.getElementById('mylist-grid');
-    if (grid) {
-      watchlist.forEach((item, index) => {
-        const card = this.createContentCard(item, index, false);
-        grid.appendChild(card);
-      });
-    }
+    this.renderCarouselHub('mylist-hub', watchlist, false);
 
     this.setupLazyLoading();
     this.setupCardHandlers();
   }
 
   /**
-   * Helper to render discover grid
+   * Helper to render carousel hub
    */
-  renderDiscoverGrid(gridId, items) {
-    const grid = document.getElementById(gridId);
-    if (!grid || !items) return;
+  renderCarouselHub(hubId, items, isDiscoveryContent = false) {
+    const hub = document.getElementById(hubId);
+    if (!hub || !items || items.length === 0) return;
+
+    // Clear existing content
+    hub.innerHTML = '';
 
     items.forEach((item, index) => {
-      const card = this.createContentCard(item, index, true);
-      grid.appendChild(card);
+      const card = this.createContentCard(item, index, isDiscoveryContent);
+      hub.appendChild(card);
     });
   }
 }

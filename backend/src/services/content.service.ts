@@ -1,5 +1,4 @@
-import { TMDBClient } from '../clients/tmdb.client';
-import { ProwlarrClient } from '../clients/prowlarr.client';
+import { TMDBClient, ProwlarrClient, tmdbClient, prowlarrClient } from '../clients';
 import { MetadataService } from './metadata.service';
 import { cacheManager } from '../utils/cache-manager';
 import logger from '../utils/logger';
@@ -55,12 +54,12 @@ export class ContentService {
   private backdropSize = 'w1280';
 
   constructor(
-    tmdbClient?: TMDBClient,
-    prowlarrClient?: ProwlarrClient,
+    tmdb?: TMDBClient,
+    prowlarr?: ProwlarrClient,
     metadataService?: MetadataService
   ) {
-    this.tmdbClient = tmdbClient || new TMDBClient();
-    this.prowlarrClient = prowlarrClient || new ProwlarrClient();
+    this.tmdbClient = tmdb || tmdbClient;
+    this.prowlarrClient = prowlarr || prowlarrClient;
     this.metadataService = metadataService || new MetadataService();
   }
 

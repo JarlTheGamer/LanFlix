@@ -1,5 +1,4 @@
-import { SonarrClient } from '../clients/sonarr.client';
-import { RadarrClient } from '../clients/radarr.client';
+import { SonarrClient, RadarrClient, sonarrClient, radarrClient } from '../clients';
 import { LibraryService } from './library.service';
 import Content from '../models/Content';
 import DownloadQueue from '../models/DownloadQueue';
@@ -36,12 +35,12 @@ export class DownloadManager {
   private isPolling = false;
 
   constructor(
-    sonarrClient?: SonarrClient,
-    radarrClient?: RadarrClient,
+    sonarr?: SonarrClient,
+    radarr?: RadarrClient,
     libraryService?: LibraryService
   ) {
-    this.sonarrClient = sonarrClient || new SonarrClient();
-    this.radarrClient = radarrClient || new RadarrClient();
+    this.sonarrClient = sonarr || sonarrClient;
+    this.radarrClient = radarr || radarrClient;
     this.libraryService = libraryService || new LibraryService();
   }
 

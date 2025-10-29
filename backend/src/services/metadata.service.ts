@@ -1,4 +1,4 @@
-import { TMDBClient } from '../clients/tmdb.client';
+import { TMDBClient, tmdbClient } from '../clients';
 import { config } from '../config/env';
 import logger from '../utils/logger';
 import { cacheManager } from '../utils/cache-manager';
@@ -59,8 +59,8 @@ export class MetadataService {
   private backdropSize = 'w1280';
   private metadataStalenessDays = 7;
 
-  constructor(tmdbClient?: TMDBClient) {
-    this.tmdbClient = tmdbClient || new TMDBClient();
+  constructor(client?: TMDBClient) {
+    this.tmdbClient = client || tmdbClient;
   }
 
   /**
@@ -68,12 +68,12 @@ export class MetadataService {
    */
   async fetchMovieMetadata(tmdbId: number): Promise<MovieMetadata> {
     const cacheKey = cacheManager.generateKey('metadata', 'movie', tmdbId);
-    
+
     return cacheManager.get(
       cacheKey,
       async () => {
         logger.info(`Fetching movie metadata from TMDB: ${tmdbId}`);
-        
+
         // Gracefully handle API failures
         const details = await this.tmdbClient.getMovieDetails(tmdbId).catch((error) => {
           logger.error(`TMDB API unavailable for movie ${tmdbId}:`, error.message);
@@ -111,12 +111,12 @@ export class MetadataService {
    */
   async fetchSeriesMetadata(tmdbId: number): Promise<SeriesMetadata> {
     const cacheKey = cacheManager.generateKey('metadata', 'series', tmdbId);
-    
+
     return cacheManager.get(
       cacheKey,
       async () => {
         logger.info(`Fetching series metadata from TMDB: ${tmdbId}`);
-        
+
         // Gracefully handle API failures
         const details = await this.tmdbClient.getTVDetails(tmdbId).catch((error) => {
           logger.error(`TMDB API unavailable for series ${tmdbId}:`, error.message);
@@ -314,7 +314,7 @@ export class MetadataService {
         title: metadata.title,
         originalTitle: metadata.originalTitle,
         overview: metadata.overview,
-        releaseDate: content.type === 'movie' 
+        releaseDate: content.type === 'movie'
           ? new Date((metadata as MovieMetadata).releaseDate)
           : new Date((metadata as SeriesMetadata).firstAirDate),
         voteAverage: metadata.voteAverage,

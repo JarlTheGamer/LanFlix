@@ -597,11 +597,15 @@ main {
 
 .spotlight-row {
   position: relative;
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: visible;
   padding: 20px 0 40px;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
 }
 
 .spotlight-row::-webkit-scrollbar {

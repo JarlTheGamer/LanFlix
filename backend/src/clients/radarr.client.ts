@@ -165,6 +165,39 @@ export class RadarrClient {
   }
 
   /**
+   * Update configuration dynamically
+   */
+  updateConfig(baseURL?: string, apiKey?: string): void {
+    if (baseURL) this.baseURL = baseURL;
+    if (apiKey) this.apiKey = apiKey;
+    
+    // Reinitialize the client with new config
+    this.client = axios.create({
+      baseURL: this.baseURL,
+      timeout: 30000,
+      headers: {
+        'X-Api-Key': this.apiKey,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error: AxiosError) => {
+        logger.error('Radarr API error', {
+          url: error.config?.url,
+          status: error.response?.status,
+          message: error.message,
+          data: error.response?.data
+        });
+        throw error;
+      }
+    );
+    
+    logger.info('Radarr configuration updated');
+  }
+
+  /**
    * Test connection to Radarr
    */
   async testConnection(): Promise<boolean> {

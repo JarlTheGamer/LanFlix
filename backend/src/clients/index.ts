@@ -31,7 +31,6 @@ export async function loadApiKeysFromDatabase(): Promise<void> {
     // Update TMDB API key if found in database
     const tmdbApiKey = settingsMap.get('tmdbApiKey');
     if (tmdbApiKey) {
-      // Validate API key format (should be 32 characters alphanumeric)
       const trimmedKey = tmdbApiKey.trim();
       if (trimmedKey.length === 0) {
         logger.warn('TMDB API key in database is empty');
@@ -43,8 +42,38 @@ export async function loadApiKeysFromDatabase(): Promise<void> {
       }
     }
 
-    // Note: Sonarr, Radarr, Prowlarr would need similar update methods
-    // For now, they will use .env values until restart
+    // Update Sonarr configuration
+    const sonarrUrl = settingsMap.get('sonarrUrl');
+    const sonarrApiKey = settingsMap.get('sonarrApiKey');
+    if (sonarrUrl || sonarrApiKey) {
+      sonarrClient.updateConfig(
+        sonarrUrl?.trim() || undefined,
+        sonarrApiKey?.trim() || undefined
+      );
+      logger.info('Loaded Sonarr configuration from database');
+    }
+
+    // Update Radarr configuration
+    const radarrUrl = settingsMap.get('radarrUrl');
+    const radarrApiKey = settingsMap.get('radarrApiKey');
+    if (radarrUrl || radarrApiKey) {
+      radarrClient.updateConfig(
+        radarrUrl?.trim() || undefined,
+        radarrApiKey?.trim() || undefined
+      );
+      logger.info('Loaded Radarr configuration from database');
+    }
+
+    // Update Prowlarr configuration
+    const prowlarrUrl = settingsMap.get('prowlarrUrl');
+    const prowlarrApiKey = settingsMap.get('prowlarrApiKey');
+    if (prowlarrUrl || prowlarrApiKey) {
+      prowlarrClient.updateConfig(
+        prowlarrUrl?.trim() || undefined,
+        prowlarrApiKey?.trim() || undefined
+      );
+      logger.info('Loaded Prowlarr configuration from database');
+    }
   } catch (error) {
     logger.error('Failed to load API keys from database:', error);
   }
