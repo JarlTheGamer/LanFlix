@@ -8,6 +8,10 @@ export class Navigation {
     this.focusedTabIndex = 0;
     this.focusedCardIndex = 0;
     this.lastMenuIndex = 1;
+    
+    // Page transition state
+    this.isTransitioning = false;
+    this.transitionDuration = 300; // ms
   }
 
   initialize() {
@@ -19,21 +23,61 @@ export class Navigation {
   setupMenu() {
     const menuButtons = document.querySelectorAll('.menu-item');
     menuButtons.forEach((button) => {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', async () => {
+        if (this.isTransitioning) return;
+        
         menuButtons.forEach((btn) => btn.classList.remove('active'));
         button.classList.add('active');
-        this.contentDisplay.switchCategory(button.dataset.hero);
+        await this.navigateToPage(button.dataset.hero);
       });
     });
+  }
+
+  /**
+   * Navigate to a page with transition animation
+   */
+  async navigateToPage(category) {
+    if (this.isTransitioning) return;
+    
+    this.isTransitioning = true;
+    const main = document.querySelector('main');
+    
+    // Fade out
+    if (main) {
+      main.style.transition = `opacity ${this.transitionDuration}ms ease-out`;
+      main.style.opacity = '0';
+    }
+    
+    // Wait for fade out
+    await this.delay(this.transitionDuration);
+    
+    // Switch content
+    await this.contentDisplay.switchCategory(category);
+    
+    // Fade in
+    if (main) {
+      main.style.opacity = '1';
+    }
+    
+    // Reset transition state
+    await this.delay(this.transitionDuration);
+    this.isTransitioning = false;
+  }
+
+  /**
+   * Delay helper
+   */
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   setupTabs() {
     const tabs = document.querySelectorAll('.tab');
     tabs.forEach((tab) => {
-      tab.addEventListener('click', () => {
+      tab.addEventListener('click', async () => {
         tabs.forEach((item) => item.classList.remove('active'));
         tab.classList.add('active');
-        this.contentDisplay.renderCards(tab.dataset.tab);
+        await this.contentDisplay.renderCards(tab.dataset.tab);
       });
     });
   }
@@ -44,7 +88,41 @@ export class Navigation {
     menuButtons[this.focusedMenuIndex].classList.add('active');
 
     document.addEventListener('keydown', (e) => this.handleKeyboard(e));
+    
+    // Add support for Android TV remote control buttons
+    this.setupRemoteControlSupport();
+    
     this.updateFocus();
+  }
+
+  /**
+   * Setup Android TV remote control support
+   */
+  setupRemoteControlSupport() {
+    // Map remote control buttons to keyboard events
+    const remoteButtonMap = {
+      'MediaPlayPause': ' ', // Space for play/pause
+      'MediaPlay': ' ',
+      'MediaPause': ' ',
+      'MediaStop': 'Escape',
+      'MediaTrackNext': 'ArrowRight',
+      'MediaTrackPrevious': 'ArrowLeft',
+      'Back': 'Escape'
+    };
+
+    document.addEventListener('keydown', (e) => {
+      if (remoteButtonMap[e.key]) {
+        const mappedKey = remoteButtonMap[e.key];
+        const syntheticEvent = new KeyboardEvent('keydown', {
+          key: mappedKey,
+          code: mappedKey,
+          bubbles: true,
+          cancelable: true
+        });
+        e.preventDefault();
+        document.dispatchEvent(syntheticEvent);
+      }
+    });
   }
 
   handleKeyboard(e) {
@@ -90,7 +168,7 @@ export class Navigation {
           this.focusedMenuIndex = this.focusedMenuIndex > 0 ? this.focusedMenuIndex - 1 : menuButtons.length - 1;
           menuButtons.forEach((btn) => btn.classList.remove('active'));
           menuButtons[this.focusedMenuIndex].classList.add('active');
-          this.contentDisplay.switchCategory(menuButtons[this.focusedMenuIndex].dataset.hero);
+          this.navigateToPage(menuButtons[this.focusedMenuIndex].dataset.hero).catch(console.error);
           this.updateFocus();
         }
       } else if (e.key === 'ArrowRight') {
@@ -102,7 +180,7 @@ export class Navigation {
           this.focusedMenuIndex = this.focusedMenuIndex < menuButtons.length - 1 ? this.focusedMenuIndex + 1 : 0;
           menuButtons.forEach((btn) => btn.classList.remove('active'));
           menuButtons[this.focusedMenuIndex].classList.add('active');
-          this.contentDisplay.switchCategory(menuButtons[this.focusedMenuIndex].dataset.hero);
+          this.navigateToPage(menuButtons[this.focusedMenuIndex].dataset.hero).catch(console.error);
           this.updateFocus();
         }
       } else if (e.key === 'ArrowDown') {

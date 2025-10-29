@@ -1,3 +1,6 @@
+import apiClient from './api-client.js';
+import stateManager from './data.js';
+
 export class SettingsManager {
   constructor() {
     this.focusedArea = 'back';
@@ -10,9 +13,15 @@ export class SettingsManager {
     this.modalFocusIndex = 0;
     this.selectedColor = null;
     this.currentProfileCard = null;
+    this.settings = {};
+    this.profiles = [];
   }
 
-  initialize() {
+  async initialize() {
+    // Load settings and profiles from backend
+    await this.loadSettings();
+    await this.loadProfiles();
+    
     this.setupNavigation();
     this.initializeCustomSelects();
     this.setupToggles();
@@ -26,6 +35,87 @@ export class SettingsManager {
         this.closeAllDropdowns();
       }
     });
+  }
+
+  /**
+   * Load settings from backend
+   */
+  async loadSettings() {
+    try {
+      const response = await apiClient.getSettings();
+      this.settings = response.settings || {};
+      this.applySettings();
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+      this.settings = {};
+    }
+  }
+
+  /**
+   * Load profiles from backend
+   */
+  async loadProfiles() {
+    try {
+      const response = await stateManager.getProfiles();
+      this.profiles = response || [];
+      this.renderProfiles();
+    } catch (error) {
+      console.error('Failed to load profiles:', error);
+      this.profiles = [];
+    }
+  }
+
+  /**
+   * Apply loaded settings to UI
+   */
+  applySettings() {
+    // Apply settings to form elements
+    Object.keys(this.settings).forEach(key => {
+      const element = document.getElementById(key);
+      if (element) {
+        if (element.type === 'checkbox') {
+          element.checked = this.settings[key];
+        } else {
+          element.value = this.settings[key];
+        }
+      }
+    });
+  }
+
+  /**
+   * Render profiles in settings
+   */
+  renderProfiles() {
+    const profilesContainer = document.querySelector('.profiles-grid');
+    if (!profilesContainer) return;
+
+    // Clear existing profiles (except add button)
+    const existingProfiles = profilesContainer.querySelectorAll('.profile-card:not(.add-profile)');
+    existingProfiles.forEach(card => card.remove());
+
+    // Add profile cards
+    this.profiles.forEach(profile => {
+      const profileCard = document.createElement('div');
+      profileCard.className = 'profile-card';
+      profileCard.dataset.profileId = profile.id;
+
+      profileCard.innerHTML = `
+        <div class="profile-card-avatar" style="background: linear-gradient(135deg, ${profile.avatarColorPrimary}, ${profile.avatarColorSecondary})"></div>
+        <div class="profile-card-name">${profile.name}</div>
+        <button class="profile-card-btn">Edit</button>
+      `;
+
+      // Insert before add button
+      const addButton = profilesContainer.querySelector('.add-profile');
+      if (addButton) {
+        profilesContainer.insertBefore(profileCard, addButton);
+      } else {
+        profilesContainer.appendChild(profileCard);
+      }
+    });
+
+    // Re-setup profile handlers
+    this.setupProfiles();
   }
 
   setupNavigation() {
@@ -149,7 +239,7 @@ export class SettingsManager {
     this.currentSelectElement = null;
   }
 
-  selectOption(wrapper, nativeSelect, optionBtn, index) {
+  async selectOption(wrapper, nativeSelect, optionBtn, index) {
     const trigger = wrapper.querySelector('.custom-select-trigger');
     const selectedText = trigger.querySelector('.custom-select-text');
     const dropdown = wrapper.querySelector('.custom-select-dropdown');
@@ -164,7 +254,16 @@ export class SettingsManager {
     nativeSelect.selectedIndex = index;
     nativeSelect.dispatchEvent(new Event('change'));
 
-    console.log(`${nativeSelect.id} changed to:`, nativeSelect.value);
+    const settingKey = nativeSelect.id;
+    const settingValue = nativeSelect.value;
+    
+    console.log(`${settingKey} changed to:`, settingValue);
+    
+    // Update local settings
+    this.settings[settingKey] = settingValue;
+    
+    // Save to backend
+    await this.saveSettings();
 
     this.closeAllDropdowns();
   }
@@ -182,8 +281,17 @@ export class SettingsManager {
   setupToggles() {
     const toggles = document.querySelectorAll('.settings-toggle input');
     toggles.forEach(toggle => {
-      toggle.addEventListener('change', (e) => {
-        console.log(`Toggle ${e.target.id || 'unnamed'} changed to:`, e.target.checked);
+      toggle.addEventListener('change', async (e) => {
+        const settingKey = e.target.id;
+        const settingValue = e.target.checked;
+        
+        console.log(`Toggle ${settingKey} changed to:`, settingValue);
+        
+        // Update local settings
+        this.settings[settingKey] = settingValue;
+        
+        // Save to backend
+        await this.saveSettings();
       });
     });
   }
@@ -192,16 +300,33 @@ export class SettingsManager {
     document.getElementById('cancel-profile')?.addEventListener('click', () => this.closeModal());
     document.getElementById('cancel-add-profile')?.addEventListener('click', () => this.closeModal());
 
-    document.getElementById('save-profile')?.addEventListener('click', () => {
+    document.getElementById('save-profile')?.addEventListener('click', async () => {
       const name = document.getElementById('profile-name').value;
-      console.log('Saving profile:', name, 'with color:', this.selectedColor);
-      this.closeModal();
+      const profileId = this.currentProfileCard?.dataset.profileId;
+      
+      if (!name || !profileId || !this.selectedColor) {
+        alert('Please fill in all fields');
+        return;
+      }
+
+      const [primary, secondary] = this.selectedColor.split(',');
+      await this.updateExistingProfile(parseInt(profileId), {
+        name,
+        avatarColorPrimary: primary,
+        avatarColorSecondary: secondary
+      });
     });
 
-    document.getElementById('create-profile')?.addEventListener('click', () => {
+    document.getElementById('create-profile')?.addEventListener('click', async () => {
       const name = document.getElementById('new-profile-name').value;
-      console.log('Creating profile:', name, 'with color:', this.selectedColor);
-      this.closeModal();
+      
+      if (!name || !this.selectedColor) {
+        alert('Please fill in all fields');
+        return;
+      }
+
+      const [primary, secondary] = this.selectedColor.split(',');
+      await this.createNewProfile(name, primary, secondary);
     });
 
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
@@ -294,6 +419,7 @@ export class SettingsManager {
     const modal = colorOption.closest('.modal-overlay');
     modal.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('selected'));
     colorOption.classList.add('selected');
+    // Store color as "primary,secondary" format
     this.selectedColor = colorOption.dataset.color;
   }
 
@@ -531,6 +657,67 @@ export class SettingsManager {
   scrollToFocusedElement(element) {
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  /**
+   * Save settings to backend
+   */
+  async saveSettings() {
+    try {
+      await apiClient.updateSettings(this.settings);
+      console.log('Settings saved successfully');
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      alert('Failed to save settings. Please try again.');
+    }
+  }
+
+  /**
+   * Create new profile
+   */
+  async createNewProfile(name, colorPrimary, colorSecondary) {
+    try {
+      await apiClient.createProfile(name, colorPrimary, colorSecondary);
+      await this.loadProfiles();
+      this.closeModal();
+      alert('Profile created successfully!');
+    } catch (error) {
+      console.error('Failed to create profile:', error);
+      alert('Failed to create profile. Please try again.');
+    }
+  }
+
+  /**
+   * Update existing profile
+   */
+  async updateExistingProfile(profileId, updates) {
+    try {
+      await apiClient.updateProfile(profileId, updates);
+      await this.loadProfiles();
+      this.closeModal();
+      alert('Profile updated successfully!');
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      alert('Failed to update profile. Please try again.');
+    }
+  }
+
+  /**
+   * Delete profile
+   */
+  async deleteExistingProfile(profileId) {
+    if (!confirm('Are you sure you want to delete this profile?')) {
+      return;
+    }
+
+    try {
+      await apiClient.deleteProfile(profileId);
+      await this.loadProfiles();
+      alert('Profile deleted successfully!');
+    } catch (error) {
+      console.error('Failed to delete profile:', error);
+      alert('Failed to delete profile. Please try again.');
     }
   }
 }

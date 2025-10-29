@@ -1,48 +1,230 @@
-// Mock data - will be replaced with API calls later
-export const PROFILES = [
-  {
-    id: 1,
-    name: 'Alex',
-    avatar: { primary: '#ff6b6b', secondary: '#ee5a24' },
-    watchedShows: [
-      { title: 'Stranger Things', image: 'https://image.tmdb.org/t/p/original/49WJfeN0moxb9IPfGn8AIqMGskD.jpg', meta: 'S4 • Sci-Fi' },
-      { title: 'The Crown', image: 'https://image.tmdb.org/t/p/original/1M876KPjulVwppEpldhdc8V4o68.jpg', meta: 'S6 • Drama' },
-      { title: 'Wednesday', image: 'https://m.media-amazon.com/images/M/MV5BNjkxNzlhMTAtZGQ3Mi00NDNmLWJkMWEtMWQ3ZjNiMWRjOGVlXkEyXkFqcGdeQWRvb2xpbmhk._V1_.jpg', meta: 'S1 • Mystery' },
-      { title: 'The Witcher', image: 'https://image.tmdb.org/t/p/original/7vjaCdMw15FEbXyLQTVa04URsPm.jpg', meta: 'S3 • Fantasy' },
-      { title: 'Arcane', image: 'https://image.tmdb.org/t/p/original/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg', meta: 'S1 • Animation' },
-      { title: 'The Mandalorian', image: 'https://image.tmdb.org/t/p/original/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg', meta: 'S3 • Sci-Fi' },
-    ]
-  },
-  {
-    id: 2,
-    name: 'Sarah',
-    avatar: { primary: '#4ecdc4', secondary: '#26d0ce' },
-    watchedShows: [
-      { title: 'The Queen\'s Gambit', image: 'https://image.tmdb.org/t/p/original/zU0htwkhNvBQdVSIKB9s6hgVeFK.jpg', meta: 'Limited • Drama' },
-      { title: 'Euphoria', image: 'https://image.tmdb.org/t/p/original/jtnfNzqZwN4E32FGGxx1YZaBWWf.jpg', meta: 'S2 • Drama' }
-    ]
-  },
-  {
-    id: 3,
-    name: 'Marcus',
-    avatar: { primary: '#a55eea', secondary: '#8854d0' },
-    watchedShows: [
-      { title: 'Breaking Bad', image: 'https://image.tmdb.org/t/p/original/3xnWaLQjelJDDF7LT1WBo6f4BRe.jpg', meta: 'S5 • Crime' },
-      { title: 'The Bear', image: 'https://image.tmdb.org/t/p/original/sHFlbKS3WLqMnp9t2ghADIJFnuQ.jpg', meta: 'S3 • Comedy' }
-    ]
-  },
-  {
-    id: 4,
-    name: 'Kids',
-    avatar: { primary: '#ffa726', secondary: '#ff9800' },
-    watchedShows: [
-      { title: 'Arcane', image: 'https://image.tmdb.org/t/p/original/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg', meta: 'S1 • Animation' },
-      { title: 'The Mandalorian', image: 'https://image.tmdb.org/t/p/original/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg', meta: 'S3 • Sci-Fi' },
-      { title: 'Avatar: The Last Airbender', image: 'https://image.tmdb.org/t/p/original/cMD9Ygz11zjJzAovURpO75Qg7rT.jpg', meta: 'S3 • Animation' },
-    ]
-  }
-];
+import apiClient from './api-client.js';
 
+/**
+ * State Management Module
+ * Handles data fetching, caching, and state persistence
+ */
+
+class StateManager {
+  constructor() {
+    this.cache = {
+      profiles: null,
+      discoverContent: null,
+      libraryMovies: null,
+      librarySeries: null,
+      recentlyAdded: null,
+      watchlist: null
+    };
+    
+    this.cacheTimestamps = {};
+    this.cacheDuration = 5 * 60 * 1000; // 5 minutes
+    
+    // Load state from localStorage
+    this.loadState();
+  }
+
+  /**
+   * Save current state to localStorage
+   */
+  saveState() {
+    const state = {
+      currentPage: this.currentPage,
+      currentProfileId: this.currentProfileId,
+      scrollPosition: window.scrollY
+    };
+    localStorage.setItem('appState', JSON.stringify(state));
+  }
+
+  /**
+   * Load state from localStorage
+   */
+  loadState() {
+    const savedState = localStorage.getItem('appState');
+    if (savedState) {
+      const state = JSON.parse(savedState);
+      this.currentPage = state.currentPage || 'home';
+      this.currentProfileId = state.currentProfileId || null;
+      this.scrollPosition = state.scrollPosition || 0;
+    } else {
+      this.currentPage = 'home';
+      this.currentProfileId = null;
+      this.scrollPosition = 0;
+    }
+  }
+
+  /**
+   * Check if cache is valid
+   */
+  isCacheValid(key) {
+    if (!this.cache[key]) return false;
+    const timestamp = this.cacheTimestamps[key];
+    if (!timestamp) return false;
+    return Date.now() - timestamp < this.cacheDuration;
+  }
+
+  /**
+   * Set cache with timestamp
+   */
+  setCache(key, data) {
+    this.cache[key] = data;
+    this.cacheTimestamps[key] = Date.now();
+  }
+
+  /**
+   * Get profiles from backend or cache
+   */
+  async getProfiles(forceRefresh = false) {
+    if (!forceRefresh && this.isCacheValid('profiles')) {
+      return this.cache.profiles;
+    }
+
+    try {
+      const response = await apiClient.getProfiles();
+      this.setCache('profiles', response.profiles);
+      return response.profiles;
+    } catch (error) {
+      console.error('Failed to fetch profiles:', error);
+      // Return cached data if available
+      return this.cache.profiles || [];
+    }
+  }
+
+  /**
+   * Get discover content from backend or cache
+   */
+  async getDiscoverContent(profileId, forceRefresh = false) {
+    const cacheKey = `discover_${profileId}`;
+    if (!forceRefresh && this.cache[cacheKey] && this.isCacheValid('discoverContent')) {
+      return this.cache[cacheKey];
+    }
+
+    try {
+      const data = await apiClient.getDiscoverContent(profileId);
+      this.cache[cacheKey] = data;
+      this.setCache('discoverContent', data);
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch discover content:', error);
+      return this.cache[cacheKey] || { trending: [], popular: { movies: [], series: [] } };
+    }
+  }
+
+  /**
+   * Get library movies from backend or cache
+   */
+  async getLibraryMovies(filters = {}, forceRefresh = false) {
+    if (!forceRefresh && this.isCacheValid('libraryMovies')) {
+      return this.cache.libraryMovies;
+    }
+
+    try {
+      const data = await apiClient.getLibraryMovies(filters);
+      this.setCache('libraryMovies', data);
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch library movies:', error);
+      return this.cache.libraryMovies || { count: 0, items: [] };
+    }
+  }
+
+  /**
+   * Get library series from backend or cache
+   */
+  async getLibrarySeries(filters = {}, forceRefresh = false) {
+    if (!forceRefresh && this.isCacheValid('librarySeries')) {
+      return this.cache.librarySeries;
+    }
+
+    try {
+      const data = await apiClient.getLibrarySeries(filters);
+      this.setCache('librarySeries', data);
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch library series:', error);
+      return this.cache.librarySeries || { count: 0, items: [] };
+    }
+  }
+
+  /**
+   * Get recently added content from backend or cache
+   */
+  async getRecentlyAdded(limit = 20, forceRefresh = false) {
+    if (!forceRefresh && this.isCacheValid('recentlyAdded')) {
+      return this.cache.recentlyAdded;
+    }
+
+    try {
+      const data = await apiClient.getRecentlyAdded(limit);
+      this.setCache('recentlyAdded', data);
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch recently added:', error);
+      return this.cache.recentlyAdded || { count: 0, items: [] };
+    }
+  }
+
+  /**
+   * Get watchlist from backend or cache
+   */
+  async getWatchlist(profileId, forceRefresh = false) {
+    const cacheKey = `watchlist_${profileId}`;
+    if (!forceRefresh && this.cache[cacheKey] && this.isCacheValid('watchlist')) {
+      return this.cache[cacheKey];
+    }
+
+    try {
+      const data = await apiClient.getWatchlist(profileId);
+      this.cache[cacheKey] = data;
+      this.setCache('watchlist', data);
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch watchlist:', error);
+      return this.cache[cacheKey] || { count: 0, items: [] };
+    }
+  }
+
+  /**
+   * Search content
+   */
+  async searchContent(query, type = 'all', profileId = null) {
+    try {
+      return await apiClient.searchContent(query, type, profileId);
+    } catch (error) {
+      console.error('Failed to search content:', error);
+      return { query, type, results: [] };
+    }
+  }
+
+  /**
+   * Clear all caches
+   */
+  clearCache() {
+    this.cache = {
+      profiles: null,
+      discoverContent: null,
+      libraryMovies: null,
+      librarySeries: null,
+      recentlyAdded: null,
+      watchlist: null
+    };
+    this.cacheTimestamps = {};
+  }
+}
+
+// Create singleton instance
+const stateManager = new StateManager();
+
+// Save state before page unload
+window.addEventListener('beforeunload', () => {
+  stateManager.saveState();
+});
+
+export default stateManager;
+
+// Legacy exports for backward compatibility (mock data)
+export const PROFILES = [];
+
+// Mock hero data for fallback
 export const HEROES = {
   home: [
     {
@@ -120,6 +302,7 @@ export const HEROES = {
   ],
 };
 
+// Mock movie data for fallback
 export const MOVIES = [
   {
     title: 'Avatar: The Way of Water',

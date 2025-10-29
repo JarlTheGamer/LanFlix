@@ -194,10 +194,6 @@
   - _Requirements: 4.6_
 
 - [x] 7. Implement background jobs and scheduled tasks
-
-
-
-
   - Create job scheduler using node-cron
   - Implement download queue polling job (every 60 seconds)
   - Implement auto-delete check job (daily at 2 AM)
@@ -207,9 +203,15 @@
   - Add job monitoring and error handling
   - _Requirements: 2.6, 2.7, 12.6_
 
-- [ ] 8. Refactor frontend JavaScript into modules
 
-- [ ] 8.1 Create API client module
+- [x] 8. Refactor frontend JavaScript into modules
+
+
+
+
+
+- [x] 8.1 Create API client module
+
   - Extract all backend communication into api-client.js module
   - Implement typed methods for all API endpoints
   - Add request/response interceptors for error handling
@@ -218,14 +220,18 @@
   - Make all the frontend work. if you reload it doesnt refresh everything, rather it will save stuff and you open the same page, use the your next watch as a template for all the carousels you can scroll through.
   - _Requirements: 14.4, 14.5_
 
-- [ ] 8.2 Create navigation module
+- [x] 8.2 Create navigation module
+
+
   - Extract navigation logic from script.js into navigation.js
   - Implement menu navigation and routing
   - Add keyboard and remote control input handling
   - Implement page transition animations
   - _Requirements: 14.4_
 
-- [ ] 8.3 Create content display module
+
+- [x] 8.3 Create content display module
+
   - Extract content rendering logic into content-display.js
   - Implement carousel rendering and management
   - Add card expansion/collapse functionality
@@ -233,7 +239,9 @@
   - Add lazy loading for images
   - _Requirements: 14.4_
 
-- [ ] 8.4 Create profile manager module
+
+
+- [x] 8.4 Create profile manager module
   - Extract profile logic into profile-manager.js
   - Implement profile selection UI
   - Add profile CRUD operations
@@ -241,7 +249,9 @@
   - Add profile data synchronization with backend
   - _Requirements: 14.4_
 
-- [ ] 8.5 Create video player module
+- [x] 8.5 Create video player module
+
+
   - Create video-player.js module with Video.js or Plyr integration
   - Implement playback controls (play, pause, seek, volume, fullscreen)
   - Add watch progress tracking (update every 10 seconds)
@@ -249,7 +259,9 @@
   - Add resume playback from saved position
   - _Requirements: 11.4, 11.5, 11.6, 11.7_
 
-- [ ] 8.6 Create settings manager module
+- [x] 8.6 Create settings manager module
+
+
   - Extract settings logic into settings-manager.js
   - Implement settings form handling and validation
   - Add settings synchronization with backend
