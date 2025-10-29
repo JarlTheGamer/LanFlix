@@ -97,7 +97,13 @@ export class DownloadManager {
           ]);
 
           if (rootFolders.length === 0 || qualityProfiles.length === 0) {
-            throw new Error('Sonarr not properly configured (missing root folder or quality profile)');
+            const missingItems = [];
+            if (rootFolders.length === 0) missingItems.push('root folder');
+            if (qualityProfiles.length === 0) missingItems.push('quality profile');
+            
+            throw new Error(
+              `Sonarr is not properly configured. Please set up ${missingItems.join(' and ')} in Sonarr settings (http://localhost:8989/settings/mediamanagement for root folders, http://localhost:8989/settings/profiles for quality profiles)`
+            );
           }
 
           // Search for series to get TVDB ID
@@ -132,7 +138,13 @@ export class DownloadManager {
           ]);
 
           if (rootFolders.length === 0 || qualityProfiles.length === 0) {
-            throw new Error('Radarr not properly configured (missing root folder or quality profile)');
+            const missingItems = [];
+            if (rootFolders.length === 0) missingItems.push('root folder');
+            if (qualityProfiles.length === 0) missingItems.push('quality profile');
+            
+            throw new Error(
+              `Radarr is not properly configured. Please set up ${missingItems.join(' and ')} in Radarr settings (http://localhost:7878/settings/mediamanagement for root folders, http://localhost:7878/settings/profiles for quality profiles)`
+            );
           }
 
           // Add movie to Radarr

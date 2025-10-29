@@ -463,22 +463,46 @@ export class LibraryService {
       const mediaRoot = config.media.rootPath;
       const stats = { added: 0, updated: 0, errors: [] as string[] };
 
+      // Try multiple possible folder names (case-insensitive)
+      const moviesFolderNames = ['movies', 'Movies', 'MOVIES'];
+      const seriesFolderNames = ['series', 'Series', 'SERIES', 'shows', 'Shows', 'SHOWS'];
+
       // Scan movies folder
-      const moviesPath = path.join(mediaRoot, 'movies');
-      try {
-        await this.scanMoviesFolder(moviesPath, stats);
-      } catch (error) {
-        logger.warn('Failed to scan movies folder:', error);
-        stats.errors.push(`Movies folder: ${(error as Error).message}`);
+      let moviesScanned = false;
+      for (const folderName of moviesFolderNames) {
+        const moviesPath = path.join(mediaRoot, folderName);
+        try {
+          await fs.access(moviesPath);
+          await this.scanMoviesFolder(moviesPath, stats);
+          moviesScanned = true;
+          break;
+        } catch (error) {
+          // Folder doesn't exist, try next name
+          continue;
+        }
+      }
+
+      if (!moviesScanned) {
+        logger.warn('No movies folder found in media root');
       }
 
       // Scan series folder
-      const seriesPath = path.join(mediaRoot, 'series');
-      try {
-        await this.scanSeriesFolder(seriesPath, stats);
-      } catch (error) {
-        logger.warn('Failed to scan series folder:', error);
-        stats.errors.push(`Series folder: ${(error as Error).message}`);
+      let seriesScanned = false;
+      for (const folderName of seriesFolderNames) {
+        const seriesPath = path.join(mediaRoot, folderName);
+        try {
+          await fs.access(seriesPath);
+          await this.scanSeriesFolder(seriesPath, stats);
+          seriesScanned = true;
+          break;
+        } catch (error) {
+          // Folder doesn't exist, try next name
+          continue;
+        }
+      }
+
+      if (!seriesScanned) {
+        logger.warn('No series folder found in media root');
       }
 
       logger.info('Library scan completed', stats);

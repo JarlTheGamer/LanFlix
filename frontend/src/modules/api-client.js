@@ -302,8 +302,12 @@ class ApiClient {
    * GET /api/library/:id
    * Get specific library item details
    */
-  async getLibraryItem(id) {
-    return this.request(`/library/${id}`);
+  async getLibraryItem(id, profileId = null) {
+    const params = new URLSearchParams();
+    if (profileId) params.append('profileId', profileId);
+    
+    const queryString = params.toString();
+    return this.request(`/library/${id}${queryString ? '?' + queryString : ''}`);
   }
 
   /**

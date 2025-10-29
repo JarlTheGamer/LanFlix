@@ -441,16 +441,17 @@ main {
 }
 
 .hero-title {
-  font-size: clamp(2.2rem, 4vw, 4.2rem);
+  font-size: clamp(1.8rem, 3.5vw, 3.2rem);
   font-weight: 700;
   letter-spacing: -0.02em;
-  line-height: 1.1;
+  line-height: 1.15;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
+  max-height: 4.6rem;
 }
 
 .hero-meta {

@@ -84,7 +84,8 @@ router.get('/recent', async (req: Request, res: Response, next: NextFunction) =>
 router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const item = await libraryService.getLibraryItem(id);
+    const profileId = req.query.profileId ? parseInt(req.query.profileId as string) : undefined;
+    const item = await libraryService.getLibraryItem(id, profileId);
 
     if (!item) {
       const error: ApiError = new Error('Library item not found');
@@ -94,6 +95,39 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
     }
 
     res.json(item);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/library
+ * Add content to library manually
+ */
+router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { tmdbId, type, filePath } = req.body;
+
+    if (!tmdbId || !type || !filePath) {
+      const error: ApiError = new Error('Missing required fields: tmdbId, type, filePath');
+      error.statusCode = 400;
+      error.code = 'VALIDATION_ERROR';
+      return next(error);
+    }
+
+    if (!['movie', 'series'].includes(type)) {
+      const error: ApiError = new Error('Type must be either "movie" or "series"');
+      error.statusCode = 400;
+      error.code = 'VALIDATION_ERROR';
+      return next(error);
+    }
+
+    const content = await libraryService.addToLibrary(tmdbId, type, filePath);
+
+    res.status(201).json({
+      message: 'Content added to library',
+      content
+    });
   } catch (error) {
     next(error);
   }

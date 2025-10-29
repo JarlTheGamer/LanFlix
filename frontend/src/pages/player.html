@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player - Flix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles/player.css">
+</head>
+<body>
+  <div class="player-container">
+    <video id="video-player" class="video-element"></video>
+    <div id="player-controls" class="player-controls"></div>
+    <button id="back-button" class="back-button" title="Back">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+
+  <script type="module">
+    import VideoPlayer from '../modules/video-player.js';
+    import apiClient from '../modules/api-client.js';
+    import stateManager from '../modules/data.js';
+
+    // Get URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const contentId = urlParams.get('contentId');
+    const contentType = urlParams.get('type');
+    const episodeId = urlParams.get('episodeId');
+
+    if (!contentId || !contentType) {
+      alert('Invalid player parameters');
+      window.location.href = 'index.html';
+    }
+
+    // Get current profile from state manager
+    const profileId = stateManager.currentProfileId;
+    
+    if (!profileId) {
+      console.error('No profile selected, redirecting to profiles page');
+      alert('Please select a profile first');
+      window.location.href = 'profiles.html';
+      throw new Error('No profile selected');
+    }
+
+    // Initialize video player
+    const videoElement = document.getElementById('video-player');
+    const player = new VideoPlayer(videoElement, profileId);
+
+    // Get watch progress
+    let startPosition = 0;
+    try {
+      const content = await apiClient.getLibraryItem(contentId, profileId);
+      if (content && content.watchProgress && !content.watchProgress.completed) {
+        startPosition = content.watchProgress.progressSeconds || 0;
+      }
+    } catch (error) {
+      console.error('Failed to get watch progress:', error);
+    }
+
+    // Initialize player
+    await player.initialize(contentId, contentType, episodeId, startPosition);
+
+    // Back button handler
+    document.getElementById('back-button').addEventListener('click', () => {
+      player.destroy();
+      window.history.back();
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      player.destroy();
+    });
+  </script>
+</body>
+</html>
