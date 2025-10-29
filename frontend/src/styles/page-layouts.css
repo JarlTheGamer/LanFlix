@@ -1,0 +1,166 @@
+/* Unique Page Layouts */
+
+/* Common Section Styles */
+.section-title {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  color: #fff;
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+/* HOME PAGE */
+.home-section {
+  margin-bottom: 60px;
+}
+
+.browse-all-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.browse-all-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* DISCOVER PAGE */
+.discover-layout {
+  padding: 100px 40px 40px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.discover-title {
+  color: #fff;
+  font-size: 48px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.discover-subtitle {
+  color: #999;
+  font-size: 18px;
+  margin-bottom: 60px;
+}
+
+.discover-section {
+  margin-bottom: 60px;
+}
+
+.discover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .discover-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+  }
+}
+
+/* MOVIES PAGE */
+.movies-layout {
+  padding: 40px;
+}
+
+.movies-header {
+  margin-bottom: 40px;
+}
+
+.movies-stats,
+.shows-stats,
+.mylist-stats {
+  color: #999;
+  font-size: 16px;
+}
+
+.movies-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .movies-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+  }
+}
+
+/* SHOWS PAGE */
+.shows-layout {
+  padding: 40px;
+}
+
+.shows-header {
+  margin-bottom: 40px;
+}
+
+.shows-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .shows-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+  }
+}
+
+/* MY LIST PAGE */
+.mylist-layout {
+  padding: 40px;
+}
+
+.mylist-header {
+  margin-bottom: 40px;
+}
+
+.mylist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .mylist-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+  }
+}
+
+/* Card adjustments for grid layouts */
+.discover-grid .movie-card,
+.movies-grid .movie-card,
+.shows-grid .movie-card,
+.mylist-grid .movie-card {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2/3;
+}
+
+.discover-grid .movie-card:hover,
+.movies-grid .movie-card:hover,
+.shows-grid .movie-card:hover,
+.mylist-grid .movie-card:hover {
+  transform: scale(1.05);
+  z-index: 10;
+}

@@ -34,13 +34,9 @@ export class ContentDisplay {
 
     await this.loadContent();
     
-    // Show normal UI
-    this.showNormalUI();
+    // Render home page with unique layout
+    await this.renderHomePage();
     
-    this.createCarouselItems();
-    this.updateCarouselPosition();
-    this.updateAmbilightForCurrentSlide();
-    await this.renderCards('all');
     this.setupScrollHandler();
     this.setupOfflineHandlers();
   }
@@ -226,26 +222,13 @@ export class ContentDisplay {
   createCarouselItems() {
     this.heroCarouselTrack.innerHTML = '';
 
-    // For discovery page, check if offline first
+    // For discovery page, use mock heroes (offline handled in switchCategory)
     if (this.currentCategory === 'discover') {
-      console.log('Discovery page - checking offline status:', {
-        apiClientOffline: apiClient.isOffline,
-        stateManagerOffline: stateManager.isOffline
+      const heroes = HEROES[this.currentCategory] || [];
+      heroes.forEach((hero, index) => {
+        const heroSection = this.createHeroFromMock(hero, index);
+        this.heroCarouselTrack.appendChild(heroSection);
       });
-      
-      if (apiClient.isOffline || stateManager.isOffline) {
-        // Show offline hero for discovery
-        console.log('Showing offline discovery hero');
-        const offlineHero = this.createOfflineDiscoveryHero();
-        this.heroCarouselTrack.appendChild(offlineHero);
-      } else {
-        console.log('Showing mock discovery heroes');
-        const heroes = HEROES[this.currentCategory] || [];
-        heroes.forEach((hero, index) => {
-          const heroSection = this.createHeroFromMock(hero, index);
-          this.heroCarouselTrack.appendChild(heroSection);
-        });
-      }
     } else {
       // For all other pages, use LOCAL downloaded content
       const localContent = this.getLocalContentForHero();
@@ -418,58 +401,7 @@ export class ContentDisplay {
     return heroSection;
   }
 
-  /**
-   * Create offline hero for discovery page
-   */
-  createOfflineDiscoveryHero() {
-    const heroSection = document.createElement('section');
-    heroSection.className = 'hero';
-    heroSection.dataset.index = 0;
 
-    heroSection.innerHTML = `
-      <div class="hero-background" style="background: linear-gradient(135deg, #1a1a2a 0%, #2d1a1a 100%)"></div>
-      <div class="hero-overlay"></div>
-      <div class="hero-body">
-        <div class="hero-content">
-          <div class="hero-tag">Connection Issue</div>
-          <h1 class="hero-title">Uh Oh! Looks Like Your Connection Didn't Work</h1>
-          <div class="hero-meta"><span>Offline</span><span>Discovery Unavailable</span></div>
-          <p class="hero-description">Discovery features require an internet connection to browse new content. We'll automatically retry in 10 minutes, or you can try again now.</p>
-          <div class="hero-actions">
-            <button class="cta primary" id="hero-retry-btn">
-              <span>🔄 Retry Connection</span>
-            </button>
-            <button class="cta ghost" onclick="document.querySelector('[data-hero=\\'home\\']').click();">
-              <span>Go to Home</span>
-            </button>
-          </div>
-        </div>
-        <div class="hero-secondary"><span>Tip</span> Your downloaded content is still available in Home, Movies, and Series</div>
-      </div>
-    `;
-
-    // Add retry button handler
-    setTimeout(() => {
-      const retryBtn = document.getElementById('hero-retry-btn');
-      if (retryBtn) {
-        retryBtn.addEventListener('click', async () => {
-          retryBtn.innerHTML = '<span>⏳ Checking...</span>';
-          retryBtn.disabled = true;
-
-          const isOnline = await apiClient.checkConnection();
-
-          if (isOnline) {
-            await this.refreshContent();
-          } else {
-            retryBtn.innerHTML = '<span>❌ Still Offline - Try Again</span>';
-            retryBtn.disabled = false;
-          }
-        });
-      }
-    }, 100);
-
-    return heroSection;
-  }
 
   updateCarouselPosition() {
     const heroes = this.heroCarouselTrack.querySelectorAll('.hero');
@@ -549,13 +481,26 @@ export class ContentDisplay {
     // Load content for new category
     await this.loadContent();
 
-    // Show normal UI elements
-    this.showNormalUI();
-
-    this.createCarouselItems();
-    this.updateCarouselPosition();
-    this.updateAmbilightForCurrentSlide();
-    await this.renderCards('all');
+    // Render page based on category with unique layouts
+    switch (category) {
+      case 'home':
+        await this.renderHomePage();
+        break;
+      case 'discover':
+        await this.renderDiscoverPage();
+        break;
+      case 'movies':
+        await this.renderMoviesPage();
+        break;
+      case 'shows':
+        await this.renderShowsPage();
+        break;
+      case 'my':
+        await this.renderMyListPage();
+        break;
+      default:
+        await this.renderHomePage();
+    }
   }
 
   async renderCards(filter) {
@@ -1195,6 +1140,254 @@ export class ContentDisplay {
         tab.classList.add('active');
         await this.renderCards(tab.dataset.tab);
       });
+    });
+  }
+
+  // ==================== UNIQUE PAGE LAYOUTS ====================
+
+  /**
+   * Render HOME page - Hero carousel + Recently Added + Discovery Preview
+   */
+  async renderHomePage() {
+    const heroStage = document.querySelector('.hero-stage');
+    const contentShell = document.querySelector('.content-shell');
+    
+    heroStage.style.display = '';
+    
+    // Create hero carousel
+    this.createCarouselItems();
+    this.updateCarouselPosition();
+    this.updateAmbilightForCurrentSlide();
+
+    // Home page layout
+    const recentlyAdded = this.contentData.recentlyAdded || [];
+    const discoverPreview = this.contentData.discoverPreview || [];
+
+    contentShell.innerHTML = `
+      <section class="home-section">
+        <h2 class="section-title">Recently Added</h2>
+        <div class="movie-hub" id="recently-added-hub"></div>
+      </section>
+      ${discoverPreview.length > 0 ? `
+        <section class="home-section">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 class="section-title">Discover New Content</h2>
+            <button class="browse-all-btn" onclick="document.querySelector('[data-hero=\\'discover\\']').click()">
+              Browse All →
+            </button>
+          </div>
+          <div class="movie-hub" id="discover-preview-hub"></div>
+        </section>
+      ` : ''}
+    `;
+
+    // Render recently added
+    const recentHub = document.getElementById('recently-added-hub');
+    if (recentHub) {
+      recentlyAdded.forEach((item, index) => {
+        const card = this.createContentCard(item, index, false);
+        recentHub.appendChild(card);
+      });
+    }
+
+    // Render discovery preview
+    if (discoverPreview.length > 0) {
+      const discoverHub = document.getElementById('discover-preview-hub');
+      if (discoverHub) {
+        discoverPreview.forEach((item, index) => {
+          const card = this.createContentCard(item, index, true);
+          discoverHub.appendChild(card);
+        });
+      }
+    }
+
+    this.setupLazyLoading();
+    this.setupCardHandlers();
+  }
+
+  /**
+   * Render DISCOVER page - Grid layout with categories
+   */
+  async renderDiscoverPage() {
+    const heroStage = document.querySelector('.hero-stage');
+    const contentShell = document.querySelector('.content-shell');
+    
+    heroStage.style.display = 'none';
+
+    const trending = this.contentData.trending || { movies: [], series: [] };
+    const popularMovies = Array.isArray(this.contentData.popularMovies) 
+      ? this.contentData.popularMovies 
+      : (this.contentData.popularMovies?.items || []);
+    const popularSeries = Array.isArray(this.contentData.popularSeries)
+      ? this.contentData.popularSeries
+      : (this.contentData.popularSeries?.items || []);
+
+    contentShell.innerHTML = `
+      <div class="discover-layout">
+        <h1 class="discover-title">Discover</h1>
+        <p class="discover-subtitle">Browse and download new content to watch</p>
+
+        ${trending.movies.length > 0 ? `
+          <section class="discover-section">
+            <h2 class="section-title">🔥 Trending Movies</h2>
+            <div class="discover-grid" id="trending-movies-grid"></div>
+          </section>
+        ` : ''}
+
+        ${trending.series.length > 0 ? `
+          <section class="discover-section">
+            <h2 class="section-title">📺 Trending Series</h2>
+            <div class="discover-grid" id="trending-series-grid"></div>
+          </section>
+        ` : ''}
+
+        ${popularMovies.length > 0 ? `
+          <section class="discover-section">
+            <h2 class="section-title">⭐ Popular Movies</h2>
+            <div class="discover-grid" id="popular-movies-grid"></div>
+          </section>
+        ` : ''}
+
+        ${popularSeries.length > 0 ? `
+          <section class="discover-section">
+            <h2 class="section-title">🎬 Popular Series</h2>
+            <div class="discover-grid" id="popular-series-grid"></div>
+          </section>
+        ` : ''}
+      </div>
+    `;
+
+    // Render grids
+    this.renderDiscoverGrid('trending-movies-grid', trending.movies);
+    this.renderDiscoverGrid('trending-series-grid', trending.series);
+    this.renderDiscoverGrid('popular-movies-grid', popularMovies);
+    this.renderDiscoverGrid('popular-series-grid', popularSeries);
+
+    this.setupLazyLoading();
+    this.setupCardHandlers();
+  }
+
+  /**
+   * Render MOVIES page - Large poster grid
+   */
+  async renderMoviesPage() {
+    const heroStage = document.querySelector('.hero-stage');
+    const contentShell = document.querySelector('.content-shell');
+    
+    heroStage.style.display = '';
+    
+    this.createCarouselItems();
+    this.updateCarouselPosition();
+    this.updateAmbilightForCurrentSlide();
+
+    const movies = this.contentData.movies || [];
+
+    contentShell.innerHTML = `
+      <section class="movies-layout">
+        <div class="movies-header">
+          <h1 class="page-title">Your Movies</h1>
+          <div class="movies-stats">${movies.length} movies in your library</div>
+        </div>
+        <div class="movies-grid" id="movies-grid"></div>
+      </section>
+    `;
+
+    const grid = document.getElementById('movies-grid');
+    if (grid) {
+      movies.forEach((item, index) => {
+        const card = this.createContentCard(item, index, false);
+        grid.appendChild(card);
+      });
+    }
+
+    this.setupLazyLoading();
+    this.setupCardHandlers();
+  }
+
+  /**
+   * Render SHOWS page - Series with seasons info
+   */
+  async renderShowsPage() {
+    const heroStage = document.querySelector('.hero-stage');
+    const contentShell = document.querySelector('.content-shell');
+    
+    heroStage.style.display = '';
+    
+    this.createCarouselItems();
+    this.updateCarouselPosition();
+    this.updateAmbilightForCurrentSlide();
+
+    const series = this.contentData.series || [];
+
+    contentShell.innerHTML = `
+      <section class="shows-layout">
+        <div class="shows-header">
+          <h1 class="page-title">Your Series</h1>
+          <div class="shows-stats">${series.length} series in your library</div>
+        </div>
+        <div class="shows-grid" id="shows-grid"></div>
+      </section>
+    `;
+
+    const grid = document.getElementById('shows-grid');
+    if (grid) {
+      series.forEach((item, index) => {
+        const card = this.createContentCard(item, index, false);
+        grid.appendChild(card);
+      });
+    }
+
+    this.setupLazyLoading();
+    this.setupCardHandlers();
+  }
+
+  /**
+   * Render MY LIST page - Watchlist with continue watching
+   */
+  async renderMyListPage() {
+    const heroStage = document.querySelector('.hero-stage');
+    const contentShell = document.querySelector('.content-shell');
+    
+    heroStage.style.display = '';
+    
+    this.createCarouselItems();
+    this.updateCarouselPosition();
+    this.updateAmbilightForCurrentSlide();
+
+    const watchlist = this.contentData.watchlist || [];
+
+    contentShell.innerHTML = `
+      <section class="mylist-layout">
+        <div class="mylist-header">
+          <h1 class="page-title">My List</h1>
+          <div class="mylist-stats">${watchlist.length} items in your list</div>
+        </div>
+        <div class="mylist-grid" id="mylist-grid"></div>
+      </section>
+    `;
+
+    const grid = document.getElementById('mylist-grid');
+    if (grid) {
+      watchlist.forEach((item, index) => {
+        const card = this.createContentCard(item, index, false);
+        grid.appendChild(card);
+      });
+    }
+
+    this.setupLazyLoading();
+    this.setupCardHandlers();
+  }
+
+  /**
+   * Helper to render discover grid
+   */
+  renderDiscoverGrid(gridId, items) {
+    const grid = document.getElementById(gridId);
+    if (!grid || !items) return;
+
+    items.forEach((item, index) => {
+      const card = this.createContentCard(item, index, true);
+      grid.appendChild(card);
     });
   }
 }
