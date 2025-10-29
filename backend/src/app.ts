@@ -52,6 +52,10 @@ const startServer = async () => {
     
     await initializeDatabase();
     
+    // Load API keys from database
+    const { loadApiKeysFromDatabase } = await import('./clients');
+    await loadApiKeysFromDatabase();
+    
     // Initialize cache manager
     await cacheManager.initialize();
     

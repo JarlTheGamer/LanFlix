@@ -414,7 +414,9 @@ export class Navigation {
     } else if (this.focusedElement === 'settings') {
       if (settingsButton) settingsButton.classList.add('focused');
     } else if (this.focusedElement === 'tabs') {
-      tabs[this.focusedTabIndex].classList.add('focused');
+      if (tabs[this.focusedTabIndex]) {
+        tabs[this.focusedTabIndex].classList.add('focused');
+      }
     } else if (this.focusedElement === 'cards') {
       const cardElements = cards();
       if (cardElements[this.focusedCardIndex]) {

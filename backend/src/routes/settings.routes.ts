@@ -62,7 +62,20 @@ router.put('/', validateBody(['settings']), async (req: Request, res: Response, 
       'visualEffects',
       'autoplay',
       'subtitlesEnabled',
-      'subtitleLanguage'
+      'subtitleLanguage',
+      // Admin settings
+      'moviesPath',
+      'seriesPath',
+      'tmdbApiKey',
+      'sonarrUrl',
+      'sonarrApiKey',
+      'radarrUrl',
+      'radarrApiKey',
+      'prowlarrUrl',
+      'prowlarrApiKey',
+      'autoMetadata',
+      'downloadImages',
+      'metadataLanguage'
     ];
 
     const invalidKeys = Object.keys(settings).filter(key => !validKeys.includes(key));
@@ -70,25 +83,51 @@ router.put('/', validateBody(['settings']), async (req: Request, res: Response, 
       logger.warn(`Invalid setting keys provided: ${invalidKeys.join(', ')}`);
     }
 
-    // Update or create settings
-    const updatePromises = Object.entries(settings).map(async ([key, value]) => {
-      if (!validKeys.includes(key)) return;
+    // Update or create settings sequentially to avoid SQLite lock issues
+    for (const [key, value] of Object.entries(settings)) {
+      if (!validKeys.includes(key)) continue;
 
       const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
 
-      const [setting] = await Settings.findOrCreate({
-        where: { key },
-        defaults: { key, value: stringValue }
-      });
+      try {
+        const [setting] = await Settings.findOrCreate({
+          where: { key },
+          defaults: { key, value: stringValue }
+        });
 
-      if (setting.value !== stringValue) {
-        setting.value = stringValue;
-        setting.updatedAt = new Date();
-        await setting.save();
+        if (setting.value !== stringValue) {
+          setting.value = stringValue;
+          setting.updatedAt = new Date();
+          await setting.save();
+        }
+      } catch (error: any) {
+        logger.error(`Failed to update setting ${key}:`, error);
+        // Continue with other settings even if one fails
       }
-    });
+    }
 
-    await Promise.all(updatePromises);
+    // Update client API keys if they were changed
+    if (settings.tmdbApiKey) {
+      const trimmedKey = settings.tmdbApiKey.trim();
+      if (trimmedKey.length > 0) {
+        tmdbClient.updateApiKey(trimmedKey);
+        logger.info(`TMDB API key updated (length: ${trimmedKey.length})`);
+      } else {
+        logger.warn('Attempted to set empty TMDB API key');
+      }
+    }
+    if (settings.sonarrUrl || settings.sonarrApiKey) {
+      // Sonarr client would need similar update method
+      logger.info('Sonarr settings updated - restart server to apply');
+    }
+    if (settings.radarrUrl || settings.radarrApiKey) {
+      // Radarr client would need similar update method
+      logger.info('Radarr settings updated - restart server to apply');
+    }
+    if (settings.prowlarrUrl || settings.prowlarrApiKey) {
+      // Prowlarr client would need similar update method
+      logger.info('Prowlarr settings updated - restart server to apply');
+    }
 
     res.json({
       message: 'Settings updated successfully'
@@ -149,6 +188,58 @@ router.get('/services', async (req: Request, res: Response, next: NextFunction) 
 
     res.json({
       services
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/settings/test-connection
+ * Test connection to a specific external service
+ */
+router.post('/test-connection', validateBody(['service']), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { service } = req.body;
+
+    if (!['sonarr', 'radarr', 'prowlarr', 'tmdb'].includes(service)) {
+      const error: ApiError = new Error('Invalid service name');
+      error.statusCode = 400;
+      error.code = 'VALIDATION_ERROR';
+      return next(error);
+    }
+
+    let connected = false;
+    let errorMessage: string | null = null;
+
+    try {
+      switch (service) {
+        case 'sonarr':
+          await sonarrClient.testConnection();
+          connected = true;
+          break;
+        case 'radarr':
+          await radarrClient.testConnection();
+          connected = true;
+          break;
+        case 'prowlarr':
+          await prowlarrClient.testConnection();
+          connected = true;
+          break;
+        case 'tmdb':
+          await tmdbClient.testConnection();
+          connected = true;
+          break;
+      }
+    } catch (error: any) {
+      errorMessage = error.message;
+      logger.error(`${service} connection test failed:`, error);
+    }
+
+    res.json({
+      service,
+      connected,
+      error: errorMessage
     });
   } catch (error) {
     next(error);

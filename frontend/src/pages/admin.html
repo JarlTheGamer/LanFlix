@@ -45,12 +45,15 @@
                 <h2>🔑 API Keys</h2>
                 <div class="admin-card">
                     <div class="admin-field">
-                        <label>TMDB API Key</label>
-                        <p class="field-desc">Required for metadata (<a href="https://www.themoviedb.org/settings/api" target="_blank">Get Key</a>)</p>
+                        <label>TMDB API Key (v3 auth)</label>
+                        <p class="field-desc">Use the "API Key (v3 auth)" from your TMDB account, NOT the "API Read Access Token" (<a href="https://www.themoviedb.org/settings/api" target="_blank">Get Key</a>)</p>
                         <div class="input-group">
-                            <input type="password" id="tmdb-key" placeholder="Enter TMDB API key" />
+                            <input type="password" id="tmdb-key" placeholder="Enter your TMDB API Key (v3 auth)" />
                             <button onclick="togglePassword('tmdb-key')">👁️</button>
                         </div>
+                        <p class="field-desc" style="margin-top: 8px; font-size: 12px; color: #666;">
+                            Example: 1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p
+                        </p>
                     </div>
                 </div>
             </section>

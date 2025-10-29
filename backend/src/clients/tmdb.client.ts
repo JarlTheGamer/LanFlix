@@ -69,7 +69,7 @@ interface RateLimitEntry {
 }
 
 export class TMDBClient {
-  private client: AxiosInstance;
+  private client!: AxiosInstance;
   private baseURL = 'https://api.themoviedb.org/3';
   private apiKey: string;
   private rateLimiter: Map<string, RateLimitEntry>;
@@ -82,6 +82,18 @@ export class TMDBClient {
 
     if (!this.apiKey) {
       logger.warn('TMDB API key not configured');
+    }
+
+    this.initializeClient();
+  }
+
+  /**
+   * Initialize or reinitialize the axios client
+   */
+  private initializeClient(): void {
+    // Log API key status (without exposing the actual key)
+    if (!this.apiKey || this.apiKey.trim().length === 0) {
+      logger.warn('TMDB client initialized without API key');
     }
 
     this.client = axios.create({
@@ -113,12 +125,22 @@ export class TMDBClient {
   }
 
   /**
+   * Update API key dynamically
+   */
+  updateApiKey(newApiKey: string): void {
+    this.apiKey = newApiKey;
+    // Reinitialize the client with the new API key
+    this.initializeClient();
+    logger.info('TMDB API key updated');
+  }
+
+  /**
    * Check and enforce rate limiting (40 requests per 10 seconds)
    */
   private async checkRateLimit(): Promise<void> {
     const now = Date.now();
     const key = 'tmdb_requests';
-    
+
     let entry = this.rateLimiter.get(key);
 
     // Clean up expired entries
@@ -141,7 +163,7 @@ export class TMDBClient {
       const waitTime = entry.resetAt - now;
       logger.warn(`TMDB rate limit reached, waiting ${waitTime}ms`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
-      
+
       // Reset counter
       this.rateLimiter.set(key, {
         count: 1,
@@ -259,11 +281,24 @@ export class TMDBClient {
    */
   async testConnection(): Promise<boolean> {
     try {
+      if (!this.apiKey) {
+        throw new Error('TMDB API key not configured');
+      }
       const response = await this.client.get('/configuration');
       return response.status === 200;
     } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        throw new Error('Invalid TMDB API key - authentication failed');
+      }
       logger.error('TMDB connection test failed:', error);
       throw new Error('Failed to connect to TMDB API');
     }
+  }
+
+  /**
+   * Check if API key is configured
+   */
+  isConfigured(): boolean {
+    return !!this.apiKey && this.apiKey.length > 0;
   }
 }

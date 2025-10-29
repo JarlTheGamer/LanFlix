@@ -17,7 +17,7 @@ class StateManager {
     };
     
     this.cacheTimestamps = {};
-    this.cacheDuration = 5 * 60 * 1000; // 5 minutes
+    this.cacheDuration = 30 * 1000; // 30 seconds
     this.isOffline = false;
     
     // Load state from localStorage

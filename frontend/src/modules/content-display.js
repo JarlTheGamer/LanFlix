@@ -472,10 +472,16 @@ export class ContentDisplay {
     stateManager.currentPage = category;
     stateManager.saveState();
 
-    // Check if discovery page is offline - show simple message
-    if (category === 'discover' && (apiClient.isOffline || stateManager.isOffline)) {
-      this.showDiscoveryOfflinePage();
-      return;
+    // For discovery page, check connection status
+    if (category === 'discover') {
+      // Check if we can reach the API
+      const isOnline = await apiClient.checkConnection();
+      
+      if (!isOnline) {
+        console.log('Discovery page - API is offline, showing offline message');
+        this.showDiscoveryOfflinePage();
+        return;
+      }
     }
 
     // Load content for new category
