@@ -5,6 +5,7 @@ import logger from './utils/logger';
 import { initializeDatabase } from './utils/database';
 import { cacheManager } from './utils/cache-manager';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
+import apiRoutes from './routes';
 import fs from 'fs';
 import path from 'path';
 
@@ -17,6 +18,9 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Mount API routes
+app.use('/api', apiRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

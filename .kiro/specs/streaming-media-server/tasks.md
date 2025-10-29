@@ -78,6 +78,7 @@
 
 
 
+
 - [x] 5.1 Implement MetadataService
 
 
@@ -127,8 +128,13 @@
   - Add Web Push API support for browser notifications
   - _Requirements: 4.6_
 
-- [ ] 6. Build REST API routes
-- [ ] 6.1 Implement Content routes
+- [x] 6. Build REST API routes
+
+
+
+- [x] 6.1 Implement Content routes
+
+
   - Create GET /api/content/discover endpoint with trending content
   - Create GET /api/content/search endpoint with query parameter
   - Create GET /api/content/:id endpoint for content details
@@ -136,7 +142,9 @@
   - Add request validation middleware
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 4.2_
 
-- [ ] 6.2 Implement Library routes
+- [x] 6.2 Implement Library routes
+
+
   - Create GET /api/library/movies endpoint with filtering
   - Create GET /api/library/series endpoint with filtering
   - Create GET /api/library/recent endpoint for recently added
@@ -144,7 +152,9 @@
   - Create DELETE /api/library/:id endpoint to remove from library
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 6.3 Implement Profile routes
+- [x] 6.3 Implement Profile routes
+
+
   - Create GET /api/profiles endpoint to list all profiles
   - Create POST /api/profiles endpoint to create new profile
   - Create GET /api/profiles/:id endpoint for profile details
@@ -155,7 +165,9 @@
   - Create DELETE /api/profiles/:id/watchlist/:contentId endpoint to remove from My List
   - _Requirements: 7.2, 7.3, 7.4, 7.5, 8.1, 8.2, 8.3, 8.6_
 
-- [ ] 6.4 Implement Streaming routes
+- [x] 6.4 Implement Streaming routes
+
+
   - Create GET /api/stream/:id endpoint with HTTP range request support
   - Create POST /api/stream/:id/progress endpoint to update watch progress
   - Create GET /api/stream/:id/subtitles endpoint to list available subtitles
@@ -163,14 +175,18 @@
   - Add video transcoding on-the-fly if needed
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6_
 
-- [ ] 6.5 Implement Settings routes
+
+- [x] 6.5 Implement Settings routes
+
   - Create GET /api/settings endpoint to retrieve all settings
   - Create PUT /api/settings endpoint to update settings
   - Create GET /api/settings/services endpoint for external service status
   - Add settings validation
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7_
 
-- [ ] 6.6 Implement Notification routes
+- [x] 6.6 Implement Notification routes
+
+
   - Create POST /api/notifications/register endpoint for device token registration
   - Create POST /api/notifications/:id/respond endpoint for keep-watching responses
   - Create GET /api/notifications/:profileId endpoint for notification history
@@ -194,7 +210,7 @@
   - Add request/response interceptors for error handling
   - Implement authentication token management
   - Add request retry logic for failed requests
-  - Make all the frontend work. if you reload it doesnt refresh everything, rather it will save stuff and you open the same page.
+  - Make all the frontend work. if you reload it doesnt refresh everything, rather it will save stuff and you open the same page, use the your next watch as a template for all the carousels you can scroll through.
   - _Requirements: 14.4, 14.5_
 
 - [ ] 8.2 Create navigation module

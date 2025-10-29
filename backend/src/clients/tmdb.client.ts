@@ -266,4 +266,17 @@ export class TMDBClient {
       return response.data;
     });
   }
+
+  /**
+   * Test connection to TMDB
+   */
+  async testConnection(): Promise<boolean> {
+    try {
+      const response = await this.client.get('/configuration');
+      return response.status === 200;
+    } catch (error) {
+      logger.error('TMDB connection test failed:', error);
+      throw new Error('Failed to connect to TMDB API');
+    }
+  }
 }

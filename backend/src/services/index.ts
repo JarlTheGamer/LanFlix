@@ -16,6 +16,14 @@ import libraryService from './library.service';
 import downloadManager from './download-manager.service';
 import notificationService from './notification.service';
 
+export {
+  metadataService,
+  contentService,
+  libraryService,
+  downloadManager,
+  notificationService
+};
+
 export default {
   metadataService,
   contentService,
