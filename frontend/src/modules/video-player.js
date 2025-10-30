@@ -158,34 +158,63 @@ export class VideoPlayer {
   }
 
   /**
-   * Detect if stream is being transcoded by checking response headers
+   * Detect playback mode by checking response headers
    */
   async detectTranscodingMode() {
     try {
       const streamUrl = apiClient.getStreamUrl(this.contentId, this.episodeId, this.profileId);
       const response = await fetch(streamUrl, { method: 'HEAD' });
 
-      // Check for transcoding headers
+      // Check for playback mode headers
+      const playbackMode = response.headers.get('X-Playback-Mode');
       const transcodeMode = response.headers.get('X-Transcode-Mode');
       const directPlay = response.headers.get('X-Direct-Play');
 
-      this.isTranscoding = !!transcodeMode && !directPlay;
+      // Determine if we need special seeking (reload stream)
+      // Direct play = normal seeking works
+      // Remux/Direct Stream/Transcode = need to reload stream for seeking
+      this.isTranscoding = !!transcodeMode || !!playbackMode;
 
-      console.log('=== Transcoding Detection ===');
+      console.log('=== Playback Mode Detection ===');
+      console.log('X-Playback-Mode:', playbackMode);
       console.log('X-Transcode-Mode:', transcodeMode);
       console.log('X-Direct-Play:', directPlay);
       console.log('isTranscoding:', this.isTranscoding);
 
       if (this.isTranscoding) {
-        console.log('🎬 Transcoding mode detected:', transcodeMode);
+        const mode = playbackMode || transcodeMode;
+        console.log(`🎬 ${mode} mode detected`);
         console.log('⚠️ Seeking will reload stream at new position');
+        
+        // Show mode indicator
+        this.showPlaybackModeIndicator(mode);
       } else {
         console.log('▶️ Direct play mode - normal seeking enabled');
+        this.showPlaybackModeIndicator('direct-play');
       }
     } catch (error) {
-      console.warn('Failed to detect transcoding mode:', error);
+      console.warn('Failed to detect playback mode:', error);
       this.isTranscoding = false;
     }
+  }
+
+  /**
+   * Show playback mode indicator
+   */
+  showPlaybackModeIndicator(mode) {
+    const modeNames = {
+      'direct-play': '▶️ Direct Play',
+      'remux': '📦 Remux',
+      'direct-stream': '🎵 Direct Stream',
+      'transcode': '🎬 Transcode',
+      'audio-only': '🎵 Audio Transcode',
+      'video+audio': '🎬 Full Transcode'
+    };
+
+    const modeName = modeNames[mode] || mode;
+    console.log(`Playback Mode: ${modeName}`);
+    
+    // Could add a visual indicator in the UI here if desired
   }
 
   /**

@@ -176,7 +176,7 @@ router.get('/:id/episodes', validatePathParam('id'), async (req: Request, res: R
         }
 
         const { getEpisodeStillUrl } = await import('../utils/image-url');
-        
+
         const seasonData = {
           seasonNumber,
           episodeCount: seasonEpisodes.length,

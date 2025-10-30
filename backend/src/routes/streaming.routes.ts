@@ -134,6 +134,7 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
     }
 
     // Load user's transcoding preferences
+    let transcodingMode = 'auto'; // auto, direct-play, direct-stream, transcode
     let audioTranscodingEnabled = true;
     let videoTranscodingEnabled = true;
 
@@ -144,26 +145,99 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
 
         if (setting) {
           const prefs = JSON.parse(setting.value);
+          transcodingMode = prefs.transcodingMode || 'auto';
           audioTranscodingEnabled = prefs.audioTranscoding !== false;
           videoTranscodingEnabled = prefs.videoTranscoding !== false;
-          logger.info(`Profile ${profileId} transcoding preferences: audio=${audioTranscodingEnabled}, video=${videoTranscodingEnabled}`);
+          logger.info(`Profile ${profileId} transcoding preferences: mode=${transcodingMode}, audio=${audioTranscodingEnabled}, video=${videoTranscodingEnabled}`);
         }
       } catch (error) {
         logger.warn('Failed to load transcoding preferences, using defaults:', error);
       }
     }
 
-    // Check if audio/video needs transcoding
+    // Check compatibility to determine optimal playback mode
     const compatCheck = await mediaConverterService.checkCompatibility(filePath);
     const range = req.headers.range;
 
-    // Determine if we should transcode based on compatibility AND user preferences
-    const shouldTranscodeAudio = compatCheck.transcodeAudio && audioTranscodingEnabled;
-    const shouldTranscodeVideo = compatCheck.transcodeVideo && videoTranscodingEnabled;
+    // Determine actual playback mode based on user preference and compatibility
+    let actualPlaybackMode = compatCheck.playbackMode;
 
+    if (transcodingMode !== 'auto') {
+      // User has forced a specific mode
+      if (transcodingMode === 'direct-play') {
+        actualPlaybackMode = 'direct-play';
+      } else if (transcodingMode === 'direct-stream') {
+        actualPlaybackMode = 'direct-stream';
+      } else if (transcodingMode === 'transcode') {
+        actualPlaybackMode = 'transcode';
+      }
+    }
+
+    // Apply user's audio/video transcoding toggles
+    let shouldTranscodeAudio = compatCheck.transcodeAudio && audioTranscodingEnabled;
+    let shouldTranscodeVideo = compatCheck.transcodeVideo && videoTranscodingEnabled;
+
+    // Override based on actual playback mode
+    if (actualPlaybackMode === 'direct-play') {
+      shouldTranscodeAudio = false;
+      shouldTranscodeVideo = false;
+    } else if (actualPlaybackMode === 'remux') {
+      shouldTranscodeAudio = false;
+      shouldTranscodeVideo = false;
+    } else if (actualPlaybackMode === 'direct-stream') {
+      shouldTranscodeVideo = false;
+      shouldTranscodeAudio = compatCheck.transcodeAudio;
+    } else if (actualPlaybackMode === 'transcode') {
+      shouldTranscodeAudio = compatCheck.transcodeAudio;
+      shouldTranscodeVideo = compatCheck.transcodeVideo;
+    }
+
+    logger.info(`Playback mode: ${actualPlaybackMode} (user pref: ${transcodingMode}, detected: ${compatCheck.playbackMode})`);
+    logger.info(`Transcode flags: audio=${shouldTranscodeAudio}, video=${shouldTranscodeVideo}`);
+
+    // Handle remux mode (container change only)
+    if (actualPlaybackMode === 'remux' && !shouldTranscodeAudio && !shouldTranscodeVideo) {
+      logger.info(`Remuxing for content ${id} (${compatCheck.reason})`);
+
+      const remuxStream = mediaConverterService.createRemuxStream(filePath, {
+        startTime: startTime
+      });
+
+      res.writeHead(200, {
+        'Content-Type': 'video/mp4',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Range',
+        'Access-Control-Expose-Headers': 'Content-Type',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Playback-Mode': 'remux',
+        'X-Transcode-Mode': 'remux',
+        'X-Direct-Play': 'false'
+      });
+
+      remuxStream.pipe(res);
+
+      req.on('close', () => {
+        logger.info('Client disconnected, destroying remux stream');
+        remuxStream.destroy();
+      });
+
+      remuxStream.on('error', (err) => {
+        logger.error('Remux stream error:', err);
+        if (!res.headersSent) {
+          res.status(500).end();
+        } else {
+          res.end();
+        }
+      });
+
+      return;
+    }
+
+    // Handle transcoding (direct-stream or full transcode)
     if (shouldTranscodeAudio || shouldTranscodeVideo) {
-      const transcodeMode = shouldTranscodeVideo ? 'video+audio' : 'audio-only';
-      logger.info(`Transcoding ${transcodeMode} for content ${id} (audio codec: ${compatCheck.mediaInfo.audioCodec}, video codec: ${compatCheck.mediaInfo.videoCodec})`);
+      const transcodeMode = shouldTranscodeVideo ? 'transcode' : 'direct-stream';
+      logger.info(`${transcodeMode} for content ${id} (${compatCheck.reason})`);
 
       // For transcoded streams with seeking, use startTime parameter
       const transcodeStream = mediaConverterService.createCPUTranscodeStream(filePath, {
@@ -179,6 +253,7 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
         'Access-Control-Expose-Headers': 'Content-Type',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'X-Playback-Mode': transcodeMode,
         'X-Transcode-Mode': transcodeMode,
         'X-Direct-Play': 'false'
       });
