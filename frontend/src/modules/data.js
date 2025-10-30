@@ -15,23 +15,23 @@ class StateManager {
       recentlyAdded: null,
       watchlist: null
     };
-    
+
     this.cacheTimestamps = {};
     this.cacheDuration = 30 * 1000; // 30 seconds
     this.isOffline = false;
-    
+
     // Load state from localStorage
     this.loadState();
-    
+
     // Load cached data from localStorage
     this.loadCacheFromStorage();
-    
+
     // Listen for API status changes
     window.addEventListener('api-offline', () => {
       this.isOffline = true;
       console.log('📦 Switching to offline mode - using cached data');
     });
-    
+
     window.addEventListener('api-online', () => {
       this.isOffline = false;
       console.log('🌐 Back online - refreshing data');
@@ -86,7 +86,7 @@ class StateManager {
   setCache(key, data) {
     this.cache[key] = data;
     this.cacheTimestamps[key] = Date.now();
-    
+
     // Persist to localStorage for offline access
     this.saveCacheToStorage(key, data);
   }
@@ -131,7 +131,7 @@ class StateManager {
   async refreshAllData() {
     // Clear cache timestamps to force refresh
     this.cacheTimestamps = {};
-    
+
     // Dispatch event for UI to refresh
     window.dispatchEvent(new CustomEvent('data-refresh-needed'));
   }
@@ -145,7 +145,7 @@ class StateManager {
       console.log('📦 Using cached profiles (offline mode)');
       return this.cache.profiles || [];
     }
-    
+
     if (!forceRefresh && this.isCacheValid('profiles')) {
       return this.cache.profiles;
     }
@@ -170,13 +170,13 @@ class StateManager {
    */
   async getDiscoverContent(profileId, forceRefresh = false) {
     const cacheKey = `discover_${profileId}`;
-    
+
     // If offline, return cached data immediately
     if (apiClient.isOffline && !forceRefresh) {
       console.log('📦 Using cached discover content (offline mode)');
       return this.cache[cacheKey] || { trending: [], popular: { movies: [], series: [] } };
     }
-    
+
     if (!forceRefresh && this.cache[cacheKey] && this.isCacheValid('discoverContent')) {
       return this.cache[cacheKey];
     }
@@ -206,7 +206,7 @@ class StateManager {
       console.log('📦 Using cached library movies (offline mode)');
       return this.cache.libraryMovies || { count: 0, items: [] };
     }
-    
+
     if (!forceRefresh && this.isCacheValid('libraryMovies')) {
       return this.cache.libraryMovies;
     }
@@ -234,7 +234,7 @@ class StateManager {
       console.log('📦 Using cached library series (offline mode)');
       return this.cache.librarySeries || { count: 0, items: [] };
     }
-    
+
     if (!forceRefresh && this.isCacheValid('librarySeries')) {
       return this.cache.librarySeries;
     }
@@ -262,7 +262,7 @@ class StateManager {
       console.log('📦 Using cached recently added (offline mode)');
       return this.cache.recentlyAdded || { count: 0, items: [] };
     }
-    
+
     if (!forceRefresh && this.isCacheValid('recentlyAdded')) {
       return this.cache.recentlyAdded;
     }
@@ -286,13 +286,13 @@ class StateManager {
    */
   async getWatchlist(profileId, forceRefresh = false) {
     const cacheKey = `watchlist_${profileId}`;
-    
+
     // If offline, return cached data immediately
     if (apiClient.isOffline && !forceRefresh) {
       console.log('📦 Using cached watchlist (offline mode)');
       return this.cache[cacheKey] || { count: 0, items: [] };
     }
-    
+
     if (!forceRefresh && this.cache[cacheKey] && this.isCacheValid('watchlist')) {
       return this.cache[cacheKey];
     }
@@ -317,13 +317,13 @@ class StateManager {
    */
   async getPopularContent(type, page = 1, profileId = null, forceRefresh = false) {
     const cacheKey = `popular_${type}_${page}`;
-    
+
     // If offline, return cached data immediately
     if (apiClient.isOffline && !forceRefresh) {
       console.log(`📦 Using cached popular ${type} (offline mode)`);
       return this.cache[cacheKey] || [];
     }
-    
+
     try {
       const data = await apiClient.getPopularContent(type, page, profileId);
       this.cache[cacheKey] = data;

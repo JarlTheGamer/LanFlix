@@ -4,7 +4,6 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import logger from '../utils/logger';
 import { probeMedia, isAudioCompatible, isVideoCompatible } from '../utils/ffmpeg';
-import type { MediaInfo } from '../utils/ffmpeg';
 import { PassThrough } from 'stream';
 
 interface HLSSession {
@@ -197,7 +196,6 @@ export class MediaConverterService {
       transcodeVideo: boolean;
       startTime?: number;
       preset?: string;
-      mediaInfo?: MediaInfo;
     }
   ): { sessionId: string; playlistPath: string } {
     this.ensureHlsRoot();
@@ -216,31 +214,11 @@ export class MediaConverterService {
     }
 
     if (options.transcodeVideo) {
-      const videoCodec = options.mediaInfo?.videoCodec?.toLowerCase();
-      const cudaDecoders: Record<string, string> = {
-        h264: 'h264_cuvid',
-        hevc: 'hevc_cuvid',
-        h265: 'hevc_cuvid',
-        av1: 'av1_cuvid',
-        vp9: 'vp9_cuvid',
-        mpeg2video: 'mpeg2_cuvid'
-      };
-
-      const decoder = videoCodec ? cudaDecoders[videoCodec] : undefined;
-
-      const hwInputOptions = [
+      command = command.inputOptions([
         '-hwaccel', 'cuda',
         '-hwaccel_output_format', 'cuda',
-        '-hwaccel_device', '0'
-      ];
-
-      if (decoder) {
-        hwInputOptions.push('-c:v', decoder);
-      }
-
-      hwInputOptions.push('-threads', '1');
-
-      command = command.inputOptions(hwInputOptions);
+        '-extra_hw_frames', '8'
+      ]);
     }
 
     command = command
@@ -258,34 +236,13 @@ export class MediaConverterService {
         .addOutputOption('-maxrate', '8M')
         .addOutputOption('-bufsize', '10M')
         .addOutputOption('-profile:v', 'high')
+        .addOutputOption('-level', '4.1')
         .addOutputOption('-g', '48')
         .addOutputOption('-keyint_min', '48')
         .addOutputOption('-pix_fmt', 'yuv420p')
         .addOutputOption('-spatial_aq', '1')
         .addOutputOption('-temporal_aq', '1')
         .addOutputOption('-rc-lookahead', '20');
-
-      const videoWidth = options.mediaInfo?.width || 0;
-      const videoHeight = options.mediaInfo?.height || 0;
-      if (videoWidth > 0 && videoHeight > 0) {
-        const inferredLevel = (() => {
-          const maxDimension = Math.max(videoWidth, videoHeight);
-          if (maxDimension >= 3840) {
-            return '5.1';
-          }
-          if (maxDimension >= 2560) {
-            return '5.0';
-          }
-          if (maxDimension >= 1920) {
-            return '4.2';
-          }
-          if (maxDimension >= 1280) {
-            return '4.0';
-          }
-          return '3.2';
-        })();
-        command = command.addOutputOption('-level', inferredLevel);
-      }
     } else {
       command = command.videoCodec('copy');
     }

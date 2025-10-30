@@ -198,7 +198,7 @@ class SearchModule {
   createResultCard(item) {
     const posterUrl = item.posterPath 
       ? apiClient.getImageUrl(item.posterPath, 'w342')
-      : '/assets/placeholder-poster.png';
+      : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="342" height="513" viewBox="0 0 342 513"%3E%3Crect fill="%23222" width="342" height="513"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24" fill="%23666"%3ENo Image%3C/text%3E%3C/svg%3E';
     
     const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : '';
     const typeLabel = item.type === 'movie' ? 'Movie' : 'TV Show';
@@ -239,8 +239,13 @@ class SearchModule {
     
     // Import and show content modal
     import('./content-modal.js').then(module => {
-      const contentModal = module.default;
-      contentModal.show(item.id, item.type);
+      const ContentModal = module.default;
+      // Create a minimal profileManager object with just the selectedProfileId
+      const profileManager = {
+        selectedProfileId: stateManager.currentProfileId
+      };
+      const contentModal = new ContentModal(profileManager);
+      contentModal.show(item.id, item.type, true); // true = isDiscovery
     });
   }
 

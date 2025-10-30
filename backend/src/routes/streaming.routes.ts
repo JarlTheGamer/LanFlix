@@ -81,8 +81,7 @@ router.head('/:id', validatePathParam('id'), async (req: Request, res: Response,
       const { sessionId } = mediaConverterService.createHlsSession(filePath, {
         transcodeAudio: shouldTranscodeAudio,
         transcodeVideo: shouldTranscodeVideo,
-        startTime,
-        mediaInfo: compatCheck.mediaInfo
+        startTime
       });
 
       res.writeHead(200, {
@@ -285,8 +284,7 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
       const { sessionId: newSessionId } = mediaConverterService.createHlsSession(filePath, {
         transcodeAudio: shouldTranscodeAudio,
         transcodeVideo: shouldTranscodeVideo,
-        startTime,
-        mediaInfo: compatCheck.mediaInfo
+        startTime
       });
 
       try {

@@ -223,7 +223,7 @@ class ApiClient {
   }
 
   /**
-   * GET /api/discovery/search
+   * GET /api/content/discovery/search
    * Search TMDB for discovery content
    */
   async searchTMDB(query, type = 'all') {
@@ -231,7 +231,7 @@ class ApiClient {
     params.append('q', query);
     params.append('type', type);
 
-    return this.request(`/discovery/search?${params.toString()}`);
+    return this.request(`/content/discovery/search?${params.toString()}`);
   }
 
   /**
