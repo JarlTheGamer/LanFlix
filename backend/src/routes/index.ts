@@ -6,6 +6,7 @@ import streamingRoutes from './streaming.routes';
 import settingsRoutes from './settings.routes';
 import notificationRoutes from './notification.routes';
 import jobsRoutes from './jobs.routes';
+import webhookRoutes from './webhook.routes';
 
 const router = Router();
 
@@ -17,5 +18,6 @@ router.use('/stream', streamingRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/jobs', jobsRoutes);
+router.use('/webhook', webhookRoutes);
 
 export default router;

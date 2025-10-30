@@ -693,7 +693,8 @@ export class LibraryService {
           // Find video file - check for nested folder first (qBittorrent issue)
           let files = await fs.readdir(movieFolder);
           let videoFile = files.find(f =>
-            this.videoExtensions.some(ext => f.toLowerCase().endsWith(ext))
+            this.videoExtensions.some(ext => f.toLowerCase().endsWith(ext)) &&
+            !f.includes('.converting.')  // Skip incomplete conversion files
           );
           let actualMovieFolder = movieFolder;
 
@@ -1040,7 +1041,8 @@ export class LibraryService {
             const episodeFiles = await fs.readdir(seasonFolder);
 
             for (const episodeFile of episodeFiles) {
-              if (!this.videoExtensions.some(ext => episodeFile.toLowerCase().endsWith(ext))) {
+              if (!this.videoExtensions.some(ext => episodeFile.toLowerCase().endsWith(ext)) ||
+                  episodeFile.includes('.converting.')) {  // Skip incomplete conversion files
                 continue;
               }
 
