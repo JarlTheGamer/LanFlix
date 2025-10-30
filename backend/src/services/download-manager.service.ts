@@ -117,7 +117,7 @@ export class DownloadManager {
             const missingItems = [];
             if (rootFolders.length === 0) missingItems.push('root folder');
             if (qualityProfiles.length === 0) missingItems.push('quality profile');
-            
+
             throw new Error(
               `Sonarr is not properly configured. Please set up ${missingItems.join(' and ')} in Sonarr settings (http://localhost:8989/settings/mediamanagement for root folders, http://localhost:8989/settings/profiles for quality profiles)`
             );
@@ -131,17 +131,25 @@ export class DownloadManager {
             throw new Error(`Series not found in Sonarr: ${options.title}`);
           }
 
-          // Add series to Sonarr
-          const series = await this.sonarrClient.addSeries({
-            tvdbId: match.tvdbId,
-            title: options.title,
-            qualityProfileId: qualityProfiles[0].id,
-            rootFolderPath: rootFolders[0].path,
-            searchForMissingEpisodes: true
-          });
+          // Check if series already exists in Sonarr
+          let series = await this.sonarrClient.getSeriesByTvdbId(match.tvdbId);
 
-          externalId = series.id;
-          logger.info(`Series added to Sonarr: ${externalId}`);
+          if (series) {
+            externalId = series.id;
+            logger.info(`Series already exists in Sonarr: ${externalId}`);
+          } else {
+            // Add series to Sonarr
+            series = await this.sonarrClient.addSeries({
+              tvdbId: match.tvdbId,
+              title: options.title,
+              qualityProfileId: qualityProfiles[0].id,
+              rootFolderPath: rootFolders[0].path,
+              searchForMissingEpisodes: true
+            });
+
+            externalId = series.id;
+            logger.info(`Series added to Sonarr: ${externalId}`);
+          }
         } catch (error) {
           logger.error('Failed to add series to Sonarr:', error);
           throw error;
@@ -158,24 +166,32 @@ export class DownloadManager {
             const missingItems = [];
             if (rootFolders.length === 0) missingItems.push('root folder');
             if (qualityProfiles.length === 0) missingItems.push('quality profile');
-            
+
             throw new Error(
               `Radarr is not properly configured. Please set up ${missingItems.join(' and ')} in Radarr settings (http://localhost:7878/settings/mediamanagement for root folders, http://localhost:7878/settings/profiles for quality profiles)`
             );
           }
 
-          // Add movie to Radarr
-          const movie = await this.radarrClient.addMovie({
-            tmdbId: options.tmdbId,
-            title: options.title,
-            year: options.year || new Date().getFullYear(),
-            qualityProfileId: qualityProfiles[0].id,
-            rootFolderPath: rootFolders[0].path,
-            searchForMovie: true
-          });
+          // Check if movie already exists in Radarr
+          let movie = await this.radarrClient.getMovieByTmdbId(options.tmdbId);
 
-          externalId = movie.id;
-          logger.info(`Movie added to Radarr: ${externalId}`);
+          if (movie) {
+            externalId = movie.id;
+            logger.info(`Movie already exists in Radarr: ${externalId}`);
+          } else {
+            // Add movie to Radarr
+            movie = await this.radarrClient.addMovie({
+              tmdbId: options.tmdbId,
+              title: options.title,
+              year: options.year || new Date().getFullYear(),
+              qualityProfileId: qualityProfiles[0].id,
+              rootFolderPath: rootFolders[0].path,
+              searchForMovie: true
+            });
+
+            externalId = movie.id;
+            logger.info(`Movie added to Radarr: ${externalId}`);
+          }
         } catch (error) {
           logger.error('Failed to add movie to Radarr:', error);
           throw error;
@@ -243,15 +259,23 @@ export class DownloadManager {
         throw new Error(`Series not found in Sonarr: ${options.title}`);
       }
 
-      // Add series to Sonarr with monitoring for specific episode only
-      const series = await this.sonarrClient.addSeries({
-        tvdbId: match.tvdbId,
-        title: options.title,
-        qualityProfileId: qualityProfiles[0].id,
-        rootFolderPath: rootFolders[0].path,
-        searchForMissingEpisodes: false, // Don't search for all episodes
-        seasonFolder: true
-      });
+      // Check if series already exists in Sonarr
+      let series = await this.sonarrClient.getSeriesByTvdbId(match.tvdbId);
+
+      if (!series) {
+        // Add series to Sonarr with monitoring for specific episode only
+        series = await this.sonarrClient.addSeries({
+          tvdbId: match.tvdbId,
+          title: options.title,
+          qualityProfileId: qualityProfiles[0].id,
+          rootFolderPath: rootFolders[0].path,
+          searchForMissingEpisodes: false, // Don't search for all episodes
+          seasonFolder: true
+        });
+        logger.info(`Series added to Sonarr: ${series.id}`);
+      } else {
+        logger.info(`Series already exists in Sonarr: ${series.id}`);
+      }
 
       // Get the episode ID from Sonarr
       const episodes = await this.sonarrClient.getEpisodes(series.id);
@@ -330,15 +354,23 @@ export class DownloadManager {
         throw new Error(`Series not found in Sonarr: ${options.title}`);
       }
 
-      // Add series to Sonarr with monitoring for specific season only
-      const series = await this.sonarrClient.addSeries({
-        tvdbId: match.tvdbId,
-        title: options.title,
-        qualityProfileId: qualityProfiles[0].id,
-        rootFolderPath: rootFolders[0].path,
-        searchForMissingEpisodes: false, // Don't search for all episodes
-        seasonFolder: true
-      });
+      // Check if series already exists in Sonarr
+      let series = await this.sonarrClient.getSeriesByTvdbId(match.tvdbId);
+
+      if (!series) {
+        // Add series to Sonarr with monitoring for specific season only
+        series = await this.sonarrClient.addSeries({
+          tvdbId: match.tvdbId,
+          title: options.title,
+          qualityProfileId: qualityProfiles[0].id,
+          rootFolderPath: rootFolders[0].path,
+          searchForMissingEpisodes: false, // Don't search for all episodes
+          seasonFolder: true
+        });
+        logger.info(`Series added to Sonarr: ${series.id}`);
+      } else {
+        logger.info(`Series already exists in Sonarr: ${series.id}`);
+      }
 
       // Get all episodes for this season
       const episodes = await this.sonarrClient.getEpisodes(series.id);

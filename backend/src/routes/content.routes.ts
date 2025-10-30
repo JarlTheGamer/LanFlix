@@ -109,8 +109,9 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
 
 /**
  * GET /api/content/:id/episodes
- * Get episodes for a TV series from LOCAL DATABASE ONLY
- * TMDB is only used for discovery, not for library content
+ * Get episodes for a TV series
+ * - If in library: use local metadata
+ * - If not in library (discovery): use TMDB
  */
 router.get('/:id/episodes', validatePathParam('id'), async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -118,6 +119,7 @@ router.get('/:id/episodes', validatePathParam('id'), async (req: Request, res: R
     const seasonNumber = req.query.season ? parseInt(req.query.season as string) : null;
 
     // Import dependencies
+    const { tmdbClient } = await import('../clients');
     const Content = (await import('../models/Content')).default;
     const SeriesEpisode = (await import('../models/SeriesEpisode')).default;
 
@@ -126,85 +128,130 @@ router.get('/:id/episodes', validatePathParam('id'), async (req: Request, res: R
       where: { tmdbId, type: 'series' }
     });
 
-    if (!content) {
-      const error: ApiError = new Error('Series not found in library');
-      error.statusCode = 404;
-      error.code = 'NOT_FOUND';
-      return next(error);
-    }
+    // If in library, use local metadata
+    if (content) {
+      // Get all episodes for this series
+      const allEpisodes = await SeriesEpisode.findAll({
+        where: { contentId: content.id },
+        order: [['seasonNumber', 'ASC'], ['episodeNumber', 'ASC']]
+      });
 
-    // Get all episodes for this series
-    const allEpisodes = await SeriesEpisode.findAll({
-      where: { contentId: content.id },
-      order: [['seasonNumber', 'ASC'], ['episodeNumber', 'ASC']]
-    });
-
-    if (allEpisodes.length === 0) {
-      const error: ApiError = new Error('No episodes found for this series');
-      error.statusCode = 404;
-      error.code = 'NOT_FOUND';
-      return next(error);
-    }
-
-    // If specific season requested, return only that season
-    if (seasonNumber !== null) {
-      const seasonEpisodes = allEpisodes.filter(ep => ep.seasonNumber === seasonNumber);
-
-      if (seasonEpisodes.length === 0) {
-        const error: ApiError = new Error(`Season ${seasonNumber} not found`);
+      if (allEpisodes.length === 0) {
+        const error: ApiError = new Error('No episodes found for this series');
         error.statusCode = 404;
         error.code = 'NOT_FOUND';
         return next(error);
       }
 
+      // If specific season requested, return only that season
+      if (seasonNumber !== null) {
+        const seasonEpisodes = allEpisodes.filter(ep => ep.seasonNumber === seasonNumber);
+
+        if (seasonEpisodes.length === 0) {
+          const error: ApiError = new Error(`Season ${seasonNumber} not found`);
+          error.statusCode = 404;
+          error.code = 'NOT_FOUND';
+          return next(error);
+        }
+
+        const seasonData = {
+          seasonNumber,
+          episodeCount: seasonEpisodes.length,
+          airDate: seasonEpisodes[0].airDate instanceof Date ? seasonEpisodes[0].airDate.toISOString() : seasonEpisodes[0].airDate,
+          episodes: seasonEpisodes.map(ep => ({
+            id: ep.id,
+            seasonNumber: ep.seasonNumber,
+            episodeNumber: ep.episodeNumber,
+            title: ep.title,
+            overview: ep.overview,
+            airDate: ep.airDate instanceof Date ? ep.airDate.toISOString() : ep.airDate,
+            stillPath: ep.stillPath ? `https://image.tmdb.org/t/p/w300${ep.stillPath}` : null,
+            runtime: null
+          }))
+        };
+
+        return res.json({
+          tmdbId,
+          title: content.title,
+          numberOfSeasons: Math.max(...allEpisodes.map(ep => ep.seasonNumber)),
+          numberOfEpisodes: allEpisodes.length,
+          season: seasonData
+        });
+      }
+
+      // Return all seasons grouped
+      const seasonMap = new Map<number, typeof allEpisodes>();
+      for (const episode of allEpisodes) {
+        if (!seasonMap.has(episode.seasonNumber)) {
+          seasonMap.set(episode.seasonNumber, []);
+        }
+        seasonMap.get(episode.seasonNumber)!.push(episode);
+      }
+
+      const seasons = Array.from(seasonMap.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([seasonNum, episodes]) => ({
+          seasonNumber: seasonNum,
+          episodeCount: episodes.length,
+          airDate: episodes[0].airDate instanceof Date ? episodes[0].airDate.toISOString() : episodes[0].airDate,
+          episodes: [] // Episodes will be loaded on demand
+        }));
+
+      return res.json({
+        tmdbId,
+        title: content.title,
+        numberOfSeasons: seasons.length,
+        numberOfEpisodes: allEpisodes.length,
+        seasons
+      });
+    }
+
+    // Not in library - use TMDB for discovery
+    const tvDetails = await tmdbClient.getTVDetails(tmdbId);
+
+    // If specific season requested
+    if (seasonNumber !== null) {
+      const seasonDetails = await tmdbClient.getSeasonDetails(tmdbId, seasonNumber);
       const seasonData = {
-        seasonNumber,
-        episodeCount: seasonEpisodes.length,
-        airDate: seasonEpisodes[0].airDate instanceof Date ? seasonEpisodes[0].airDate.toISOString() : seasonEpisodes[0].airDate,
-        episodes: seasonEpisodes.map(ep => ({
+        seasonNumber: seasonDetails.season_number,
+        episodeCount: seasonDetails.episodes.length,
+        airDate: seasonDetails.air_date,
+        episodes: seasonDetails.episodes.map((ep: any) => ({
           id: ep.id,
-          seasonNumber: ep.seasonNumber,
-          episodeNumber: ep.episodeNumber,
-          title: ep.title,
+          seasonNumber: ep.season_number,
+          episodeNumber: ep.episode_number,
+          title: ep.name,
           overview: ep.overview,
-          airDate: ep.airDate instanceof Date ? ep.airDate.toISOString() : ep.airDate,
-          stillPath: ep.stillPath ? `https://image.tmdb.org/t/p/w300${ep.stillPath}` : null,
-          runtime: null
+          airDate: ep.air_date,
+          stillPath: ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : null,
+          runtime: ep.runtime
         }))
       };
 
       return res.json({
         tmdbId,
-        title: content.title,
-        numberOfSeasons: Math.max(...allEpisodes.map(ep => ep.seasonNumber)),
-        numberOfEpisodes: allEpisodes.length,
+        title: tvDetails.name,
+        numberOfSeasons: tvDetails.number_of_seasons,
+        numberOfEpisodes: tvDetails.number_of_episodes,
         season: seasonData
       });
     }
 
-    // Return all seasons grouped
-    const seasonMap = new Map<number, typeof allEpisodes>();
-    for (const episode of allEpisodes) {
-      if (!seasonMap.has(episode.seasonNumber)) {
-        seasonMap.set(episode.seasonNumber, []);
-      }
-      seasonMap.get(episode.seasonNumber)!.push(episode);
-    }
-
-    const seasons = Array.from(seasonMap.entries())
-      .sort(([a], [b]) => a - b)
-      .map(([seasonNum, episodes]) => ({
-        seasonNumber: seasonNum,
-        episodeCount: episodes.length,
-        airDate: episodes[0].airDate instanceof Date ? episodes[0].airDate.toISOString() : episodes[0].airDate,
+    // Return season list without episodes (for initial load)
+    const seasons = tvDetails.seasons
+      .filter(season => season.season_number > 0) // Skip season 0 (specials)
+      .map(season => ({
+        seasonNumber: season.season_number,
+        episodeCount: season.episode_count,
+        airDate: season.air_date,
         episodes: [] // Episodes will be loaded on demand
       }));
 
     res.json({
       tmdbId,
-      title: content.title,
-      numberOfSeasons: seasons.length,
-      numberOfEpisodes: allEpisodes.length,
+      title: tvDetails.name,
+      numberOfSeasons: tvDetails.number_of_seasons,
+      numberOfEpisodes: tvDetails.number_of_episodes,
       seasons
     });
   } catch (error) {

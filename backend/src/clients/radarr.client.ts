@@ -296,6 +296,20 @@ export class RadarrClient {
   }
 
   /**
+   * Get movie by TMDB ID
+   */
+  async getMovieByTmdbId(tmdbId: number): Promise<RadarrMovie | null> {
+    try {
+      const allMovies = await this.getMovies();
+      const movie = allMovies.find(m => m.tmdbId === tmdbId);
+      return movie || null;
+    } catch (error) {
+      logger.error('Failed to get movie by TMDB ID from Radarr', { tmdbId, error });
+      throw error;
+    }
+  }
+
+  /**
    * Get download queue
    */
   async getQueue(page = 1, pageSize = 20): Promise<RadarrQueueResponse> {

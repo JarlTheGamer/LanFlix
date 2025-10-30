@@ -95,7 +95,6 @@ export class ContentModal {
         const hasEpisodes = content.type === 'series' && (content.seasons?.length > 0 || episodes.length > 0);
 
         modal.innerHTML = `
-      <div class="modal-backdrop" style="background-image: url(${backdropUrl})"></div>
       <div class="modal-ambilight"></div>
       <div class="modal-overlay"></div>
       
@@ -560,7 +559,7 @@ export class ContentModal {
     applyAmbilightEffect(imageUrl) {
         const ambilight = this.modal.querySelector('.modal-ambilight');
         if (ambilight && imageUrl) {
-            ambilight.style.backgroundImage = `url(${imageUrl})`;
+            ambilight.style.backgroundImage = `url('${imageUrl}')`;
         }
     }
 

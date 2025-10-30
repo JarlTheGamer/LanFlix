@@ -371,7 +371,7 @@ export class ContentDisplay {
     const meta = [type, year, rating].filter(Boolean);
 
     heroSection.innerHTML = `
-      <div class="hero-background" style="background-image: url(${backdropUrl})"></div>
+      <div class="hero-background" style="background-image: url('${backdropUrl}')"></div>
       <div class="hero-overlay"></div>
       <div class="hero-body">
         <div class="hero-content">
@@ -584,6 +584,7 @@ export class ContentDisplay {
 
   async renderCards(filter) {
     const row = document.getElementById('spotlight-row');
+    if (!row) return; // Element doesn't exist on this page
     row.innerHTML = '';
 
     // Check if we're offline and on discovery page
@@ -860,8 +861,8 @@ export class ContentDisplay {
       || item.expandedImage
       || posterUrl;
 
-    const genres = Array.isArray(item.genres) && item.genres.length > 0 
-      ? item.genres.slice(0, 2).join(', ') 
+    const genres = Array.isArray(item.genres) && item.genres.length > 0
+      ? item.genres.slice(0, 2).join(', ')
       : (item.genre || '');
     const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : (item.year || '');
     const duration = item.runtime ? `${item.runtime}m` : (item.duration || '');
@@ -1003,7 +1004,7 @@ export class ContentDisplay {
     // Determine if this is discovery content or library content
     const card = document.querySelector(`[data-content-id="${contentId}"]`);
     const isDiscovery = card?.dataset.isDiscovery === 'true';
-    
+
     await this.contentModal.show(contentId, contentType, isDiscovery);
   }
 

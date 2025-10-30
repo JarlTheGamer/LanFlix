@@ -111,7 +111,7 @@ main {
 }
 
 .hero-ambilight-layer.active {
-  opacity: 0.68;
+  opacity: 0.0;
 }
 
 .nav-inner {

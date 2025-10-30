@@ -276,6 +276,20 @@ export class SonarrClient {
   }
 
   /**
+   * Get series by TVDB ID
+   */
+  async getSeriesByTvdbId(tvdbId: number): Promise<SonarrSeries | null> {
+    try {
+      const allSeries = await this.getSeries();
+      const series = allSeries.find(s => s.tvdbId === tvdbId);
+      return series || null;
+    } catch (error) {
+      logger.error('Failed to get series by TVDB ID from Sonarr', { tvdbId, error });
+      throw error;
+    }
+  }
+
+  /**
    * Get download queue
    */
   async getQueue(page = 1, pageSize = 20): Promise<SonarrQueueResponse> {

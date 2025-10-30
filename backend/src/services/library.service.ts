@@ -337,7 +337,8 @@ export class LibraryService {
         }
 
         // Save metadata to media folder even if content exists
-        const mediaFolder = path.dirname(filePath);
+        // For movies, use parent directory; for series, use the folder itself
+        const mediaFolder = type === 'movie' ? path.dirname(filePath) : filePath;
         try {
           await this.metadataService.saveMetadataToMediaFolder(existing.id, mediaFolder);
           logger.info(`Saved metadata to ${mediaFolder} for existing content`);
@@ -376,7 +377,8 @@ export class LibraryService {
       });
 
       // Save metadata to media folder
-      const mediaFolder = path.dirname(filePath);
+      // For movies, use parent directory; for series, use the folder itself
+      const mediaFolder = type === 'movie' ? path.dirname(filePath) : filePath;
       await this.metadataService.saveMetadataToMediaFolder(content.id, mediaFolder);
 
       // For series, fetch and store episode metadata
@@ -615,24 +617,24 @@ export class LibraryService {
 
         if (shouldRemove) {
           logger.info(`Removing content ${content.id} (${content.title}) - ${reason}`);
-          
+
           // Import models
           const Watchlist = (await import('../models/Watchlist')).default;
           const DownloadQueue = (await import('../models/DownloadQueue')).default;
           const AutoDeleteSchedule = (await import('../models/AutoDeleteSchedule')).default;
-          
+
           // Delete related records first to avoid foreign key constraint errors
           if (content.type === 'series') {
             // Delete episodes
             await SeriesEpisode.destroy({ where: { contentId: content.id } });
           }
-          
+
           // Delete all related records
           await WatchHistory.destroy({ where: { contentId: content.id } });
           await Watchlist.destroy({ where: { contentId: content.id } });
           await DownloadQueue.destroy({ where: { contentId: content.id } });
           await AutoDeleteSchedule.destroy({ where: { contentId: content.id } });
-          
+
           // Now delete the content
           await content.destroy();
           stats.removed++;
@@ -834,6 +836,16 @@ export class LibraryService {
     try {
       const entries = await fs.readdir(seriesPath, { withFileTypes: true });
 
+      // Import sonarrClient to check for downloading series
+      const { sonarrClient } = await import('../clients');
+      let sonarrSeries: any[] = [];
+      try {
+        sonarrSeries = await sonarrClient.getSeries();
+        logger.info(`Found ${sonarrSeries.length} series in Sonarr`);
+      } catch (error) {
+        logger.warn('Failed to get series from Sonarr:', error);
+      }
+
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
 
@@ -841,12 +853,70 @@ export class LibraryService {
 
         try {
           // Load metadata from series folder
-          const metadata = await this.metadataService.loadMetadataFromMediaFolder(seriesFolder);
+          let metadata = await this.metadataService.loadMetadataFromMediaFolder(seriesFolder);
 
+          // If no metadata file exists, try to fetch from TMDB using folder name
           if (!metadata || !metadata.tmdbId) {
-            logger.warn(`No metadata found for series in ${seriesFolder}`);
-            stats.errors.push(`No metadata: ${entry.name}`);
-            continue;
+            logger.info(`No metadata found for series in ${seriesFolder}, attempting to fetch from TMDB`);
+
+            try {
+              // Try to parse series title from folder name
+              const seriesTitle = entry.name;
+
+              // Import tmdbClient
+              const { tmdbClient } = await import('../clients');
+
+              // Search for series
+              const searchResults = await tmdbClient.searchTV(seriesTitle);
+
+              if (searchResults.results.length > 0) {
+                const seriesMatch = searchResults.results[0]; // Take first match
+                logger.info(`Found TMDB match for ${seriesTitle}: ${seriesMatch.id}`);
+
+                // Fetch full metadata
+                metadata = await this.metadataService.getMetadata(seriesMatch.id, 'series');
+
+                // Save metadata JSON and images to series folder directly
+                const metadataPath = path.join(seriesFolder, 'metadata.json');
+                await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+                logger.info(`Saved metadata JSON to ${metadataPath}`);
+
+                // Download and save images
+                if (metadata.posterPath) {
+                  try {
+                    const axios = (await import('axios')).default;
+                    const posterUrl = `https://image.tmdb.org/t/p/w500${metadata.posterPath}`;
+                    const posterPath = path.join(seriesFolder, 'poster.jpg');
+                    const response = await axios.get(posterUrl, { responseType: 'arraybuffer' });
+                    await fs.writeFile(posterPath, response.data);
+                    logger.info(`Saved poster to ${posterPath}`);
+                  } catch (error) {
+                    logger.warn(`Failed to download poster for ${seriesTitle}:`, error);
+                  }
+                }
+
+                if (metadata.backdropPath) {
+                  try {
+                    const axios = (await import('axios')).default;
+                    const backdropUrl = `https://image.tmdb.org/t/p/w1280${metadata.backdropPath}`;
+                    const backdropPath = path.join(seriesFolder, 'backdrop.jpg');
+                    const response = await axios.get(backdropUrl, { responseType: 'arraybuffer' });
+                    await fs.writeFile(backdropPath, response.data);
+                    logger.info(`Saved backdrop to ${backdropPath}`);
+                  } catch (error) {
+                    logger.warn(`Failed to download backdrop for ${seriesTitle}:`, error);
+                  }
+                }
+              } else {
+                logger.warn(`No TMDB match found for ${seriesTitle}`);
+                stats.errors.push(`No TMDB match: ${entry.name}`);
+                continue;
+              }
+            } catch (error) {
+              logger.error(`Failed to fetch metadata for ${entry.name}:`, error);
+              stats.errors.push(`Failed to fetch metadata: ${entry.name}`);
+              continue;
+            }
           }
 
           // Check if already in library
@@ -855,11 +925,40 @@ export class LibraryService {
           });
 
           if (!content) {
-            // Add series to library (without specific file path for now)
+            // Add series to library
             content = await this.addToLibrary(metadata.tmdbId, 'series', seriesFolder);
             stats.added++;
             // Track this folder as existing
             existingFolders.add(seriesFolder);
+
+            // Check if this series is in Sonarr and create download queue entry if needed
+            const sonarrMatch = sonarrSeries.find(s =>
+              s.title.toLowerCase() === entry.name.toLowerCase() ||
+              s.path.toLowerCase().includes(entry.name.toLowerCase())
+            );
+
+            if (sonarrMatch) {
+              logger.info(`Series ${entry.name} found in Sonarr (id: ${sonarrMatch.id}), checking download status`);
+
+              // Check if there's already a download queue entry
+              const DownloadQueue = (await import('../models/DownloadQueue')).default;
+              const existingQueue = await DownloadQueue.findOne({
+                where: { contentId: content.id }
+              });
+
+              if (!existingQueue) {
+                // Create download queue entry as "downloading"
+                await DownloadQueue.create({
+                  profileId: 1, // Default profile, adjust as needed
+                  contentId: content.id,
+                  type: 'series',
+                  externalId: sonarrMatch.id,
+                  status: 'downloading',
+                  progressPercent: 0
+                });
+                logger.info(`Created download queue entry for ${entry.name}`);
+              }
+            }
           } else {
             // Update metadata if missing
             const needsUpdate =
