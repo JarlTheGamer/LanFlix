@@ -33,7 +33,7 @@ export async function probeMedia(filePath: string): Promise<MediaInfo> {
     if (!fs.existsSync(filePath)) {
       return reject(new Error(`File does not exist: ${filePath}`));
     }
-    
+
     const stats = fs.statSync(filePath);
     if (stats.isDirectory()) {
       return reject(new Error(`Path is a directory, not a file: ${filePath}`));
@@ -71,7 +71,7 @@ export async function probeMedia(filePath: string): Promise<MediaInfo> {
  */
 export function isAudioCompatible(audioCodec?: string): boolean {
   if (!audioCodec) return false;
-  
+
   const compatibleCodecs = ['aac', 'mp3', 'opus', 'vorbis'];
   return compatibleCodecs.includes(audioCodec.toLowerCase());
 }
@@ -82,7 +82,7 @@ export function isAudioCompatible(audioCodec?: string): boolean {
  */
 export function isVideoCompatible(videoCodec?: string): boolean {
   if (!videoCodec) return false;
-  
+
   const compatibleCodecs = ['h264', 'vp8', 'vp9', 'av1'];
   return compatibleCodecs.includes(videoCodec.toLowerCase());
 }

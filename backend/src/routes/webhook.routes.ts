@@ -44,12 +44,12 @@ router.post('/radarr', async (req: Request, res: Response) => {
                     const scanResult = await libraryService.scanLibraryFolder();
                     logger.info('Library scan completed', scanResult);
 
-                    // Auto-convert the file if needed
-                    if (movieFile.path) {
-                        logger.info(`🎬 Auto-converting movie: ${movieFile.path}`);
-                        const convertedPath = await mediaConverterService.ensureCompatible(movieFile.path);
-                        logger.info(`✅ Conversion completed: ${convertedPath}`);
-                    }
+                    // TODO: Auto-convert the file if needed (offline transcoding not yet implemented)
+                    // if (movieFile.path) {
+                    //     logger.info(`🎬 Auto-converting movie: ${movieFile.path}`);
+                    //     const convertedPath = await mediaConverterService.ensureCompatible(movieFile.path);
+                    //     logger.info(`✅ Conversion completed: ${convertedPath}`);
+                    // }
                 } catch (error) {
                     logger.error('❌ Error processing Radarr webhook:', error);
                 }
@@ -105,14 +105,14 @@ router.post('/sonarr', async (req: Request, res: Response) => {
                     const scanResult = await libraryService.scanLibraryFolder();
                     logger.info('Library scan completed', scanResult);
 
-                    // Auto-convert the file if we have a path
-                    if (episodeFile?.path) {
-                        logger.info(`🎬 Auto-converting episode: ${episodeFile.path}`);
-                        const convertedPath = await mediaConverterService.ensureCompatible(episodeFile.path);
-                        logger.info(`✅ Conversion completed: ${convertedPath}`);
-                    } else {
-                        logger.info('No specific file path, scan will find and convert new files');
-                    }
+                    // TODO: Auto-convert the file if we have a path (offline transcoding not yet implemented)
+                    // if (episodeFile?.path) {
+                    //     logger.info(`🎬 Auto-converting episode: ${episodeFile.path}`);
+                    //     const convertedPath = await mediaConverterService.ensureCompatible(episodeFile.path);
+                    //     logger.info(`✅ Conversion completed: ${convertedPath}`);
+                    // } else {
+                    //     logger.info('No specific file path, scan will find and convert new files');
+                    // }
                 } catch (error) {
                     logger.error('❌ Error processing Sonarr webhook:', error);
                 }

@@ -448,6 +448,20 @@ class ApiClient {
     });
   }
 
+  // ==================== CONTENT ENDPOINTS ====================
+
+  /**
+   * GET /api/content/:id
+   * Get content details (movie or series)
+   */
+  async getContentDetails(contentId, contentType, profileId = null) {
+    const params = new URLSearchParams();
+    params.append('type', contentType);
+    if (profileId) params.append('profileId', profileId);
+
+    return this.request(`/content/${contentId}?${params.toString()}`);
+  }
+
   // ==================== STREAMING ENDPOINTS ====================
 
   /**
@@ -493,6 +507,17 @@ class ApiClient {
     if (episodeId) params.append('episodeId', episodeId);
 
     return this.request(`/stream/${contentId}/subtitles?${params.toString()}`);
+  }
+
+  /**
+   * GET /api/stream/:id/info
+   * Get media file information (codecs, duration, etc.)
+   */
+  async getMediaInfo(contentId, episodeId = null) {
+    const params = new URLSearchParams();
+    if (episodeId) params.append('episodeId', episodeId);
+
+    return this.request(`/stream/${contentId}/info?${params.toString()}`);
   }
 
   // ==================== SETTINGS ENDPOINTS ====================

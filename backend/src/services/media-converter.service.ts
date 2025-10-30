@@ -65,7 +65,13 @@ export class MediaConverterService {
 
     let command = ffmpeg(filePath);
 
+    // Seek if needed (before decoding for efficiency)
+    if (options.startTime && options.startTime > 0) {
+      command = command.seekInput(options.startTime);
+    }
+
     // NVDEC hardware-accelerated decoding (GPU decode)
+    // Only use hardware decode if we're transcoding video
     if (options.transcodeVideo) {
       command = command
         .inputOptions([
@@ -73,11 +79,6 @@ export class MediaConverterService {
           '-hwaccel_output_format', 'cuda',
           '-extra_hw_frames', '8'
         ]);
-    }
-
-    // Seek if needed (before decoding for efficiency)
-    if (options.startTime && options.startTime > 0) {
-      command = command.seekInput(options.startTime);
     }
 
     command = command
@@ -88,7 +89,7 @@ export class MediaConverterService {
 
     // Video transcoding with NVENC (GPU encode)
     if (options.transcodeVideo) {
-      logger.info('Using NVDEC decode + NVENC encode (full GPU pipeline)');
+      logger.info('VIDEO: Transcoding with NVDEC decode + NVENC encode (full GPU pipeline)');
       command = command
         .videoCodec('h264_nvenc')
         .addOutputOption('-preset', 'p4')           // Balanced preset (fast + good quality)
@@ -107,20 +108,20 @@ export class MediaConverterService {
         .addOutputOption('-bf', '3')
         .addOutputOption('-gpu', '0');
     } else {
-      logger.info('Copying video stream (no transcode)');
+      logger.info('VIDEO: Copying stream (no transcoding)');
       command = command.videoCodec('copy');
     }
 
     // Audio transcoding
     if (options.transcodeAudio) {
-      logger.info('Transcoding audio to AAC');
+      logger.info('AUDIO: Transcoding to AAC');
       command = command
         .audioCodec('aac')
         .audioBitrate('192k')
         .audioChannels(2)
         .audioFrequency(48000);
     } else {
-      logger.info('Copying audio stream (no transcode)');
+      logger.info('AUDIO: Copying stream (no transcoding)');
       command = command.audioCodec('copy');
     }
 

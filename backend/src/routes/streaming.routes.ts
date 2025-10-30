@@ -133,116 +133,40 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
       return next(error);
     }
 
-    // Get user streaming settings
-    let streamingSettings = {
-      transcodingMode: 'direct-play', // 'direct-play', 'streaming', 'offline'
-      audioTranscoding: true,
-      videoTranscoding: true,
-      preset: 'p4',
-      useHardwareAccel: true
-    };
-
-    if (profileId) {
-      try {
-        const settingKey = `streamingPreferences_${profileId}`;
-        const settings = await Settings.findOne({ where: { key: settingKey } });
-        if (settings && settings.value) {
-          const prefs = JSON.parse(settings.value);
-          streamingSettings = {
-            transcodingMode: prefs.transcodingMode || 'direct-play',
-            audioTranscoding: prefs.audioTranscoding !== false,
-            videoTranscoding: prefs.videoTranscoding !== false,
-            preset: prefs.preset || 'p4',
-            useHardwareAccel: prefs.useHardwareAccel !== false
-          };
-        }
-      } catch (error) {
-        logger.warn('Failed to load streaming settings, using defaults:', error);
-      }
-    }
-
-    // Check if transcoding is needed
+    // Check if audio needs transcoding
     const compatCheck = await mediaConverterService.checkCompatibility(filePath);
-    
-    // Handle seeking via query parameter (better for transcoding)
-    const seekTime = req.query.start ? parseFloat(req.query.start as string) : 0;
     const range = req.headers.range;
 
-    // Determine if we should transcode based on mode
-    let shouldTranscode = false;
-    
-    if (forceTranscode) {
-      shouldTranscode = true;
-    } else if (streamingSettings.transcodingMode === 'streaming') {
-      // Streaming mode: transcode incompatible files in real-time
-      shouldTranscode = compatCheck.needsTranscode;
-    } else if (streamingSettings.transcodingMode === 'offline') {
-      // Offline mode: files should be pre-transcoded, don't transcode on-the-fly
-      // This would be handled by a background job (not implemented here)
-      shouldTranscode = false;
-    } else {
-      // Direct play mode: never transcode
-      shouldTranscode = false;
-    }
+    // Only transcode audio if needed, always copy video
+    const needsAudioTranscode = compatCheck.transcodeAudio;
 
-    // Decide which streams to transcode based on user settings
-    let transcodeAudio = shouldTranscode && compatCheck.transcodeAudio && streamingSettings.audioTranscoding;
-    let transcodeVideo = shouldTranscode && compatCheck.transcodeVideo && streamingSettings.videoTranscoding;
+    if (needsAudioTranscode) {
+      logger.info(`Transcoding audio only for content ${id} (audio codec: ${compatCheck.mediaInfo.audioCodec})`);
 
-    if (shouldTranscode && (transcodeAudio || transcodeVideo)) {
-      // TRANSCODE MODE: Stream with on-the-fly transcoding (Jellyfin-style)
-      logger.info(`Real-time transcoding for content ${id}`, {
-        audio: transcodeAudio,
-        video: transcodeVideo,
-        seekTime,
-        hwAccel: streamingSettings.useHardwareAccel
+      // Create transcode stream with audio transcoding only
+      const transcodeStream = mediaConverterService.createCPUTranscodeStream(filePath, {
+        transcodeAudio: true,
+        transcodeVideo: false,
+        startTime: undefined
       });
 
-      // Try GPU transcoding first
-      let transcodeStream;
-      try {
-        if (streamingSettings.useHardwareAccel) {
-          transcodeStream = mediaConverterService.createTranscodeStream(filePath, {
-            transcodeAudio,
-            transcodeVideo,
-            startTime: seekTime > 0 ? seekTime : undefined
-          });
-        } else {
-          transcodeStream = mediaConverterService.createCPUTranscodeStream(filePath, {
-            transcodeAudio,
-            transcodeVideo,
-            startTime: seekTime > 0 ? seekTime : undefined
-          });
-        }
-      } catch (error) {
-        logger.error('Failed to create transcode stream:', error);
-        const apiError: ApiError = new Error('Transcoding failed');
-        apiError.statusCode = 500;
-        apiError.code = 'TRANSCODE_ERROR';
-        return next(apiError);
-      }
-
-      // Set response headers for transcoded stream
       res.writeHead(200, {
         'Content-Type': 'video/mp4',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Range',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
-        'X-Transcode-Mode': transcodeAudio && transcodeVideo ? 'both' : (transcodeAudio ? 'audio' : 'video'),
-        'X-Hardware-Accel': streamingSettings.useHardwareAccel ? 'true' : 'false'
+        'X-Transcode-Mode': 'audio-only',
+        'X-Direct-Play': 'false'
       });
 
-      // Pipe transcoded stream to response
       transcodeStream.pipe(res);
 
-      // Handle client disconnect
       req.on('close', () => {
         logger.info('Client disconnected, destroying transcode stream');
         transcodeStream.destroy();
       });
 
-      // Handle stream errors
       transcodeStream.on('error', (err) => {
         logger.error('Transcode stream error:', err);
         if (!res.headersSent) {
@@ -252,77 +176,78 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
         }
       });
 
-    } else {
-      // DIRECT PLAY MODE: Serve file as-is
-      logger.info(`Direct play for content ${id}`);
+      return;
+    }
 
-      const ext = path.extname(filePath).toLowerCase();
-      const contentTypeMap: { [key: string]: string } = {
-        '.mp4': 'video/mp4',
-        '.m4v': 'video/mp4',
-        '.mkv': 'video/x-matroska',
-        '.webm': 'video/webm',
-        '.avi': 'video/x-msvideo',
-        '.mov': 'video/quicktime',
-        '.ts': 'video/mp2t',
-        '.m3u8': 'application/vnd.apple.mpegurl',
-        '.mpd': 'application/dash+xml'
-      };
-      const contentType = contentTypeMap[ext] || 'video/mp4';
+    // Direct play if audio is compatible
+    logger.info(`Direct play for content ${id}`);
 
-      if (range) {
-        // Handle range request for seeking
-        const parts = range.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] && parts[1].length > 0 ? parseInt(parts[1], 10) : fileSize - 1;
+    const ext = path.extname(filePath).toLowerCase();
+    const contentTypeMap: { [key: string]: string } = {
+      '.mp4': 'video/mp4',
+      '.m4v': 'video/mp4',
+      '.mkv': 'video/x-matroska',
+      '.webm': 'video/webm',
+      '.avi': 'video/x-msvideo',
+      '.mov': 'video/quicktime',
+      '.ts': 'video/mp2t',
+      '.m3u8': 'application/vnd.apple.mpegurl',
+      '.mpd': 'application/dash+xml'
+    };
+    const contentType = contentTypeMap[ext] || 'video/mp4';
 
-        // Validate range values
-        if (isNaN(start) || start < 0 || start >= fileSize) {
-          const error: ApiError = new Error('Invalid range start');
-          error.statusCode = 416;
-          error.code = 'INVALID_RANGE';
-          return next(error);
-        }
+    if (range) {
+      // Handle range request for seeking
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] && parts[1].length > 0 ? parseInt(parts[1], 10) : fileSize - 1;
 
-        if (isNaN(end) || end < start || end >= fileSize) {
-          const error: ApiError = new Error('Invalid range end');
-          error.statusCode = 416;
-          error.code = 'INVALID_RANGE';
-          return next(error);
-        }
-
-        const chunkSize = (end - start) + 1;
-        const fileStream = fs.createReadStream(filePath, { start, end });
-
-        res.writeHead(206, {
-          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-          'Accept-Ranges': 'bytes',
-          'Content-Length': chunkSize,
-          'Content-Type': contentType,
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': 'Range',
-          'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
-          'Cache-Control': 'public, max-age=3600',
-          'X-Direct-Play': 'true'
-        });
-
-        fileStream.pipe(res);
-      } else {
-        // Stream entire file
-        res.writeHead(200, {
-          'Content-Length': fileSize,
-          'Content-Type': contentType,
-          'Accept-Ranges': 'bytes',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': 'Range',
-          'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
-          'Cache-Control': 'public, max-age=3600',
-          'X-Direct-Play': 'true'
-        });
-
-        const fileStream = fs.createReadStream(filePath);
-        fileStream.pipe(res);
+      // Validate range values
+      if (isNaN(start) || start < 0 || start >= fileSize) {
+        const error: ApiError = new Error('Invalid range start');
+        error.statusCode = 416;
+        error.code = 'INVALID_RANGE';
+        return next(error);
       }
+
+      if (isNaN(end) || end < start || end >= fileSize) {
+        const error: ApiError = new Error('Invalid range end');
+        error.statusCode = 416;
+        error.code = 'INVALID_RANGE';
+        return next(error);
+      }
+
+      const chunkSize = (end - start) + 1;
+      const fileStream = fs.createReadStream(filePath, { start, end });
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': contentType,
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Range',
+        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
+        'Cache-Control': 'public, max-age=3600',
+        'X-Direct-Play': 'true'
+      });
+
+      fileStream.pipe(res);
+    } else {
+      // Stream entire file
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Range',
+        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
+        'Cache-Control': 'public, max-age=3600',
+        'X-Direct-Play': 'true'
+      });
+
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
     }
   } catch (error) {
     next(error);

@@ -14,12 +14,12 @@ export class VideoPlayer {
     this.episodeId = null;
     this.contentType = null;
     this.isTranscoding = false;
-    
+
     // Progress tracking
     this.progressInterval = null;
     this.progressUpdateFrequency = 10000; // 10 seconds
     this.lastSavedProgress = 0;
-    
+
     // Playback state
     this.isPlaying = false;
     this.currentTime = 0;
@@ -27,11 +27,11 @@ export class VideoPlayer {
     this.volume = 1.0;
     this.isMuted = false;
     this.isFullscreen = false;
-    
+
     // Subtitles
     this.availableSubtitles = [];
     this.currentSubtitleTrack = null;
-    
+
     // Controls
     this.controlsTimeout = null;
     this.controlsVisible = true;
@@ -45,47 +45,162 @@ export class VideoPlayer {
     this.contentId = contentId;
     this.contentType = contentType;
     this.episodeId = episodeId;
-    
+
+    // Setup event listeners first (to catch any errors)
+    this.setupEventListeners();
+
+    // Setup controls
+    this.setupControls();
+
     // Ensure audio is enabled - CRITICAL: Set these BEFORE setting src
     this.videoElement.muted = false;
     this.videoElement.volume = 1.0;
-    
+
     // Set video attributes for audio playback
     this.videoElement.setAttribute('muted', 'false');
     this.videoElement.removeAttribute('muted');
-    
+
     // Set video source
     const streamUrl = apiClient.getStreamUrl(contentId, episodeId, this.profileId);
+    console.log('Setting video source:', streamUrl);
+
+    // Test if the stream URL is accessible
+    try {
+      const testResponse = await fetch(streamUrl, { method: 'HEAD' });
+      console.log('Stream HEAD response status:', testResponse.status);
+      console.log('Stream HEAD response headers:', Object.fromEntries(testResponse.headers.entries()));
+
+      if (!testResponse.ok) {
+        console.error('Stream URL returned error:', testResponse.status, testResponse.statusText);
+        const errorText = await fetch(streamUrl).then(r => r.text());
+        console.error('Error response:', errorText);
+        this.showNotification(`Stream error: ${testResponse.status} ${testResponse.statusText}`);
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to test stream URL:', error);
+      this.showNotification('Cannot connect to streaming server');
+      return;
+    }
+
     this.videoElement.src = streamUrl;
-    
+
+    // Load content metadata to get duration (async, non-blocking)
+    this.loadContentMetadata().catch(err => {
+      console.warn('Failed to load metadata:', err);
+    });
+
+    // Detect if transcoding is happening (async, non-blocking)
+    this.detectTranscodingMode().catch(err => {
+      console.warn('Failed to detect transcoding mode:', err);
+    });
+
     // Force unmute after source is set (some browsers auto-mute)
     this.videoElement.addEventListener('loadedmetadata', () => {
       this.videoElement.muted = false;
       this.videoElement.volume = 1.0;
+
+      // If duration is still not set from probe, use video element duration
+      if (!this.duration || this.duration === 0) {
+        this.duration = this.videoElement.duration;
+        console.log(`Duration fallback from video element: ${this.duration}s`);
+      }
+
+      // Update duration display once we have it
+      this.updateDurationDisplay();
     }, { once: true });
-    
-    // Load subtitles
-    await this.loadSubtitles();
-    
-    // Setup event listeners
-    this.setupEventListeners();
-    
-    // Setup controls
-    this.setupControls();
-    
-    // Start at saved position
+
+    // Load subtitles (async, non-blocking)
+    this.loadSubtitles().catch(err => {
+      console.warn('Failed to load subtitles:', err);
+    });
+
+    // Wait for video to be ready before seeking
     if (startPosition > 0) {
-      this.videoElement.currentTime = startPosition;
+      this.videoElement.addEventListener('loadedmetadata', () => {
+        if (this.isTranscoding) {
+          // For transcoded streams, reload at position
+          this.reloadStreamAtTime(startPosition);
+        } else {
+          // For direct play, use normal seeking
+          this.videoElement.currentTime = startPosition;
+        }
+      }, { once: true });
     }
-    
-    // Start playing
-    this.play();
+
+    // Start playing once video is ready
+    this.videoElement.addEventListener('canplay', () => {
+      this.play();
+    }, { once: true });
+  }
+
+  /**
+   * Load content metadata (runtime/duration)
+   */
+  async loadContentMetadata() {
+    try {
+      // Use the stream info endpoint to get actual media duration from ffprobe
+      const data = await apiClient.getMediaInfo(this.contentId, this.episodeId);
+
+      if (data.mediaInfo && data.mediaInfo.duration) {
+        this.duration = data.mediaInfo.duration;
+        console.log(`Duration from media probe: ${this.duration}s (${Math.floor(this.duration / 60)} minutes)`);
+      }
+    } catch (error) {
+      console.warn('Failed to load media info, will use video element duration:', error);
+    }
+  }
+
+  /**
+   * Detect if stream is being transcoded by checking response headers
+   */
+  async detectTranscodingMode() {
+    try {
+      const streamUrl = apiClient.getStreamUrl(this.contentId, this.episodeId, this.profileId);
+      const response = await fetch(streamUrl, { method: 'HEAD' });
+
+      // Check for transcoding headers
+      const transcodeMode = response.headers.get('X-Transcode-Mode');
+      const directPlay = response.headers.get('X-Direct-Play');
+
+      this.isTranscoding = !!transcodeMode && !directPlay;
+
+      if (this.isTranscoding) {
+        console.log('🎬 Transcoding mode detected:', transcodeMode);
+        console.log('⚠️ Seeking will reload stream at new position');
+      } else {
+        console.log('▶️ Direct play mode - normal seeking enabled');
+      }
+    } catch (error) {
+      console.warn('Failed to detect transcoding mode:', error);
+      this.isTranscoding = false;
+    }
   }
 
   /**
    * Setup video element event listeners
    */
   setupEventListeners() {
+    // Error handling
+    this.videoElement.addEventListener('error', (e) => {
+      console.error('Video element error:', e);
+      if (this.videoElement.error) {
+        console.error('Error code:', this.videoElement.error.code);
+        console.error('Error message:', this.videoElement.error.message);
+
+        const errorMessages = {
+          1: 'MEDIA_ERR_ABORTED - The video download was aborted',
+          2: 'MEDIA_ERR_NETWORK - A network error occurred',
+          3: 'MEDIA_ERR_DECODE - The video is corrupted or not supported',
+          4: 'MEDIA_ERR_SRC_NOT_SUPPORTED - The video format is not supported'
+        };
+
+        const errorMsg = errorMessages[this.videoElement.error.code] || 'Unknown error';
+        console.error('Error details:', errorMsg);
+        this.showNotification(`Video Error: ${errorMsg}`);
+      }
+    });
+
     // Playback events
     this.videoElement.addEventListener('play', () => {
       this.isPlaying = true;
@@ -111,9 +226,13 @@ export class VideoPlayer {
     });
 
     this.videoElement.addEventListener('loadedmetadata', () => {
-      this.duration = this.videoElement.duration;
+      // Only use video element duration if we don't have it from probe
+      if (!this.duration || this.duration === 0) {
+        this.duration = this.videoElement.duration;
+        console.log(`Duration from video element: ${this.duration}s`);
+      }
       this.updateDurationDisplay();
-      
+
       // Detect if transcoding (no duration or specific headers)
       this.isTranscoding = !this.videoElement.duration || this.videoElement.duration === Infinity;
     });
@@ -301,11 +420,11 @@ export class VideoPlayer {
     let controlsTimeout;
     const playerContainer = document.querySelector('.player-container');
     const controls = document.querySelector('.player-controls');
-    
+
     const showControls = () => {
       controls?.classList.add('visible');
       clearTimeout(controlsTimeout);
-      
+
       if (this.isPlaying) {
         controlsTimeout = setTimeout(() => {
           controls?.classList.remove('visible');
@@ -327,6 +446,12 @@ export class VideoPlayer {
   play() {
     this.videoElement.play().catch(error => {
       console.error('Failed to play video:', error);
+      console.error('Video src:', this.videoElement.src);
+      console.error('Video readyState:', this.videoElement.readyState);
+      console.error('Video networkState:', this.videoElement.networkState);
+
+      // Show user-friendly error
+      this.showNotification('Failed to play video. Check console for details.');
     });
   }
 
@@ -353,15 +478,13 @@ export class VideoPlayer {
    */
   seek(time) {
     const targetTime = Math.max(0, Math.min(time, this.duration));
-    
-    // Check if we're transcoding (no Content-Length header means transcoding)
-    const isTranscoding = !this.videoElement.duration || this.isTranscoding;
-    
-    if (isTranscoding && Math.abs(targetTime - this.currentTime) > 10) {
-      // For transcoded streams with large seeks, reload stream at new position
+
+    if (this.isTranscoding) {
+      // For transcoded streams, always reload at new position
+      // This ensures proper seeking without buffering issues
       this.reloadStreamAtTime(targetTime);
     } else {
-      // For direct play or small seeks, use normal seeking
+      // For direct play, use normal seeking
       this.videoElement.currentTime = targetTime;
     }
   }
@@ -370,21 +493,44 @@ export class VideoPlayer {
    * Reload stream at specific time (for transcoded streams)
    */
   reloadStreamAtTime(time) {
+    console.log(`Reloading transcoded stream at ${time}s`);
     const wasPlaying = !this.videoElement.paused;
-    
+
     // Save current state
     this.videoElement.pause();
-    
+
+    // Stop progress tracking during reload
+    this.stopProgressTracking();
+
     // Reload stream with start parameter
     const streamUrl = apiClient.getStreamUrl(this.contentId, this.episodeId, this.profileId, time);
+    console.log('New stream URL:', streamUrl);
+
+    // Load new source
     this.videoElement.src = streamUrl;
-    
+    this.videoElement.load();
+
     // Resume playback when ready
-    if (wasPlaying) {
-      this.videoElement.addEventListener('canplay', () => {
+    const onCanPlay = () => {
+      console.log('Stream reloaded and ready at', this.videoElement.currentTime);
+      if (wasPlaying) {
         this.play();
-      }, { once: true });
-    }
+      }
+      // Restart progress tracking
+      if (wasPlaying) {
+        this.startProgressTracking();
+      }
+    };
+
+    this.videoElement.addEventListener('canplay', onCanPlay, { once: true });
+
+    // Fallback timeout in case canplay doesn't fire
+    setTimeout(() => {
+      if (wasPlaying && this.videoElement.paused) {
+        console.warn('Canplay timeout, forcing play');
+        this.play();
+      }
+    }, 3000);
   }
 
   /**
@@ -427,7 +573,7 @@ export class VideoPlayer {
     try {
       const response = await apiClient.getSubtitles(this.contentId, this.episodeId);
       this.availableSubtitles = response.subtitles || [];
-      
+
       // Add subtitle tracks to video element
       this.availableSubtitles.forEach((subtitle, index) => {
         const track = document.createElement('track');
@@ -435,11 +581,11 @@ export class VideoPlayer {
         track.label = subtitle.language.toUpperCase();
         track.srclang = subtitle.language;
         track.src = subtitle.path;
-        
+
         if (index === 0) {
           track.default = true;
         }
-        
+
         this.videoElement.appendChild(track);
       });
     } catch (error) {
@@ -453,7 +599,7 @@ export class VideoPlayer {
   showSubtitleMenu() {
     // Simple implementation - cycle through subtitles
     const tracks = this.videoElement.textTracks;
-    
+
     if (tracks.length === 0) {
       alert('No subtitles available');
       return;
@@ -470,7 +616,7 @@ export class VideoPlayer {
 
     // Activate next track (or turn off if at end)
     const nextIndex = (currentIndex + 1) % (tracks.length + 1);
-    
+
     if (nextIndex < tracks.length) {
       tracks[nextIndex].mode = 'showing';
       this.showNotification(`Subtitles: ${tracks[nextIndex].label}`);
@@ -484,7 +630,7 @@ export class VideoPlayer {
    */
   startProgressTracking() {
     if (this.progressInterval) return;
-    
+
     this.progressInterval = setInterval(() => {
       this.saveProgress();
     }, this.progressUpdateFrequency);
@@ -498,7 +644,7 @@ export class VideoPlayer {
       clearInterval(this.progressInterval);
       this.progressInterval = null;
     }
-    
+
     // Save final progress
     this.saveProgress();
   }
@@ -520,7 +666,7 @@ export class VideoPlayer {
         Math.floor(this.duration),
         this.episodeId
       );
-      
+
       this.lastSavedProgress = this.currentTime;
     } catch (error) {
       console.error('Failed to save watch progress:', error);
@@ -561,7 +707,7 @@ export class VideoPlayer {
     const pauseIcon = document.querySelector('.play-pause-btn .pause-icon');
     const centerPlayBtn = document.querySelector('.center-play-button');
     const playerContainer = document.querySelector('.player-container');
-    
+
     if (this.isPlaying) {
       if (playIcon) playIcon.style.display = 'none';
       if (pauseIcon) pauseIcon.style.display = 'block';
@@ -586,7 +732,7 @@ export class VideoPlayer {
 
     const volumeHighIcon = document.querySelector('.volume-high-icon');
     const volumeMutedIcon = document.querySelector('.volume-muted-icon');
-    
+
     if (this.isMuted || this.volume === 0) {
       if (volumeHighIcon) volumeHighIcon.style.display = 'none';
       if (volumeMutedIcon) volumeMutedIcon.style.display = 'block';
@@ -602,7 +748,7 @@ export class VideoPlayer {
   updateFullscreenButton() {
     const enterIcon = document.querySelector('.fullscreen-enter-icon');
     const exitIcon = document.querySelector('.fullscreen-exit-icon');
-    
+
     if (this.isFullscreen) {
       if (enterIcon) enterIcon.style.display = 'none';
       if (exitIcon) exitIcon.style.display = 'block';
@@ -697,11 +843,11 @@ export class VideoPlayer {
    */
   formatTime(seconds) {
     if (isNaN(seconds)) return '0:00';
-    
+
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    
+
     if (hours > 0) {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     } else {
@@ -714,7 +860,7 @@ export class VideoPlayer {
    */
   showNotification(message) {
     let notification = document.getElementById('player-notification');
-    
+
     if (!notification) {
       notification = document.createElement('div');
       notification.id = 'player-notification';
@@ -748,7 +894,7 @@ export class VideoPlayer {
     this.stopProgressTracking();
     this.videoElement.pause();
     this.videoElement.src = '';
-    
+
     if (this.controlsTimeout) {
       clearTimeout(this.controlsTimeout);
     }
