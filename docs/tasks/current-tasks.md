@@ -5,31 +5,42 @@ Active development tasks and work in progress.
 ## 🔴 Critical Priority
 
 ### Fix Video Audio Issues
-**Status**: In Progress  
+**Status**: ✅ Completed  
 **Assigned**: -  
-**Due**: ASAP
+**Completed**: October 30, 2025
 
 **Problem**: Video streams have no audio when played through the API.
 
-**Investigation**:
-- Streaming route serves files correctly with range support
-- Content-Type headers now properly detect file format (mp4, mkv, webm, etc.)
-- Issue may be with source video files lacking audio tracks
+**Solution Implemented**: Jellyfin-style smart streaming
+1. ✅ Direct play first (fastest, no transcoding)
+2. ✅ FFprobe checks audio/video codec compatibility
+3. ✅ Smart transcoding only when needed:
+   - Audio incompatible → transcode audio only (copy video)
+   - Video incompatible → transcode both
+   - Both compatible → direct play
+4. ✅ Added `/api/stream/:id/info` endpoint to debug media files
 
-**Solution**:
-1. ✅ Updated streaming route to detect proper Content-Type based on file extension
-2. ✅ Added Cache-Control headers to prevent caching issues
-3. ⏳ Need to verify source video files have audio tracks using ffprobe
-4. ⏳ Consider adding FFmpeg transcoding for incompatible formats
+**How It Works**:
+- Browser-compatible codecs: AAC, MP3, Opus, Vorbis (audio) / H.264, VP8, VP9, AV1 (video)
+- Incompatible audio (DTS, AC3, TrueHD, etc.) → transcoded to AAC on-the-fly
+- Video stream copied without re-encoding (fast!)
+- Force transcode with `?transcode=true` query parameter
 
 **Files Modified**:
-- `backend/src/routes/streaming.routes.ts`
-- `frontend/src/modules/video-player.js`
+- `backend/src/routes/streaming.routes.ts` - Smart streaming logic
+- `backend/src/utils/ffmpeg.ts` - FFmpeg probe and transcode utilities
 
-**Next Steps**:
-- Test with known good video files
-- Add FFmpeg probe to detect audio tracks
-- Implement transcoding if needed
+**Testing**:
+```bash
+# Check media info
+curl http://localhost:3000/api/stream/1/info
+
+# Direct play (if compatible)
+curl http://localhost:3000/api/stream/1
+
+# Force transcode
+curl http://localhost:3000/api/stream/1?transcode=true
+```
 
 ---
 

@@ -3,6 +3,7 @@ import Content from '../models/Content';
 import SeriesEpisode from '../models/SeriesEpisode';
 import WatchHistory from '../models/WatchHistory';
 import { MetadataService } from './metadata.service';
+import { mediaConverterService } from './media-converter.service';
 import { config } from '../config/env';
 import logger from '../utils/logger';
 import fs from 'fs/promises';
@@ -727,7 +728,23 @@ export class LibraryService {
             continue;
           }
 
-          const filePath = path.join(actualMovieFolder, videoFile);
+          let filePath = path.join(actualMovieFolder, videoFile);
+
+          // Auto-convert file if needed (runs in background)
+          mediaConverterService.ensureCompatible(filePath)
+            .then((convertedPath) => {
+              if (convertedPath !== filePath) {
+                logger.info(`File auto-converted: ${filePath} -> ${convertedPath}`);
+                // Update the database with new file path
+                Content.update(
+                  { filePath: convertedPath },
+                  { where: { filePath } }
+                ).catch(err => logger.error('Failed to update file path after conversion:', err));
+              }
+            })
+            .catch((err) => {
+              logger.error(`Failed to auto-convert file ${filePath}:`, err);
+            });
 
           // Try to load metadata from the top-level folder first, then nested
           let metadata = await this.metadataService.loadMetadataFromMediaFolder(movieFolder);
@@ -1034,7 +1051,23 @@ export class LibraryService {
               if (!episodeMatch) continue;
 
               const episodeNumber = parseInt(episodeMatch[2], 10);
-              const filePath = path.join(seasonFolder, episodeFile);
+              let filePath = path.join(seasonFolder, episodeFile);
+
+              // Auto-convert file if needed (runs in background)
+              mediaConverterService.ensureCompatible(filePath)
+                .then((convertedPath) => {
+                  if (convertedPath !== filePath) {
+                    logger.info(`Episode auto-converted: ${filePath} -> ${convertedPath}`);
+                    // Update the database with new file path
+                    SeriesEpisode.update(
+                      { filePath: convertedPath },
+                      { where: { filePath } }
+                    ).catch(err => logger.error('Failed to update episode file path after conversion:', err));
+                  }
+                })
+                .catch((err) => {
+                  logger.error(`Failed to auto-convert episode ${filePath}:`, err);
+                });
 
               // Check if episode exists
               const existingEpisode = await SeriesEpisode.findOne({
