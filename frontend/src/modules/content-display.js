@@ -517,12 +517,24 @@ export class ContentDisplay {
     }
 
     if (this.activeAmbilightLayer === 1) {
+      // Set the background image on the inactive layer first
       this.ambilightLayer2.style.backgroundImage = backgroundImage;
+      
+      // Force a reflow to ensure the background is set before transition
+      void this.ambilightLayer2.offsetWidth;
+      
+      // Now trigger the transition
       this.ambilightLayer2.classList.add('active');
       this.ambilightLayer1.classList.remove('active');
       this.activeAmbilightLayer = 2;
     } else {
+      // Set the background image on the inactive layer first
       this.ambilightLayer1.style.backgroundImage = backgroundImage;
+      
+      // Force a reflow to ensure the background is set before transition
+      void this.ambilightLayer1.offsetWidth;
+      
+      // Now trigger the transition
       this.ambilightLayer1.classList.add('active');
       this.ambilightLayer2.classList.remove('active');
       this.activeAmbilightLayer = 1;

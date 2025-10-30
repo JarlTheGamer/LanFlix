@@ -154,6 +154,8 @@ router.get('/:id/episodes', validatePathParam('id'), async (req: Request, res: R
           return next(error);
         }
 
+        const { getEpisodeStillUrl } = await import('../utils/image-url');
+        
         const seasonData = {
           seasonNumber,
           episodeCount: seasonEpisodes.length,
@@ -165,7 +167,7 @@ router.get('/:id/episodes', validatePathParam('id'), async (req: Request, res: R
             title: ep.title,
             overview: ep.overview,
             airDate: ep.airDate instanceof Date ? ep.airDate.toISOString() : ep.airDate,
-            stillPath: ep.stillPath ? `https://image.tmdb.org/t/p/w300${ep.stillPath}` : null,
+            stillPath: getEpisodeStillUrl(ep.stillPath, content.filePath, ep.seasonNumber, ep.episodeNumber),
             runtime: null
           }))
         };

@@ -29,8 +29,8 @@
   bottom: -50%;
   background-size: cover;
   background-position: center;
-  filter: blur(100px) saturate(150%);
-  opacity: 0.;
+  filter: blur(100px) saturate(150%) brightness(1.2);
+  opacity: 1;
   transform: scale(1.08);
   z-index: 1;
 }
@@ -41,7 +41,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.692);
+  background: rgba(0, 0, 0, 0.5);
   z-index: 3;
   cursor: pointer;
 }
@@ -371,6 +371,14 @@
   transform: translateX(4px);
 }
 
+.episode-card-horizontal.unavailable {
+  opacity: 0.5;
+}
+
+.episode-card-horizontal.unavailable:hover {
+  opacity: 0.7;
+}
+
 .episode-thumbnail-horizontal {
   position: relative;
   flex-shrink: 0;
@@ -401,6 +409,20 @@
   color: white;
   font-size: 16px;
   font-weight: 700;
+}
+
+.unavailable-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 152, 0, 0.9);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .episode-play-btn {

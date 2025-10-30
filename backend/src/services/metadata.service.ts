@@ -375,6 +375,46 @@ export class MetadataService {
       { ttl: 7 * 24 * 60 * 60 * 1000 } // Cache for 7 days
     );
   }
+
+  /**
+   * Download episode still image to season folder
+   */
+  async downloadEpisodeStill(
+    stillPath: string,
+    seasonFolder: string,
+    seasonNumber: number,
+    episodeNumber: number
+  ): Promise<string | null> {
+    try {
+      if (!stillPath) {
+        return null;
+      }
+
+      // Create filename: S01E01.jpg
+      const filename = `S${seasonNumber.toString().padStart(2, '0')}E${episodeNumber.toString().padStart(2, '0')}.jpg`;
+      const localPath = path.join(seasonFolder, filename);
+
+      // Check if already exists
+      try {
+        await fs.access(localPath);
+        logger.debug(`Episode still already exists: ${localPath}`);
+        return filename;
+      } catch {
+        // File doesn't exist, download it
+      }
+
+      // Download from TMDB
+      const stillUrl = `${this.imageBaseUrl}/w300${stillPath}`;
+      const response = await axios.get(stillUrl, { responseType: 'arraybuffer' });
+      await fs.writeFile(localPath, response.data);
+      logger.info(`Downloaded episode still: ${localPath}`);
+
+      return filename;
+    } catch (error) {
+      logger.warn(`Failed to download episode still for S${seasonNumber}E${episodeNumber}:`, error);
+      return null;
+    }
+  }
 }
 
 export default new MetadataService();

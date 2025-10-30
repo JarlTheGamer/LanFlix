@@ -45,6 +45,7 @@ interface EpisodeInfo {
   stillPath?: string;
   filePath?: string;
   watched: boolean;
+  available: boolean;
 }
 
 interface LibraryFilters {
@@ -198,17 +199,21 @@ export class LibraryService {
               );
             }
 
-            item.episodes = episodes.map(ep => ({
-              id: ep.id,
-              seasonNumber: ep.seasonNumber,
-              episodeNumber: ep.episodeNumber,
-              title: ep.title,
-              overview: ep.overview,
-              airDate: ep.airDate ? (ep.airDate instanceof Date ? ep.airDate.toISOString() : ep.airDate) : undefined,
-              stillPath: ep.stillPath,
-              filePath: ep.filePath,
-              watched: watchedEpisodes.has(ep.id)
-            }));
+            item.episodes = episodes.map(ep => {
+              const { getEpisodeStillUrl } = require('../utils/image-url');
+              return {
+                id: ep.id,
+                seasonNumber: ep.seasonNumber,
+                episodeNumber: ep.episodeNumber,
+                title: ep.title,
+                overview: ep.overview,
+                airDate: ep.airDate ? (ep.airDate instanceof Date ? ep.airDate.toISOString() : ep.airDate) : undefined,
+                stillPath: getEpisodeStillUrl(ep.stillPath, content.filePath, ep.seasonNumber, ep.episodeNumber),
+                filePath: ep.filePath,
+                watched: watchedEpisodes.has(ep.id),
+                available: !!ep.filePath // Episode is available if it has a file path
+              };
+            });
           }
 
           return item;
@@ -293,17 +298,21 @@ export class LibraryService {
           );
         }
 
-        item.episodes = episodes.map(ep => ({
-          id: ep.id,
-          seasonNumber: ep.seasonNumber,
-          episodeNumber: ep.episodeNumber,
-          title: ep.title,
-          overview: ep.overview,
-          airDate: ep.airDate ? (ep.airDate instanceof Date ? ep.airDate.toISOString() : ep.airDate) : undefined,
-          stillPath: ep.stillPath,
-          filePath: ep.filePath,
-          watched: watchedEpisodes.has(ep.id)
-        }));
+        item.episodes = episodes.map(ep => {
+          const { getEpisodeStillUrl } = require('../utils/image-url');
+          return {
+            id: ep.id,
+            seasonNumber: ep.seasonNumber,
+            episodeNumber: ep.episodeNumber,
+            title: ep.title,
+            overview: ep.overview,
+            airDate: ep.airDate ? (ep.airDate instanceof Date ? ep.airDate.toISOString() : ep.airDate) : undefined,
+            stillPath: getEpisodeStillUrl(ep.stillPath, content.filePath, ep.seasonNumber, ep.episodeNumber),
+            filePath: ep.filePath,
+            watched: watchedEpisodes.has(ep.id),
+            available: !!ep.filePath // Episode is available if it has a file path
+          };
+        });
       }
 
       return item;
@@ -1038,8 +1047,31 @@ export class LibraryService {
 
               if (existingEpisode) {
                 // Update file path if changed
+                let needsUpdate = false;
+                const updates: any = {};
+
                 if (existingEpisode.filePath !== filePath) {
-                  await existingEpisode.update({ filePath });
+                  updates.filePath = filePath;
+                  needsUpdate = true;
+                }
+
+                // Check if still image needs to be downloaded
+                // If stillPath is a TMDB path (starts with /), download it locally
+                if (existingEpisode.stillPath && existingEpisode.stillPath.startsWith('/')) {
+                  const downloadedStill = await this.metadataService.downloadEpisodeStill(
+                    existingEpisode.stillPath,
+                    seasonFolder,
+                    seasonNumber,
+                    episodeNumber
+                  );
+                  if (downloadedStill) {
+                    updates.stillPath = downloadedStill; // Update to local filename
+                    needsUpdate = true;
+                  }
+                }
+
+                if (needsUpdate) {
+                  await existingEpisode.update(updates);
                   stats.updated++;
                 }
               } else {
@@ -1052,6 +1084,20 @@ export class LibraryService {
                     (ep: any) => ep.episode_number === episodeNumber
                   );
 
+                  // Download episode still image to season folder
+                  let localStillPath = episodeData?.still_path;
+                  if (episodeData?.still_path) {
+                    const downloadedStill = await this.metadataService.downloadEpisodeStill(
+                      episodeData.still_path,
+                      seasonFolder,
+                      seasonNumber,
+                      episodeNumber
+                    );
+                    if (downloadedStill) {
+                      localStillPath = downloadedStill; // Store just the filename
+                    }
+                  }
+
                   await SeriesEpisode.create({
                     contentId: content.id,
                     seasonNumber,
@@ -1059,7 +1105,7 @@ export class LibraryService {
                     title: episodeData?.name,
                     overview: episodeData?.overview,
                     airDate: episodeData?.air_date ? new Date(episodeData.air_date) : undefined,
-                    stillPath: episodeData?.still_path || undefined,
+                    stillPath: localStillPath || undefined,
                     filePath
                   });
                 } catch (error) {

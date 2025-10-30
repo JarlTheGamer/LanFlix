@@ -209,12 +209,10 @@ export class ContentModal {
             <div class="season-episodes ${index === 0 ? 'active' : ''}" data-season="${seasonNum}">
               <div class="season-header">
                 <h3>Season ${seasonNum}</h3>
-                ${isDiscovery ? `
-                  <button class="season-download-btn" data-season="${seasonNum}">
-                    <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                    Download Season
-                  </button>
-                ` : ''}
+                <button class="season-download-btn" data-season="${seasonNum}" style="display: none;">
+                  <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                  <span class="download-btn-text">${isDiscovery ? 'Download Season' : 'Download Missing'}</span>
+                </button>
               </div>
               <div class="episodes-list-vertical" data-season="${seasonNum}">
                 ${index === 0 ? '' : '<div class="loading-placeholder">Loading episodes...</div>'}
@@ -323,12 +321,20 @@ export class ContentModal {
                 episodesContainer.appendChild(episodeCard);
             });
 
-            // Add season download handler
-            if (isDiscovery) {
-                const seasonDownloadBtn = document.querySelector(`.season-download-btn[data-season="${seasonNum}"]`);
-                seasonDownloadBtn?.addEventListener('click', () => {
-                    this.downloadSeason(seasonNum);
-                });
+            // Check if there are any unavailable episodes (for library content)
+            const hasUnavailableEpisodes = !isDiscovery && seasonEpisodes.some(ep => !ep.available);
+            
+            // Show/hide download button based on content type and availability
+            const seasonDownloadBtn = document.querySelector(`.season-download-btn[data-season="${seasonNum}"]`);
+            if (seasonDownloadBtn) {
+                if (isDiscovery || hasUnavailableEpisodes) {
+                    seasonDownloadBtn.style.display = 'flex';
+                    seasonDownloadBtn.addEventListener('click', () => {
+                        this.downloadSeason(seasonNum);
+                    });
+                } else {
+                    seasonDownloadBtn.style.display = 'none';
+                }
             }
         } catch (error) {
             console.error(`Failed to load season ${seasonNum}:`, error);
@@ -341,12 +347,17 @@ export class ContentModal {
      */
     createEpisodeCard(episode, isDiscovery) {
         const episodeCard = document.createElement('div');
-        episodeCard.className = 'episode-card-horizontal';
+        const isAvailable = episode.available !== false; // Default to true for discovery content
+        const isLibraryContent = !isDiscovery;
+        
+        episodeCard.className = `episode-card-horizontal ${!isAvailable && isLibraryContent ? 'unavailable' : ''}`;
         episodeCard.dataset.episodeId = episode.id;
         episodeCard.dataset.seasonNumber = episode.seasonNumber;
         episodeCard.dataset.episodeNumber = episode.episodeNumber;
 
+        // Use still path - backend handles local vs TMDB URLs
         const stillUrl = episode.stillPath || this.currentContent.backdropUrl || '';
+        
         const watched = episode.watched || false;
         const runtime = episode.runtime ? `${episode.runtime}m` : '';
 
@@ -354,7 +365,8 @@ export class ContentModal {
           <div class="episode-thumbnail-horizontal">
             <img src="${stillUrl}" alt="Episode ${episode.episodeNumber}" />
             ${watched ? '<div class="watched-badge">✓</div>' : ''}
-            ${!isDiscovery ? `
+            ${!isAvailable && isLibraryContent ? '<div class="unavailable-badge">Not Downloaded</div>' : ''}
+            ${isAvailable && isLibraryContent ? `
               <button class="episode-play-btn">
                 <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
               </button>
@@ -369,7 +381,7 @@ export class ContentModal {
               ${runtime ? `<span class="episode-runtime">${runtime}</span>` : ''}
             </div>
             <div class="episode-overview">${episode.overview || 'No description available.'}</div>
-            ${isDiscovery ? `
+            ${isDiscovery || (!isAvailable && isLibraryContent) ? `
               <button class="episode-download-btn" data-episode-id="${episode.id}">
                 <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                 Download Episode
@@ -378,8 +390,8 @@ export class ContentModal {
           </div>
         `;
 
-        // Add play handler for library content
-        if (!isDiscovery) {
+        // Add play handler for available library content
+        if (isAvailable && isLibraryContent) {
             const playBtn = episodeCard.querySelector('.episode-play-btn');
             playBtn?.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -387,8 +399,8 @@ export class ContentModal {
             });
         }
 
-        // Add download handler for discovery content
-        if (isDiscovery) {
+        // Add download handler for discovery content or unavailable library episodes
+        if (isDiscovery || (!isAvailable && isLibraryContent)) {
             const downloadBtn = episodeCard.querySelector('.episode-download-btn');
             downloadBtn?.addEventListener('click', (e) => {
                 e.stopPropagation();
