@@ -199,6 +199,78 @@
                             </select>
                         </div>
                     </div>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Transcoding</h2>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label for="transcoding-mode">Transcoding Mode</label>
+                                <p class="settings-item-description">How to handle incompatible media files</p>
+                            </div>
+                            <select id="transcoding-mode" class="settings-select">
+                                <option value="direct-play">Direct Play - No transcoding (fastest, may not work)</option>
+                                <option value="streaming">Streaming - Real-time transcoding (like Jellyfin)</option>
+                                <option value="offline">Offline - Background transcoding (requires pre-processing)</option>
+                            </select>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Audio Transcoding</label>
+                                <p class="settings-item-description">Convert incompatible audio codecs to AAC</p>
+                            </div>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="audio-transcoding" checked />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Video Transcoding</label>
+                                <p class="settings-item-description">Convert incompatible video codecs to H.264</p>
+                            </div>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="video-transcoding" checked />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Hardware Acceleration</label>
+                                <p class="settings-item-description">Use GPU (NVIDIA NVENC) for faster transcoding</p>
+                            </div>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="use-hardware-accel" checked />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label for="transcode-preset">Encoding Preset</label>
+                                <p class="settings-item-description">Balance between speed and quality (p1=fastest, p7=best quality)</p>
+                            </div>
+                            <select id="transcode-preset" class="settings-select">
+                                <option value="p1">P1 - Fastest (Low Quality)</option>
+                                <option value="p2">P2 - Very Fast</option>
+                                <option value="p3">P3 - Fast</option>
+                                <option value="p4" selected>P4 - Balanced (Recommended)</option>
+                                <option value="p5">P5 - Quality</option>
+                                <option value="p6">P6 - High Quality</option>
+                                <option value="p7">P7 - Best Quality (Slowest)</option>
+                            </select>
+                        </div>
+                        <div class="settings-info-box">
+                            <svg viewBox="0 0 24 24" width="20" height="20">
+                                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                            </svg>
+                            <div>
+                                <strong>Transcoding Modes:</strong>
+                                <p><strong>Direct Play:</strong> Stream files as-is (fastest, but incompatible files won't play).<br>
+                                <strong>Streaming:</strong> Real-time transcoding like Jellyfin (works with all files, uses CPU/GPU).<br>
+                                <strong>Offline:</strong> Pre-transcode files in background (smooth playback, requires storage).<br>
+                                You can enable/disable audio and video transcoding independently. Hardware acceleration uses GPU for 10-20x faster encoding.</p>
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Display Section -->

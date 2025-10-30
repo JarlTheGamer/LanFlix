@@ -906,3 +906,34 @@
   outline: 3px solid rgba(255, 255, 255, 0.9);
   outline-offset: 2px;
 }
+/* In
+fo Box */
+.settings-info-box {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(33, 150, 243, 0.1);
+  border-left: 3px solid #2196f3;
+  border-radius: 8px;
+  margin-top: 16px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.settings-info-box svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #2196f3;
+}
+
+.settings-info-box strong {
+  display: block;
+  margin-bottom: 4px;
+  color: white;
+}
+
+.settings-info-box p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+}

@@ -211,7 +211,7 @@ class ApiClient {
 
   /**
    * GET /api/content/search
-   * Search for content
+   * Search for content in library
    */
   async searchContent(query, type = 'all', profileId = null) {
     const params = new URLSearchParams();
@@ -220,6 +220,18 @@ class ApiClient {
     if (profileId) params.append('profileId', profileId);
 
     return this.request(`/content/search?${params.toString()}`);
+  }
+
+  /**
+   * GET /api/discovery/search
+   * Search TMDB for discovery content
+   */
+  async searchTMDB(query, type = 'all') {
+    const params = new URLSearchParams();
+    params.append('q', query);
+    params.append('type', type);
+
+    return this.request(`/discovery/search?${params.toString()}`);
   }
 
   /**
@@ -442,9 +454,11 @@ class ApiClient {
    * GET /api/stream/:id
    * Get streaming URL for content
    */
-  getStreamUrl(contentId, episodeId = null) {
+  getStreamUrl(contentId, episodeId = null, profileId = null, startTime = null) {
     const params = new URLSearchParams();
     if (episodeId) params.append('episodeId', episodeId);
+    if (profileId) params.append('profileId', profileId);
+    if (startTime) params.append('start', startTime.toString());
 
     return `${this.baseURL}/stream/${contentId}?${params.toString()}`;
   }
@@ -499,6 +513,17 @@ class ApiClient {
     return this.request('/settings', {
       method: 'PUT',
       body: JSON.stringify({ settings })
+    });
+  }
+
+  /**
+   * PUT /api/settings/streaming/:profileId
+   * Update streaming preferences for a profile
+   */
+  async updateStreamingPreferences(profileId, preferences) {
+    return this.request(`/settings/streaming/${profileId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ streamingPreferences: preferences })
     });
   }
 

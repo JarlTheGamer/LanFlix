@@ -176,6 +176,83 @@ export class ContentService {
   }
 
   /**
+   * Search TMDB directly (for discovery)
+   */
+  async searchTMDB(
+    query: string,
+    type: 'movie' | 'series' | 'all' = 'all'
+  ): Promise<SearchResult[]> {
+    try {
+      logger.info(`Searching TMDB: ${query}, type: ${type}`);
+
+      // Search TMDB
+      const [movieResults, tvResults] = await Promise.all([
+        type === 'series'
+          ? Promise.resolve({ results: [] })
+          : this.tmdbClient.searchMovie(query).catch(() => ({ results: [] })),
+        type === 'movie'
+          ? Promise.resolve({ results: [] })
+          : this.tmdbClient.searchTV(query).catch(() => ({ results: [] }))
+      ]);
+
+      const results: SearchResult[] = [];
+
+      // Add movie results
+      for (const movie of movieResults.results) {
+        results.push({
+          id: movie.id,
+          tmdbId: movie.id,
+          type: 'movie',
+          title: movie.title,
+          originalTitle: movie.original_title,
+          overview: movie.overview,
+          releaseDate: movie.release_date,
+          posterUrl: movie.poster_path
+            ? `${this.imageBaseUrl}/${this.posterSize}${movie.poster_path}`
+            : undefined,
+          backdropUrl: movie.backdrop_path
+            ? `${this.imageBaseUrl}/${this.backdropSize}${movie.backdrop_path}`
+            : undefined,
+          voteAverage: movie.vote_average,
+          voteCount: movie.vote_count,
+          genres: [],
+          inLibrary: false,
+          inWatchlist: false
+        });
+      }
+
+      // Add TV results
+      for (const tv of tvResults.results) {
+        results.push({
+          id: tv.id,
+          tmdbId: tv.id,
+          type: 'series',
+          title: tv.name,
+          originalTitle: tv.original_name,
+          overview: tv.overview,
+          releaseDate: tv.first_air_date,
+          posterUrl: tv.poster_path
+            ? `${this.imageBaseUrl}/${this.posterSize}${tv.poster_path}`
+            : undefined,
+          backdropUrl: tv.backdrop_path
+            ? `${this.imageBaseUrl}/${this.backdropSize}${tv.backdrop_path}`
+            : undefined,
+          voteAverage: tv.vote_average,
+          voteCount: tv.vote_count,
+          genres: [],
+          inLibrary: false,
+          inWatchlist: false
+        });
+      }
+
+      return results;
+    } catch (error) {
+      logger.error('Failed to search TMDB:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get trending content with caching
    */
   async getTrendingContent(profileId?: number): Promise<TrendingContent> {

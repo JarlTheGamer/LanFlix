@@ -419,7 +419,20 @@ export class ContentModal {
 
         // Play button
         modal.querySelector('[data-action="play"]')?.addEventListener('click', () => {
-            window.location.href = `player.html?contentId=${content.id}&type=${content.type}`;
+            if (content.type === 'series') {
+                // For series, find the first available episode to play
+                const episodes = content.episodes || [];
+                const firstAvailableEpisode = episodes.find(ep => ep.available);
+                
+                if (firstAvailableEpisode) {
+                    this.playEpisode(firstAvailableEpisode.id);
+                } else {
+                    alert('No episodes available to play. Please download episodes first.');
+                }
+            } else {
+                // For movies, play directly
+                window.location.href = `player.html?contentId=${content.id}&type=${content.type}`;
+            }
         });
 
         // Queue/Download all button

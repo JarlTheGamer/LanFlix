@@ -1,6 +1,7 @@
 import { ProfileManager } from '../modules/profile-manager.js';
 import { ContentDisplay } from '../modules/content-display.js';
 import { Navigation } from '../modules/navigation.js';
+import searchModule from '../modules/search.js';
 import stateManager from '../modules/data.js';
 
 // Initialize application
@@ -32,6 +33,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     await contentDisplay.initialize();
     navigation.initialize();
+    
+    // Initialize search module
+    searchModule.initialize();
+    
+    // Add search button handler
+    const searchBtn = document.getElementById('search-btn');
+    if (searchBtn) {
+      searchBtn.addEventListener('click', () => {
+        searchModule.open();
+      });
+    }
 
   } catch (error) {
     console.error('Failed to initialize application:', error);

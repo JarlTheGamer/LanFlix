@@ -95,23 +95,27 @@ async getContinueWatching(profileId: number, limit = 10) {
 ## 🟡 High Priority
 
 ### Add Search UI
-**Status**: Not Started  
-**Priority**: High  
-**Estimated**: 3 hours
+**Status**: ✅ Completed  
+**Assigned**: -  
+**Completed**: October 30, 2025
 
 **Description**: Implement search functionality in the frontend.
 
-**Requirements**:
-- Search input in header
-- Real-time search as user types (debounced)
-- Search across movies and TV shows
-- Display results in modal or dedicated page
-- Keyboard shortcut (/) to focus search
+**Implementation**:
+- ✅ Search button in header (magnifying glass icon)
+- ✅ Search overlay modal with input
+- ✅ Real-time search with 300ms debounce
+- ✅ Search across movies and TV shows via API
+- ✅ Grid display of results with posters
+- ✅ Keyboard shortcut (/) to open search
+- ✅ Escape key to close
+- ✅ Click result to open content modal
 
-**Files to Create/Modify**:
-- `frontend/src/modules/search.js` - New search module
-- `frontend/src/pages/index.html` - Add search input
-- `frontend/src/styles/search.css` - Search styling
+**Files Created**:
+- `frontend/src/modules/search.js` - Search module with debounced search
+- `frontend/src/styles/search.css` - Search UI styling
+- Updated `frontend/src/pages/index.html` - Added search button
+- Updated `frontend/src/scripts/main.js` - Initialize search module
 
 ---
 
@@ -311,6 +315,23 @@ Allow third-party plugins to extend functionality.
 ---
 
 ## ✅ Recently Completed
+
+### Hardware-Accelerated Transcoding with Seeking
+**Completed**: October 30, 2025
+- Implemented Jellyfin-style hardware-accelerated transcoding
+- NVDEC (GPU decode) + NVENC (GPU encode) pipeline
+- Configurable presets (p1-p7) for speed/quality balance
+- Smart seeking: reloads stream at target time for transcoded content
+- Settings for hardware acceleration, preset, audio-only, video-only
+- MPEG-TS streaming format for better seeking support
+- Handles client disconnects gracefully
+
+### Series Playback Fix
+**Completed**: October 30, 2025
+- Fixed "Media file is empty" error when playing series
+- Series play button now finds first available episode
+- Shows alert if no episodes are downloaded
+- Episodes play correctly with episodeId parameter
 
 ### Video Player Audio Fix (Partial)
 - Updated Content-Type detection for different video formats

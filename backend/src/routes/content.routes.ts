@@ -55,7 +55,7 @@ router.get('/popular', async (req: Request, res: Response, next: NextFunction) =
 
 /**
  * GET /api/content/search
- * Search for content
+ * Search for content in library
  */
 router.get('/search', validateQueryParam('q', true), async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -64,6 +64,27 @@ router.get('/search', validateQueryParam('q', true), async (req: Request, res: R
     const profileId = req.query.profileId ? parseInt(req.query.profileId as string) : undefined;
 
     const results = await contentService.searchContent(query, type, profileId);
+
+    res.json({
+      query,
+      type,
+      results
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/discovery/search
+ * Search TMDB for discovery content
+ */
+router.get('/discovery/search', validateQueryParam('q', true), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const query = req.query.q as string;
+    const type = (req.query.type as 'movie' | 'series' | 'all') || 'all';
+
+    const results = await contentService.searchContent(query, type);
 
     res.json({
       query,

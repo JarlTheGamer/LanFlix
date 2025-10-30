@@ -7,7 +7,7 @@ interface SettingsAttributes {
   updatedAt: Date;
 }
 
-interface SettingsCreationAttributes extends Optional<SettingsAttributes, 'updatedAt'> {}
+interface SettingsCreationAttributes extends Optional<SettingsAttributes, 'updatedAt'> { }
 
 class Settings extends Model<SettingsAttributes, SettingsCreationAttributes> implements SettingsAttributes {
   public key!: string;

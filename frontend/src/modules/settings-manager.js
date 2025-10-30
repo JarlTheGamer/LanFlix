@@ -80,6 +80,44 @@ export class SettingsManager {
         }
       }
     });
+    
+    // Load streaming preferences for current profile
+    this.loadStreamingPreferences();
+  }
+
+  /**
+   * Load streaming preferences for current profile
+   */
+  async loadStreamingPreferences() {
+    try {
+      const profileId = stateManager.currentProfileId;
+      if (!profileId) return;
+
+      const response = await apiClient.getSettings();
+      const settingKey = `streamingPreferences_${profileId}`;
+      
+      if (response.settings && response.settings[settingKey]) {
+        const prefs = JSON.parse(response.settings[settingKey]);
+        
+        // Apply to UI
+        const transcodingMode = document.getElementById('transcoding-mode');
+        if (transcodingMode) transcodingMode.value = prefs.transcodingMode || 'direct-play';
+        
+        const hwAccel = document.getElementById('use-hardware-accel');
+        if (hwAccel) hwAccel.checked = prefs.useHardwareAccel !== false;
+        
+        const preset = document.getElementById('transcode-preset');
+        if (preset) preset.value = prefs.preset || 'p4';
+        
+        const audioTranscoding = document.getElementById('audio-transcoding');
+        if (audioTranscoding) audioTranscoding.checked = prefs.audioTranscoding !== false;
+        
+        const videoTranscoding = document.getElementById('video-transcoding');
+        if (videoTranscoding) videoTranscoding.checked = prefs.videoTranscoding !== false;
+      }
+    } catch (error) {
+      console.error('Failed to load streaming preferences:', error);
+    }
   }
 
   /**
@@ -292,13 +330,67 @@ export class SettingsManager {
         
         console.log(`Toggle ${settingKey} changed to:`, settingValue);
         
-        // Update local settings
-        this.settings[settingKey] = settingValue;
-        
-        // Save to backend
-        await this.saveSettings();
+        // Handle streaming transcode toggles specially
+        if (settingKey === 'audio-transcoding' || settingKey === 'video-transcoding' || 
+            settingKey === 'use-hardware-accel') {
+          await this.saveStreamingPreferences();
+        } else {
+          // Update local settings
+          this.settings[settingKey] = settingValue;
+          
+          // Save to backend
+          await this.saveSettings();
+        }
       });
     });
+    
+    // Handle transcoding mode and preset select changes
+    const transcodingModeSelect = document.getElementById('transcoding-mode');
+    if (transcodingModeSelect) {
+      transcodingModeSelect.addEventListener('change', async () => {
+        await this.saveStreamingPreferences();
+      });
+    }
+    
+    const presetSelect = document.getElementById('transcode-preset');
+    if (presetSelect) {
+      presetSelect.addEventListener('change', async () => {
+        await this.saveStreamingPreferences();
+      });
+    }
+  }
+
+  /**
+   * Save streaming preferences to profile settings
+   */
+  async saveStreamingPreferences() {
+    try {
+      const profileId = stateManager.currentProfileId;
+      if (!profileId) {
+        console.error('No profile selected');
+        return;
+      }
+
+      const transcodingMode = document.getElementById('transcoding-mode')?.value ?? 'direct-play';
+      const audioTranscoding = document.getElementById('audio-transcoding')?.checked ?? true;
+      const videoTranscoding = document.getElementById('video-transcoding')?.checked ?? true;
+      const useHardwareAccel = document.getElementById('use-hardware-accel')?.checked ?? true;
+      const preset = document.getElementById('transcode-preset')?.value ?? 'p4';
+
+      const streamingPreferences = {
+        transcodingMode,
+        audioTranscoding,
+        videoTranscoding,
+        useHardwareAccel,
+        preset
+      };
+
+      await apiClient.updateStreamingPreferences(profileId, streamingPreferences);
+      console.log('Streaming preferences saved successfully');
+    } catch (error) {
+      console.error('Failed to save streaming preferences:', error);
+      alert('Failed to save streaming preferences. Please try again.');
+    }
   }
 
   setupModals() {

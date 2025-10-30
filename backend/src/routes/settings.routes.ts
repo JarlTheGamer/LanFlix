@@ -75,7 +75,13 @@ router.put('/', validateBody(['settings']), async (req: Request, res: Response, 
       'prowlarrApiKey',
       'autoMetadata',
       'downloadImages',
-      'metadataLanguage'
+      'metadataLanguage',
+      // Transcoding settings
+      'transcodingMode',
+      'audioTranscoding',
+      'videoTranscoding',
+      'useHardwareAccel',
+      'transcodePreset'
     ];
 
     const invalidKeys = Object.keys(settings).filter(key => !validKeys.includes(key));
@@ -256,3 +262,49 @@ router.post('/test-connection', validateBody(['service']), async (req: Request, 
 });
 
 export default router;
+
+/**
+ * PUT /api/settings/streaming/:profileId
+ * Update streaming preferences for a profile
+ */
+router.put('/streaming/:profileId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const profileId = parseInt(req.params.profileId, 10);
+    const { streamingPreferences } = req.body;
+
+    if (!streamingPreferences || typeof streamingPreferences !== 'object') {
+      const error: ApiError = new Error('Streaming preferences must be an object');
+      error.statusCode = 400;
+      error.code = 'VALIDATION_ERROR';
+      return next(error);
+    }
+
+    const settingKey = `streamingPreferences_${profileId}`;
+    const settingValue = JSON.stringify(streamingPreferences);
+
+    // Find or create settings for this profile
+    const [settings] = await Settings.findOrCreate({
+      where: { key: settingKey },
+      defaults: {
+        key: settingKey,
+        value: settingValue
+      }
+    });
+
+    // Update if exists
+    if (settings.value !== settingValue) {
+      settings.value = settingValue;
+      settings.updatedAt = new Date();
+      await settings.save();
+    }
+
+    logger.info(`Streaming preferences updated for profile ${profileId}:`, streamingPreferences);
+
+    res.json({
+      message: 'Streaming preferences updated successfully',
+      preferences: streamingPreferences
+    });
+  } catch (error) {
+    next(error);
+  }
+});

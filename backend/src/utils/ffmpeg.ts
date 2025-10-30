@@ -19,6 +19,8 @@ export interface TranscodeOptions {
   audioCodec?: string;
   videoCopy?: boolean;
   startTime?: number;
+  preset?: string;
+  useHardwareAccel?: boolean;
 }
 
 /**
@@ -145,43 +147,113 @@ export async function needsTranscoding(filePath: string): Promise<{
 }
 
 /**
- * Create a transcode stream (audio only, copy video)
- * This is the Jellyfin approach: only transcode what's needed
+ * Create a transcode stream with HLS segmentation
+ * Supports audio-only, video-only, or both transcoding
+ * Uses hardware acceleration when available
  */
 export function createTranscodeStream(options: TranscodeOptions): ffmpeg.FfmpegCommand {
   const {
     inputPath,
-    outputFormat = 'matroska',
+    outputFormat = 'mpegts',
     audioCodec = 'aac',
     videoCopy = true,
-    startTime
+    startTime,
+    preset = 'p4',
+    useHardwareAccel = true
   } = options;
 
-  let command = ffmpeg(inputPath)
-    .outputFormat(outputFormat)
-    .audioCodec(audioCodec)
-    .audioBitrate('192k');
+  let command = ffmpeg(inputPath);
 
-  // Copy video stream without re-encoding (fast!)
-  if (videoCopy) {
-    command = command.videoCodec('copy');
+  // Hardware acceleration setup (NVDEC for decoding)
+  if (useHardwareAccel && !videoCopy) {
+    command = command
+      .inputOption('-hwaccel', 'cuda')
+      .inputOption('-hwaccel_output_format', 'cuda');
   }
 
-  // Seek to start time if provided
-  if (startTime) {
+  // Seek to start time if provided (accurate seeking)
+  if (startTime && startTime > 0) {
     command = command.seekInput(startTime);
   }
 
-  // Additional options for streaming
+  command = command.outputFormat(outputFormat);
+
+  // Audio handling
+  if (audioCodec === 'copy') {
+    command = command.audioCodec('copy');
+  } else {
+    command = command
+      .audioCodec(audioCodec)
+      .audioBitrate('192k')
+      .audioChannels(2);
+  }
+
+  // Video handling
+  if (videoCopy) {
+    // Copy video stream without re-encoding (fast!)
+    command = command.videoCodec('copy');
+  } else {
+    // Transcode video with hardware acceleration
+    if (useHardwareAccel) {
+      // NVENC hardware encoding
+      command = command
+        .videoCodec('h264_nvenc')
+        .addOutputOption('-preset', preset) // p1-p7, p4 is balanced
+        .addOutputOption('-rc', 'vbr')
+        .addOutputOption('-cq', '23')
+        .addOutputOption('-b:v', '4M')
+        .addOutputOption('-maxrate', '6M')
+        .addOutputOption('-bufsize', '8M')
+        .addOutputOption('-profile:v', 'high')
+        .addOutputOption('-level', '4.1');
+    } else {
+      // Software encoding fallback
+      command = command
+        .videoCodec('libx264')
+        .addOutputOption('-preset', 'veryfast')
+        .addOutputOption('-crf', '23')
+        .addOutputOption('-maxrate', '4M')
+        .addOutputOption('-bufsize', '8M')
+        .addOutputOption('-profile:v', 'high')
+        .addOutputOption('-level', '4.1');
+    }
+  }
+
+  // Streaming optimizations
   command = command
-    .addOutputOption('-movflags', 'frag_keyframe+empty_moov')
-    .addOutputOption('-preset', 'ultrafast')
+    .addOutputOption('-movflags', '+faststart')
+    .addOutputOption('-avoid_negative_ts', 'make_zero')
+    .addOutputOption('-fflags', '+genpts+discardcorrupt')
+    .addOutputOption('-max_muxing_queue_size', '1024')
+    .addOutputOption('-copyts')
     .on('start', (commandLine) => {
       logger.info('FFmpeg transcode started:', commandLine);
     })
     .on('error', (err) => {
       logger.error('FFmpeg transcode error:', err);
+    })
+    .on('stderr', (stderrLine) => {
+      // Log progress for debugging
+      if (stderrLine.includes('time=')) {
+        logger.debug('Transcode progress:', stderrLine);
+      }
     });
 
   return command;
+}
+
+/**
+ * Check if NVIDIA hardware acceleration is available
+ */
+export async function checkHardwareAccel(): Promise<boolean> {
+  return new Promise((resolve) => {
+    ffmpeg()
+      .input('color=c=black:s=256x256:d=1')
+      .inputFormat('lavfi')
+      .videoCodec('h264_nvenc')
+      .output('/dev/null')
+      .on('error', () => resolve(false))
+      .on('end', () => resolve(true))
+      .run();
+  });
 }

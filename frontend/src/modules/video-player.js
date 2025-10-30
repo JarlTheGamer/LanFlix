@@ -13,6 +13,7 @@ export class VideoPlayer {
     this.contentId = null;
     this.episodeId = null;
     this.contentType = null;
+    this.isTranscoding = false;
     
     // Progress tracking
     this.progressInterval = null;
@@ -54,7 +55,7 @@ export class VideoPlayer {
     this.videoElement.removeAttribute('muted');
     
     // Set video source
-    const streamUrl = apiClient.getStreamUrl(contentId, episodeId);
+    const streamUrl = apiClient.getStreamUrl(contentId, episodeId, this.profileId);
     this.videoElement.src = streamUrl;
     
     // Force unmute after source is set (some browsers auto-mute)
@@ -112,6 +113,9 @@ export class VideoPlayer {
     this.videoElement.addEventListener('loadedmetadata', () => {
       this.duration = this.videoElement.duration;
       this.updateDurationDisplay();
+      
+      // Detect if transcoding (no duration or specific headers)
+      this.isTranscoding = !this.videoElement.duration || this.videoElement.duration === Infinity;
     });
 
     this.videoElement.addEventListener('volumechange', () => {
@@ -348,7 +352,39 @@ export class VideoPlayer {
    * Seek to specific time
    */
   seek(time) {
-    this.videoElement.currentTime = Math.max(0, Math.min(time, this.duration));
+    const targetTime = Math.max(0, Math.min(time, this.duration));
+    
+    // Check if we're transcoding (no Content-Length header means transcoding)
+    const isTranscoding = !this.videoElement.duration || this.isTranscoding;
+    
+    if (isTranscoding && Math.abs(targetTime - this.currentTime) > 10) {
+      // For transcoded streams with large seeks, reload stream at new position
+      this.reloadStreamAtTime(targetTime);
+    } else {
+      // For direct play or small seeks, use normal seeking
+      this.videoElement.currentTime = targetTime;
+    }
+  }
+
+  /**
+   * Reload stream at specific time (for transcoded streams)
+   */
+  reloadStreamAtTime(time) {
+    const wasPlaying = !this.videoElement.paused;
+    
+    // Save current state
+    this.videoElement.pause();
+    
+    // Reload stream with start parameter
+    const streamUrl = apiClient.getStreamUrl(this.contentId, this.episodeId, this.profileId, time);
+    this.videoElement.src = streamUrl;
+    
+    // Resume playback when ready
+    if (wasPlaying) {
+      this.videoElement.addEventListener('canplay', () => {
+        this.play();
+      }, { once: true });
+    }
   }
 
   /**

@@ -129,6 +129,11 @@ export class Navigation {
   setupMenu() {
     const menuButtons = document.querySelectorAll('.menu-item');
     menuButtons.forEach((button) => {
+      // Skip search button - it's handled by search module
+      if (button.id === 'search-btn' || button.classList.contains('search-home')) {
+        return;
+      }
+
       button.addEventListener('click', async () => {
         if (this.isTransitioning) return;
 
