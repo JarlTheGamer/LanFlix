@@ -309,7 +309,7 @@ export class ContentDisplay {
     const meta = [type, year, rating, duration].filter(Boolean);
 
     heroSection.innerHTML = `
-      <div class="hero-background" style="background-image: url(${backdropUrl})"></div>
+      <div class="hero-background" style="background-image: url('${backdropUrl}')"></div>
       <div class="hero-overlay"></div>
       <div class="hero-body">
         <div class="hero-content">

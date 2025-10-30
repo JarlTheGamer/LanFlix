@@ -109,8 +109,8 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
 
 /**
  * GET /api/content/:id/episodes
- * Get episodes for a TV series (with progressive loading)
- * Also stores episode metadata in database for offline access
+ * Get episodes for a TV series from LOCAL DATABASE ONLY
+ * TMDB is only used for discovery, not for library content
  */
 router.get('/:id/episodes', validatePathParam('id'), async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -118,138 +118,93 @@ router.get('/:id/episodes', validatePathParam('id'), async (req: Request, res: R
     const seasonNumber = req.query.season ? parseInt(req.query.season as string) : null;
 
     // Import dependencies
-    const { tmdbClient } = await import('../clients');
     const Content = (await import('../models/Content')).default;
     const SeriesEpisode = (await import('../models/SeriesEpisode')).default;
-
-    // Get TV details first to know how many seasons
-    const tvDetails = await tmdbClient.getTVDetails(tmdbId);
 
     // Check if series exists in library
     const content = await Content.findOne({
       where: { tmdbId, type: 'series' }
     });
 
-    // If specific season requested, return only that season
-    if (seasonNumber !== null) {
-      try {
-        // First check if we have episodes in database
-        if (content) {
-          const dbEpisodes = await SeriesEpisode.findAll({
-            where: {
-              contentId: content.id,
-              seasonNumber
-            },
-            order: [['episodeNumber', 'ASC']]
-          });
-
-          // If we have episodes with metadata in DB, use them
-          if (dbEpisodes.length > 0 && dbEpisodes[0].title) {
-            const seasonData = {
-              seasonNumber,
-              episodeCount: dbEpisodes.length,
-              airDate: dbEpisodes[0].airDate?.toISOString(),
-              episodes: dbEpisodes.map(ep => ({
-                id: ep.id,
-                seasonNumber: ep.seasonNumber,
-                episodeNumber: ep.episodeNumber,
-                title: ep.title,
-                overview: ep.overview,
-                airDate: ep.airDate?.toISOString(),
-                stillPath: ep.stillPath ? `https://image.tmdb.org/t/p/w300${ep.stillPath}` : null,
-                runtime: null
-              }))
-            };
-
-            return res.json({
-              tmdbId,
-              title: tvDetails.name,
-              numberOfSeasons: tvDetails.number_of_seasons,
-              numberOfEpisodes: tvDetails.number_of_episodes,
-              season: seasonData
-            });
-          }
-        }
-
-        // Fetch from TMDB if not in database
-        const seasonDetails = await tmdbClient.getSeasonDetails(tmdbId, seasonNumber);
-        const seasonData = {
-          seasonNumber: seasonDetails.season_number,
-          episodeCount: seasonDetails.episodes.length,
-          airDate: seasonDetails.air_date,
-          episodes: seasonDetails.episodes.map((ep: any) => ({
-            id: ep.id,
-            seasonNumber: ep.season_number,
-            episodeNumber: ep.episode_number,
-            title: ep.name,
-            overview: ep.overview,
-            airDate: ep.air_date,
-            stillPath: ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : null,
-            runtime: ep.runtime
-          }))
-        };
-
-        // Store episodes in database if content exists in library
-        if (content) {
-          for (const ep of seasonDetails.episodes) {
-            const existing = await SeriesEpisode.findOne({
-              where: {
-                contentId: content.id,
-                seasonNumber: ep.season_number,
-                episodeNumber: ep.episode_number
-              }
-            });
-
-            if (!existing) {
-              await SeriesEpisode.create({
-                contentId: content.id,
-                seasonNumber: ep.season_number,
-                episodeNumber: ep.episode_number,
-                title: ep.name,
-                overview: ep.overview,
-                airDate: ep.air_date ? new Date(ep.air_date) : undefined,
-                stillPath: ep.still_path || undefined
-              });
-            } else if (!existing.title) {
-              // Update metadata if episode exists but metadata is missing
-              await existing.update({
-                title: ep.name,
-                overview: ep.overview,
-                airDate: ep.air_date ? new Date(ep.air_date) : undefined,
-                stillPath: ep.still_path || undefined
-              });
-            }
-          }
-        }
-
-        return res.json({
-          tmdbId,
-          title: tvDetails.name,
-          numberOfSeasons: tvDetails.number_of_seasons,
-          numberOfEpisodes: tvDetails.number_of_episodes,
-          season: seasonData
-        });
-      } catch (error) {
-        console.error(`Failed to fetch season ${seasonNumber}:`, error);
-        return res.status(500).json({ error: 'Failed to fetch season details' });
-      }
+    if (!content) {
+      const error: ApiError = new Error('Series not found in library');
+      error.statusCode = 404;
+      error.code = 'NOT_FOUND';
+      return next(error);
     }
 
-    // Return season list without episodes (for initial load)
-    const seasons = tvDetails.seasons
-      .filter(season => season.season_number > 0) // Skip season 0 (specials)
-      .map(season => ({
-        seasonNumber: season.season_number,
-        episodeCount: season.episode_count,
-        airDate: season.air_date,
+    // Get all episodes for this series
+    const allEpisodes = await SeriesEpisode.findAll({
+      where: { contentId: content.id },
+      order: [['seasonNumber', 'ASC'], ['episodeNumber', 'ASC']]
+    });
+
+    if (allEpisodes.length === 0) {
+      const error: ApiError = new Error('No episodes found for this series');
+      error.statusCode = 404;
+      error.code = 'NOT_FOUND';
+      return next(error);
+    }
+
+    // If specific season requested, return only that season
+    if (seasonNumber !== null) {
+      const seasonEpisodes = allEpisodes.filter(ep => ep.seasonNumber === seasonNumber);
+
+      if (seasonEpisodes.length === 0) {
+        const error: ApiError = new Error(`Season ${seasonNumber} not found`);
+        error.statusCode = 404;
+        error.code = 'NOT_FOUND';
+        return next(error);
+      }
+
+      const seasonData = {
+        seasonNumber,
+        episodeCount: seasonEpisodes.length,
+        airDate: seasonEpisodes[0].airDate instanceof Date ? seasonEpisodes[0].airDate.toISOString() : seasonEpisodes[0].airDate,
+        episodes: seasonEpisodes.map(ep => ({
+          id: ep.id,
+          seasonNumber: ep.seasonNumber,
+          episodeNumber: ep.episodeNumber,
+          title: ep.title,
+          overview: ep.overview,
+          airDate: ep.airDate instanceof Date ? ep.airDate.toISOString() : ep.airDate,
+          stillPath: ep.stillPath ? `https://image.tmdb.org/t/p/w300${ep.stillPath}` : null,
+          runtime: null
+        }))
+      };
+
+      return res.json({
+        tmdbId,
+        title: content.title,
+        numberOfSeasons: Math.max(...allEpisodes.map(ep => ep.seasonNumber)),
+        numberOfEpisodes: allEpisodes.length,
+        season: seasonData
+      });
+    }
+
+    // Return all seasons grouped
+    const seasonMap = new Map<number, typeof allEpisodes>();
+    for (const episode of allEpisodes) {
+      if (!seasonMap.has(episode.seasonNumber)) {
+        seasonMap.set(episode.seasonNumber, []);
+      }
+      seasonMap.get(episode.seasonNumber)!.push(episode);
+    }
+
+    const seasons = Array.from(seasonMap.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([seasonNum, episodes]) => ({
+        seasonNumber: seasonNum,
+        episodeCount: episodes.length,
+        airDate: episodes[0].airDate instanceof Date ? episodes[0].airDate.toISOString() : episodes[0].airDate,
         episodes: [] // Episodes will be loaded on demand
       }));
 
     res.json({
       tmdbId,
-      title: tvDetails.name,
-      numberOfSeasons: tvDetails.number_of_seasons,
-      numberOfEpisodes: tvDetails.number_of_episodes,
+      title: content.title,
+      numberOfSeasons: seasons.length,
+      numberOfEpisodes: allEpisodes.length,
       seasons
     });
   } catch (error) {

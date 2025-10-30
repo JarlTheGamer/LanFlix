@@ -593,19 +593,66 @@ export class LibraryService {
       const allContent = await Content.findAll();
 
       for (const content of allContent) {
-        if (!content.filePath) continue;
+        let shouldRemove = false;
+        let reason = '';
 
-        // Check if the folder still exists
-        const folderPath = path.dirname(content.filePath);
-        
-        try {
-          await fs.access(folderPath);
-          // Folder exists, add to set
-          existingFolders.add(folderPath);
-        } catch (error) {
-          // Folder doesn't exist, remove from database
-          logger.info(`Removing content ${content.id} (${content.title}) - folder no longer exists: ${folderPath}`);
+        // Remove content with no filePath (orphaned entries)
+        if (!content.filePath) {
+          shouldRemove = true;
+          reason = 'no file path';
+        } else {
+          // For movies, check if the file exists
+          // For series, check if the folder exists
+          try {
+            await fs.access(content.filePath);
+            // Path exists, keep it
+          } catch (error) {
+            // Path doesn't exist, remove from database
+            shouldRemove = true;
+            reason = `${content.type === 'movie' ? 'file' : 'folder'} no longer exists: ${content.filePath}`;
+          }
+        }
+
+        if (shouldRemove) {
+          logger.info(`Removing content ${content.id} (${content.title}) - ${reason}`);
+          
+          // Import models
+          const Watchlist = (await import('../models/Watchlist')).default;
+          const DownloadQueue = (await import('../models/DownloadQueue')).default;
+          const AutoDeleteSchedule = (await import('../models/AutoDeleteSchedule')).default;
+          
+          // Delete related records first to avoid foreign key constraint errors
+          if (content.type === 'series') {
+            // Delete episodes
+            await SeriesEpisode.destroy({ where: { contentId: content.id } });
+          }
+          
+          // Delete all related records
+          await WatchHistory.destroy({ where: { contentId: content.id } });
+          await Watchlist.destroy({ where: { contentId: content.id } });
+          await DownloadQueue.destroy({ where: { contentId: content.id } });
+          await AutoDeleteSchedule.destroy({ where: { contentId: content.id } });
+          
+          // Now delete the content
           await content.destroy();
+          stats.removed++;
+        }
+      }
+
+      // Also check episodes for series
+      const allEpisodes = await SeriesEpisode.findAll();
+
+      for (const episode of allEpisodes) {
+        // Skip episodes without filePath (metadata-only entries are OK)
+        if (!episode.filePath) continue;
+
+        try {
+          await fs.access(episode.filePath);
+          // File exists, keep it
+        } catch (error) {
+          // File doesn't exist, remove from database
+          logger.info(`Removing episode ${episode.id} (S${episode.seasonNumber}E${episode.episodeNumber}) - file no longer exists: ${episode.filePath}`);
+          await episode.destroy();
           stats.removed++;
         }
       }
@@ -685,9 +732,9 @@ export class LibraryService {
 
             if (existing) {
               // Update metadata if missing or file path changed
-              const needsUpdate = 
-                !existing.overview || 
-                !existing.posterPath || 
+              const needsUpdate =
+                !existing.overview ||
+                !existing.posterPath ||
                 !existing.backdropPath ||
                 existing.filePath !== filePath;
 
@@ -695,17 +742,19 @@ export class LibraryService {
 
               if (needsUpdate) {
                 logger.info(`Updating metadata for ${metadata.title} (id: ${existing.id})`);
+                // Cast to MovieMetadata since we're in the movies folder
+                const movieMetadata = metadata as any;
                 await existing.update({
                   title: metadata.title,
                   originalTitle: metadata.originalTitle,
                   overview: metadata.overview,
-                  releaseDate: new Date(metadata.releaseDate),
+                  releaseDate: new Date(movieMetadata.releaseDate),
                   posterPath: metadata.posterPath,
                   backdropPath: metadata.backdropPath,
                   voteAverage: metadata.voteAverage,
                   voteCount: metadata.voteCount,
                   genres: JSON.stringify(metadata.genres),
-                  runtime: metadata.runtime,
+                  runtime: movieMetadata.runtime,
                   status: metadata.status,
                   filePath
                 });
@@ -813,9 +862,9 @@ export class LibraryService {
             existingFolders.add(seriesFolder);
           } else {
             // Update metadata if missing
-            const needsUpdate = 
-              !content.overview || 
-              !content.posterPath || 
+            const needsUpdate =
+              !content.overview ||
+              !content.posterPath ||
               !content.backdropPath;
 
             if (needsUpdate) {
