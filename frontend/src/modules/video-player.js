@@ -5,6 +5,7 @@
 
 import apiClient from './api-client.js';
 import stateManager from './data.js';
+import Hls from 'https://cdn.jsdelivr.net/npm/hls.js@1.5.6/dist/hls.mjs';
 
 export class VideoPlayer {
   constructor(videoElement, profileId) {
@@ -14,6 +15,9 @@ export class VideoPlayer {
     this.episodeId = null;
     this.contentType = null;
     this.isTranscoding = false;
+    this.streamType = 'file';
+    this.hls = null;
+    this.activeSessionId = null;
 
     // Progress tracking
     this.progressInterval = null;
@@ -63,21 +67,26 @@ export class VideoPlayer {
     this.videoElement.setAttribute('muted', 'false');
     this.videoElement.removeAttribute('muted');
 
-    // Set video source
-    const streamUrl = apiClient.getStreamUrl(contentId, episodeId, this.profileId);
+    // Build stream URL (include start offset when resuming)
+    const streamUrl = apiClient.getStreamUrl(
+      contentId,
+      episodeId,
+      this.profileId,
+      startPosition > 0 ? startPosition : null
+    );
     console.log('Setting video source:', streamUrl);
 
-    // Test if the stream URL is accessible
+    let headResponse;
     try {
-      const testResponse = await fetch(streamUrl, { method: 'HEAD' });
-      console.log('Stream HEAD response status:', testResponse.status);
-      console.log('Stream HEAD response headers:', Object.fromEntries(testResponse.headers.entries()));
+      headResponse = await fetch(streamUrl, { method: 'HEAD' });
+      console.log('Stream HEAD response status:', headResponse.status);
+      console.log('Stream HEAD response headers:', Object.fromEntries(headResponse.headers.entries()));
 
-      if (!testResponse.ok) {
-        console.error('Stream URL returned error:', testResponse.status, testResponse.statusText);
+      if (!headResponse.ok) {
+        console.error('Stream URL returned error:', headResponse.status, headResponse.statusText);
         const errorText = await fetch(streamUrl).then(r => r.text());
         console.error('Error response:', errorText);
-        this.showNotification(`Stream error: ${testResponse.status} ${testResponse.statusText}`);
+        this.showNotification(`Stream error: ${headResponse.status} ${headResponse.statusText}`);
         return;
       }
     } catch (error) {
@@ -86,16 +95,44 @@ export class VideoPlayer {
       return;
     }
 
-    this.videoElement.src = streamUrl;
+    await this.detectTranscodingMode(headResponse.headers);
+
+    const streamType = headResponse.headers.get('X-Stream-Type') || 'file';
+    const sessionId = headResponse.headers.get('X-Transcode-Session');
+
+    if (streamType === 'hls') {
+      if (!sessionId) {
+        console.error('HLS stream requested but no session id returned');
+        this.showNotification('Streaming session could not be created');
+        return;
+      }
+
+      this.streamType = 'hls';
+      this.isTranscoding = true;
+      this.activeSessionId = sessionId;
+      this.startOffset = startPosition || 0;
+
+      try {
+        const manifestUrl = this.appendQueryParam(streamUrl, 'session', sessionId);
+        await this.loadHlsStream(manifestUrl);
+      } catch (error) {
+        console.error('Failed to initialize HLS stream:', error);
+        this.showNotification('Failed to start transcoded stream');
+        return;
+      }
+    } else {
+      this.streamType = 'file';
+      this.isTranscoding = false;
+      this.activeSessionId = null;
+      this.startOffset = 0;
+      this.destroyHls();
+      this.videoElement.src = streamUrl;
+      this.videoElement.load();
+    }
 
     // Load content metadata to get duration (async, non-blocking)
     this.loadContentMetadata().catch(err => {
       console.warn('Failed to load metadata:', err);
-    });
-
-    // Detect if transcoding is happening (async, non-blocking)
-    this.detectTranscodingMode().catch(err => {
-      console.warn('Failed to detect transcoding mode:', err);
     });
 
     // Force unmute after source is set (some browsers auto-mute)
@@ -118,20 +155,10 @@ export class VideoPlayer {
       console.warn('Failed to load subtitles:', err);
     });
 
-    // Wait for video to be ready before seeking
-    if (startPosition > 0) {
+    if (startPosition > 0 && this.streamType !== 'hls') {
       this.videoElement.addEventListener('loadedmetadata', () => {
-        if (this.isTranscoding) {
-          // For transcoded streams, reload at position
-          this.reloadStreamAtTime(startPosition);
-        } else {
-          // For direct play, use normal seeking
-          this.videoElement.currentTime = startPosition;
-        }
+        this.videoElement.currentTime = startPosition;
       }, { once: true });
-    } else {
-      // Starting from beginning - reset offset
-      this.startOffset = 0;
     }
 
     // Start playing once video is ready
@@ -160,24 +187,35 @@ export class VideoPlayer {
   /**
    * Detect if stream is being transcoded by checking response headers
    */
-  async detectTranscodingMode() {
+  async detectTranscodingMode(preloadedHeaders = null) {
     try {
-      const streamUrl = apiClient.getStreamUrl(this.contentId, this.episodeId, this.profileId);
-      const response = await fetch(streamUrl, { method: 'HEAD' });
+      let headers = preloadedHeaders;
 
-      // Check for transcoding headers
-      const transcodeMode = response.headers.get('X-Transcode-Mode');
-      const directPlay = response.headers.get('X-Direct-Play');
+      if (!headers) {
+        const streamUrl = apiClient.getStreamUrl(this.contentId, this.episodeId, this.profileId);
+        const response = await fetch(streamUrl, { method: 'HEAD' });
+        headers = response.headers;
+      }
 
-      this.isTranscoding = !!transcodeMode && !directPlay;
+      if (!headers) {
+        this.isTranscoding = false;
+        return;
+      }
+
+      const streamType = headers.get('X-Stream-Type');
+      const transcodeMode = headers.get('X-Transcode-Mode');
+      const directPlay = headers.get('X-Direct-Play');
+
+      this.isTranscoding = streamType === 'hls' || (!!transcodeMode && directPlay !== 'true');
 
       console.log('=== Transcoding Detection ===');
+      console.log('X-Stream-Type:', streamType);
       console.log('X-Transcode-Mode:', transcodeMode);
       console.log('X-Direct-Play:', directPlay);
       console.log('isTranscoding:', this.isTranscoding);
 
       if (this.isTranscoding) {
-        console.log('🎬 Transcoding mode detected:', transcodeMode);
+        console.log('🎬 Transcoding mode detected:', transcodeMode || 'hls');
         console.log('⚠️ Seeking will reload stream at new position');
       } else {
         console.log('▶️ Direct play mode - normal seeking enabled');
@@ -499,11 +537,11 @@ export class VideoPlayer {
     const targetTime = Math.max(0, Math.min(time, this.duration));
     console.log(`Seeking to ${targetTime}s (duration: ${this.duration}s, isTranscoding: ${this.isTranscoding})`);
 
-    if (this.isTranscoding) {
+    if (this.isTranscoding || this.streamType === 'hls') {
       // For transcoded streams, always reload at new position
       // This ensures proper seeking without buffering issues
       console.log('Using transcode seek (reload stream)');
-      this.reloadStreamAtTime(targetTime);
+      void this.reloadStreamAtTime(targetTime);
     } else {
       // For direct play, use normal seeking
       console.log('Using direct play seek');
@@ -514,49 +552,130 @@ export class VideoPlayer {
   /**
    * Reload stream at specific time (for transcoded streams)
    */
-  reloadStreamAtTime(time) {
-    console.log(`Reloading transcoded stream at ${time}s`);
+  async reloadStreamAtTime(time) {
+    console.log(`Reloading stream at ${time}s (current type: ${this.streamType})`);
     const wasPlaying = !this.videoElement.paused;
 
-    // Save current state
     this.videoElement.pause();
-
-    // Stop progress tracking during reload
     this.stopProgressTracking();
 
-    // Update start offset - this is where we are in the original video
-    this.startOffset = time;
-    console.log(`Set start offset to ${this.startOffset}s`);
-
-    // Reload stream with start parameter
     const streamUrl = apiClient.getStreamUrl(this.contentId, this.episodeId, this.profileId, time);
     console.log('New stream URL:', streamUrl);
 
-    // Load new source
-    this.videoElement.src = streamUrl;
-    this.videoElement.load();
-
-    // Resume playback when ready
-    const onCanPlay = () => {
-      console.log(`Stream reloaded - video element at ${this.videoElement.currentTime}s, actual position: ${this.currentTime}s`);
-      if (wasPlaying) {
-        this.play();
+    let headResponse;
+    try {
+      headResponse = await fetch(streamUrl, { method: 'HEAD' });
+      if (!headResponse.ok) {
+        throw new Error(`HEAD request failed with status ${headResponse.status}`);
       }
-      // Restart progress tracking
-      if (wasPlaying) {
+    } catch (error) {
+      console.error('Failed to start new streaming session for seek:', error);
+      this.showNotification('Failed to seek - unable to restart stream');
+      return;
+    }
+
+    await this.detectTranscodingMode(headResponse.headers);
+
+    const streamType = headResponse.headers.get('X-Stream-Type') || 'file';
+    const sessionId = headResponse.headers.get('X-Transcode-Session');
+    this.streamType = streamType;
+
+    if (streamType === 'hls') {
+      if (!sessionId) {
+        console.error('Missing session id for HLS reload');
+        this.showNotification('Failed to resume transcoded stream');
+        return;
+      }
+
+      this.activeSessionId = sessionId;
+      this.startOffset = time;
+
+      try {
+        const manifestUrl = this.appendQueryParam(streamUrl, 'session', sessionId);
+        await this.loadHlsStream(manifestUrl);
+      } catch (error) {
+        console.error('Failed to reload HLS stream:', error);
+        this.showNotification('Failed to reload stream');
+        return;
+      }
+    } else {
+      this.destroyHls();
+      this.activeSessionId = null;
+      this.startOffset = 0;
+      this.videoElement.src = streamUrl;
+      this.videoElement.load();
+      this.videoElement.addEventListener('loadedmetadata', () => {
+        this.videoElement.currentTime = time;
+      }, { once: true });
+    }
+
+    const resumePlayback = wasPlaying;
+    this.videoElement.addEventListener('canplay', () => {
+      if (resumePlayback) {
+        this.play();
         this.startProgressTracking();
       }
-    };
+    }, { once: true });
+  }
 
-    this.videoElement.addEventListener('canplay', onCanPlay, { once: true });
+  appendQueryParam(url, key, value) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+  }
 
-    // Fallback timeout in case canplay doesn't fire
-    setTimeout(() => {
-      if (wasPlaying && this.videoElement.paused) {
-        console.warn('Canplay timeout, forcing play');
-        this.play();
+  async loadHlsStream(manifestUrl) {
+    this.destroyHls();
+
+    if (Hls.isSupported()) {
+      this.hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        backBufferLength: 120
+      });
+
+      this.hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data) {
+          return;
+        }
+
+        if (data.fatal) {
+          console.error('Fatal HLS error:', data);
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              this.hls?.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              this.hls?.recoverMediaError();
+              break;
+            default:
+              this.showNotification('Streaming error - please try again');
+              this.destroyHls();
+              break;
+          }
+        }
+      });
+
+      this.hls.attachMedia(this.videoElement);
+      this.hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+        this.hls?.loadSource(manifestUrl);
+      });
+    } else if (this.videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+      this.videoElement.src = manifestUrl;
+      this.videoElement.load();
+    } else {
+      throw new Error('HLS is not supported in this browser');
+    }
+  }
+
+  destroyHls() {
+    if (this.hls) {
+      try {
+        this.hls.destroy();
+      } catch (error) {
+        console.warn('Failed to destroy HLS instance:', error);
       }
-    }, 3000);
+      this.hls = null;
+    }
   }
 
   /**
@@ -920,6 +1039,9 @@ export class VideoPlayer {
     this.stopProgressTracking();
     this.videoElement.pause();
     this.videoElement.src = '';
+    this.destroyHls();
+    this.activeSessionId = null;
+    this.streamType = 'file';
 
     if (this.controlsTimeout) {
       clearTimeout(this.controlsTimeout);

@@ -30,6 +30,8 @@ router.head('/:id', validatePathParam('id'), async (req: Request, res: Response,
   try {
     const id = parseInt(req.params.id, 10);
     const episodeId = req.query.episodeId ? parseInt(req.query.episodeId as string) : undefined;
+    const startTime = req.query.start ? parseFloat(req.query.start as string) : undefined;
+    const profileId = req.query.profileId ? parseInt(req.query.profileId as string) : undefined;
 
     let filePath: string | undefined;
 
@@ -51,6 +53,53 @@ router.head('/:id', validatePathParam('id'), async (req: Request, res: Response,
       return res.status(404).end();
     }
 
+    // Load user's transcoding preferences
+    let audioTranscodingEnabled = true;
+    let videoTranscodingEnabled = true;
+
+    if (profileId) {
+      try {
+        const settingKey = `streamingPreferences_${profileId}`;
+        const setting = await Settings.findOne({ where: { key: settingKey } });
+
+        if (setting) {
+          const prefs = JSON.parse(setting.value);
+          audioTranscodingEnabled = prefs.audioTranscoding !== false;
+          videoTranscodingEnabled = prefs.videoTranscoding !== false;
+        }
+      } catch (error) {
+        logger.warn('Failed to load transcoding preferences for HEAD request:', error);
+      }
+    }
+
+    const compatCheck = await mediaConverterService.checkCompatibility(filePath);
+    const shouldTranscodeAudio = compatCheck.transcodeAudio && audioTranscodingEnabled;
+    const shouldTranscodeVideo = compatCheck.transcodeVideo && videoTranscodingEnabled;
+
+    if (shouldTranscodeAudio || shouldTranscodeVideo) {
+      const transcodeMode = shouldTranscodeVideo ? 'video+audio' : 'audio-only';
+      const { sessionId } = mediaConverterService.createHlsSession(filePath, {
+        transcodeAudio: shouldTranscodeAudio,
+        transcodeVideo: shouldTranscodeVideo,
+        startTime,
+        mediaInfo: compatCheck.mediaInfo
+      });
+
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.apple.mpegurl',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Range',
+        'Access-Control-Expose-Headers': 'Content-Type, X-Stream-Type, X-Transcode-Mode, X-Transcode-Session, X-Direct-Play',
+        'Cache-Control': 'no-cache',
+        'X-Stream-Type': 'hls',
+        'X-Transcode-Mode': transcodeMode,
+        'X-Transcode-Session': sessionId,
+        'X-Direct-Play': 'false'
+      });
+      res.end();
+      return;
+    }
+
     const stat = fs.statSync(filePath);
     const ext = path.extname(filePath).toLowerCase();
     const contentTypeMap: { [key: string]: string } = {
@@ -69,8 +118,11 @@ router.head('/:id', validatePathParam('id'), async (req: Request, res: Response,
       'Content-Type': contentType,
       'Accept-Ranges': 'bytes',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Expose-Headers': 'Content-Length, Accept-Ranges',
-      'Cache-Control': 'public, max-age=3600'
+      'Access-Control-Expose-Headers': 'Content-Length, Accept-Ranges, X-Stream-Type, X-Transcode-Mode, X-Direct-Play',
+      'Cache-Control': 'public, max-age=3600',
+      'X-Stream-Type': 'file',
+      'X-Transcode-Mode': 'direct-play',
+      'X-Direct-Play': 'true'
     });
     res.end();
   } catch (error) {
@@ -89,6 +141,71 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
     const episodeId = req.query.episodeId ? parseInt(req.query.episodeId as string) : undefined;
     const startTime = req.query.start ? parseFloat(req.query.start as string) : undefined;
     const profileId = req.query.profileId ? parseInt(req.query.profileId as string) : undefined;
+    const sessionId = typeof req.query.session === 'string' ? req.query.session : undefined;
+    const segmentName = typeof req.query.segment === 'string' ? req.query.segment : undefined;
+
+    // Serve existing HLS session requests (manifest or segments)
+    if (sessionId) {
+      try {
+        if (segmentName) {
+          const segmentStream = await mediaConverterService.getHlsSegmentStream(sessionId, segmentName);
+          res.writeHead(200, {
+            'Content-Type': 'video/mp2t',
+            'Cache-Control': 'no-cache',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Expose-Headers': 'X-Stream-Type, X-Transcode-Session',
+            'X-Stream-Type': 'hls',
+            'X-Transcode-Session': sessionId
+          });
+
+          segmentStream.pipe(res);
+          segmentStream.on('error', (err) => {
+            logger.error(`HLS segment stream error for session ${sessionId}:`, err);
+            if (!res.headersSent) {
+              res.status(500).end();
+            } else {
+              res.end();
+            }
+          });
+          return;
+        }
+
+        const manifest = await mediaConverterService.getHlsManifest(sessionId);
+        const manifestMeta = mediaConverterService.getSessionMetadata(sessionId);
+        const lines = manifest.split(/\r?\n/).map((line) => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) {
+            return line;
+          }
+          const encodedSegment = encodeURIComponent(trimmed);
+          return `${req.baseUrl}/${id}?session=${sessionId}&segment=${encodedSegment}`;
+        });
+
+        res.writeHead(200, {
+          'Content-Type': 'application/vnd.apple.mpegurl',
+          'Cache-Control': 'no-cache',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Range',
+          'Access-Control-Expose-Headers': 'Content-Type, X-Stream-Type, X-Transcode-Mode, X-Transcode-Session, X-Direct-Play, X-Start-Offset',
+          'X-Stream-Type': 'hls',
+          'X-Transcode-Mode': manifestMeta.transcodeVideo ? 'video+audio' : 'audio-only',
+          'X-Transcode-Session': sessionId,
+          'X-Direct-Play': 'false',
+          'X-Start-Offset': manifestMeta.startTime.toString()
+        });
+
+        res.end(lines.join('\n'));
+        return;
+      } catch (error) {
+        logger.error(`Failed to serve HLS session ${sessionId}:`, error);
+        if (!res.headersSent) {
+          res.status(404).end();
+        } else {
+          res.end();
+        }
+        return;
+      }
+    }
 
     let filePath: string | undefined;
 
@@ -165,44 +282,52 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
       const transcodeMode = shouldTranscodeVideo ? 'video+audio' : 'audio-only';
       logger.info(`Transcoding ${transcodeMode} for content ${id} (audio codec: ${compatCheck.mediaInfo.audioCodec}, video codec: ${compatCheck.mediaInfo.videoCodec})`);
 
-      // For transcoded streams with seeking, use startTime parameter
-      const transcodeStream = mediaConverterService.createCPUTranscodeStream(filePath, {
+      const { sessionId: newSessionId } = mediaConverterService.createHlsSession(filePath, {
         transcodeAudio: shouldTranscodeAudio,
         transcodeVideo: shouldTranscodeVideo,
-        startTime: startTime
+        startTime,
+        mediaInfo: compatCheck.mediaInfo
       });
 
-      res.writeHead(200, {
-        'Content-Type': 'video/mp4',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Range',
-        'Access-Control-Expose-Headers': 'Content-Type',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'X-Transcode-Mode': transcodeMode,
-        'X-Direct-Play': 'false'
-      });
+      try {
+        const manifest = await mediaConverterService.getHlsManifest(newSessionId);
+        const lines = manifest.split(/\r?\n/).map((line) => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) {
+            return line;
+          }
+          const encodedSegment = encodeURIComponent(trimmed);
+          return `${req.baseUrl}/${id}?session=${newSessionId}&segment=${encodedSegment}`;
+        });
 
-      transcodeStream.pipe(res);
+        res.writeHead(200, {
+          'Content-Type': 'application/vnd.apple.mpegurl',
+          'Cache-Control': 'no-cache',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Range',
+          'Access-Control-Expose-Headers': 'Content-Type, X-Stream-Type, X-Transcode-Mode, X-Transcode-Session, X-Direct-Play, X-Start-Offset',
+          'X-Stream-Type': 'hls',
+          'X-Transcode-Mode': transcodeMode,
+          'X-Transcode-Session': newSessionId,
+          'X-Direct-Play': 'false',
+          'X-Start-Offset': (startTime || 0).toString()
+        });
 
-      req.on('close', () => {
-        logger.info('Client disconnected, destroying transcode stream');
-        transcodeStream.destroy();
-      });
+        res.end(lines.join('\n'));
+      } catch (error) {
+        logger.error('Failed to prepare HLS manifest:', error);
+        mediaConverterService.endSession(newSessionId);
 
-      transcodeStream.on('error', (err) => {
-        logger.error('Transcode stream error:', err);
-        if (!res.headersSent) {
-          res.status(500).end();
-        } else {
-          res.end();
-        }
-      });
+        const apiError: ApiError = new Error('Failed to prepare transcoding session');
+        apiError.statusCode = 500;
+        apiError.code = 'TRANSCODE_FAILED';
+        return next(apiError);
+      }
 
       return;
     }
 
-    // Direct play if audio is compatible
+    // Direct play if codecs are compatible
     logger.info(`Direct play for content ${id}`);
 
     const ext = path.extname(filePath).toLowerCase();
@@ -250,8 +375,10 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
         'Content-Type': contentType,
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Range',
-        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
+        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, X-Stream-Type, X-Transcode-Mode, X-Direct-Play',
         'Cache-Control': 'public, max-age=3600',
+        'X-Stream-Type': 'file',
+        'X-Transcode-Mode': 'direct-play',
         'X-Direct-Play': 'true'
       });
 
@@ -264,8 +391,10 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
         'Accept-Ranges': 'bytes',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Range',
-        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
+        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, X-Stream-Type, X-Transcode-Mode, X-Direct-Play',
         'Cache-Control': 'public, max-age=3600',
+        'X-Stream-Type': 'file',
+        'X-Transcode-Mode': 'direct-play',
         'X-Direct-Play': 'true'
       });
 
