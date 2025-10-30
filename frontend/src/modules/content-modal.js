@@ -472,16 +472,17 @@ export class ContentModal {
 
             const content = this.currentContent;
 
-            // Queue the series download (Sonarr/Radarr will handle episode selection)
-            await apiClient.queueDownload(
+            // Queue the episode download
+            await apiClient.queueEpisodeDownload(
                 content.tmdbId || content.id,
                 profileId,
-                'series',
                 content.title,
+                seasonNumber,
+                episodeNumber,
                 content.releaseDate ? new Date(content.releaseDate).getFullYear() : null
             );
 
-            alert(`"${content.title}" S${seasonNumber}E${episodeNumber} has been added to your download queue!\n\nNote: The entire series will be monitored. You can configure episode selection in Sonarr.`);
+            alert(`"${content.title}" S${seasonNumber}E${episodeNumber} has been added to your download queue!`);
         } catch (error) {
             console.error('Failed to queue episode download:', error);
             alert('Failed to add episode to download queue.');
@@ -501,16 +502,16 @@ export class ContentModal {
 
             const content = this.currentContent;
 
-            // Queue the series download
-            await apiClient.queueDownload(
+            // Queue the season download
+            await apiClient.queueSeasonDownload(
                 content.tmdbId || content.id,
                 profileId,
-                'series',
                 content.title,
+                seasonNumber,
                 content.releaseDate ? new Date(content.releaseDate).getFullYear() : null
             );
 
-            alert(`"${content.title}" Season ${seasonNumber} has been added to your download queue!\n\nNote: The entire series will be monitored. You can configure season selection in Sonarr.`);
+            alert(`"${content.title}" Season ${seasonNumber} has been added to your download queue!`);
         } catch (error) {
             console.error('Failed to queue season download:', error);
             alert('Failed to add season to download queue.');

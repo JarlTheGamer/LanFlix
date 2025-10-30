@@ -162,8 +162,8 @@ export class LibraryService {
             originalTitle: content.originalTitle,
             overview: content.overview,
             releaseDate: content.releaseDate instanceof Date ? content.releaseDate.toISOString() : content.releaseDate,
-            posterUrl: getPosterUrl(content.posterPath, content.id),
-            backdropUrl: getBackdropUrl(content.backdropPath, content.id),
+            posterUrl: getPosterUrl(content.posterPath, content.id, content.filePath),
+            backdropUrl: getBackdropUrl(content.backdropPath, content.id, content.filePath),
             voteAverage: content.voteAverage ? parseFloat(content.voteAverage.toString()) : undefined,
             voteCount: content.voteCount,
             genres: content.genres ? JSON.parse(content.genres) : [],
@@ -204,7 +204,7 @@ export class LibraryService {
               episodeNumber: ep.episodeNumber,
               title: ep.title,
               overview: ep.overview,
-              airDate: ep.airDate?.toISOString(),
+              airDate: ep.airDate ? (ep.airDate instanceof Date ? ep.airDate.toISOString() : ep.airDate) : undefined,
               stillPath: ep.stillPath,
               filePath: ep.filePath,
               watched: watchedEpisodes.has(ep.id)
@@ -257,8 +257,8 @@ export class LibraryService {
         originalTitle: content.originalTitle,
         overview: content.overview,
         releaseDate: content.releaseDate instanceof Date ? content.releaseDate.toISOString() : content.releaseDate,
-        posterUrl: getPosterUrl(content.posterPath, content.id),
-        backdropUrl: getBackdropUrl(content.backdropPath, content.id),
+        posterUrl: getPosterUrl(content.posterPath, content.id, content.filePath),
+        backdropUrl: getBackdropUrl(content.backdropPath, content.id, content.filePath),
         voteAverage: content.voteAverage ? parseFloat(content.voteAverage.toString()) : undefined,
         voteCount: content.voteCount,
         genres: content.genres ? JSON.parse(content.genres) : [],
@@ -299,7 +299,7 @@ export class LibraryService {
           episodeNumber: ep.episodeNumber,
           title: ep.title,
           overview: ep.overview,
-          airDate: ep.airDate?.toISOString(),
+          airDate: ep.airDate ? (ep.airDate instanceof Date ? ep.airDate.toISOString() : ep.airDate) : undefined,
           stillPath: ep.stillPath,
           filePath: ep.filePath,
           watched: watchedEpisodes.has(ep.id)
@@ -335,37 +335,25 @@ export class LibraryService {
         if (existing.filePath !== filePath) {
           await existing.update({ filePath });
         }
+
+        // Save metadata to media folder even if content exists
+        const mediaFolder = path.dirname(filePath);
+        try {
+          await this.metadataService.saveMetadataToMediaFolder(existing.id, mediaFolder);
+          logger.info(`Saved metadata to ${mediaFolder} for existing content`);
+        } catch (error) {
+          logger.warn(`Failed to save metadata to media folder for existing content ${existing.id}:`, error);
+        }
+
         return existing;
       }
 
       // Fetch metadata
       const metadata = await this.metadataService.getMetadata(tmdbId, type);
 
-      // Download images
-      let posterPath: string | undefined;
-      let backdropPath: string | undefined;
-
-      if (metadata.posterPath) {
-        try {
-          posterPath = await this.metadataService.downloadPosterImage(
-            metadata.posterPath,
-            tmdbId
-          );
-        } catch (error) {
-          logger.warn(`Failed to download poster for ${tmdbId}:`, error);
-        }
-      }
-
-      if (metadata.backdropPath) {
-        try {
-          backdropPath = await this.metadataService.downloadBackdropImage(
-            metadata.backdropPath,
-            tmdbId
-          );
-        } catch (error) {
-          logger.warn(`Failed to download backdrop for ${tmdbId}:`, error);
-        }
-      }
+      // Store poster and backdrop paths (images will be saved to media folder)
+      const posterPath = metadata.posterPath;
+      const backdropPath = metadata.backdropPath;
 
       // Create content entry
       const content = await Content.create({
@@ -391,11 +379,85 @@ export class LibraryService {
       const mediaFolder = path.dirname(filePath);
       await this.metadataService.saveMetadataToMediaFolder(content.id, mediaFolder);
 
+      // For series, fetch and store episode metadata
+      if (type === 'series') {
+        await this.fetchAndStoreEpisodeMetadata(content.id, tmdbId);
+      }
+
       logger.info(`Content added to library: ${content.id}`);
       return content;
     } catch (error) {
       logger.error(`Failed to add content to library (${type} ${tmdbId}):`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Fetch and store episode metadata for a series
+   */
+  async fetchAndStoreEpisodeMetadata(contentId: number, tmdbId: number): Promise<void> {
+    try {
+      logger.info(`Fetching episode metadata for series ${tmdbId}`);
+
+      // Import tmdbClient to avoid circular dependency
+      const { tmdbClient } = await import('../clients');
+
+      // Get TV details to know how many seasons
+      const tvDetails = await tmdbClient.getTVDetails(tmdbId);
+
+      // Fetch all seasons
+      for (const season of tvDetails.seasons) {
+        // Skip season 0 (specials)
+        if (season.season_number === 0) continue;
+
+        try {
+          const seasonDetails = await tmdbClient.getSeasonDetails(tmdbId, season.season_number);
+
+          // Store each episode
+          for (const episode of seasonDetails.episodes) {
+            // Check if episode already exists
+            const existing = await SeriesEpisode.findOne({
+              where: {
+                contentId,
+                seasonNumber: episode.season_number,
+                episodeNumber: episode.episode_number
+              }
+            });
+
+            if (!existing) {
+              await SeriesEpisode.create({
+                contentId,
+                seasonNumber: episode.season_number,
+                episodeNumber: episode.episode_number,
+                title: episode.name,
+                overview: episode.overview,
+                airDate: episode.air_date ? new Date(episode.air_date) : undefined,
+                stillPath: episode.still_path || undefined
+              });
+            } else {
+              // Update metadata if episode exists but metadata is missing
+              await existing.update({
+                title: episode.name,
+                overview: episode.overview,
+                airDate: episode.air_date ? new Date(episode.air_date) : undefined,
+                stillPath: episode.still_path || undefined
+              });
+            }
+          }
+
+          logger.info(`Stored metadata for Season ${season.season_number} (${seasonDetails.episodes.length} episodes)`);
+
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (error) {
+          logger.error(`Failed to fetch season ${season.season_number} for series ${tmdbId}:`, error);
+        }
+      }
+
+      logger.info(`Episode metadata stored for series ${tmdbId}`);
+    } catch (error) {
+      logger.error(`Failed to fetch episode metadata for series ${tmdbId}:`, error);
+      // Don't throw - allow content to be added even if episode metadata fails
     }
   }
 
@@ -456,16 +518,19 @@ export class LibraryService {
   /**
    * Scan library folder for new media files
    */
-  async scanLibraryFolder(): Promise<{ added: number; updated: number; errors: string[] }> {
+  async scanLibraryFolder(): Promise<{ added: number; updated: number; removed: number; errors: string[] }> {
     try {
       logger.info('Starting library scan');
 
       const mediaRoot = config.media.rootPath;
-      const stats = { added: 0, updated: 0, errors: [] as string[] };
+      const stats = { added: 0, updated: 0, removed: 0, errors: [] as string[] };
 
       // Try multiple possible folder names (case-insensitive)
       const moviesFolderNames = ['movies', 'Movies', 'MOVIES'];
       const seriesFolderNames = ['series', 'Series', 'SERIES', 'shows', 'Shows', 'SHOWS'];
+
+      // Track existing content folders
+      const existingFolders = new Set<string>();
 
       // Scan movies folder
       let moviesScanned = false;
@@ -473,7 +538,7 @@ export class LibraryService {
         const moviesPath = path.join(mediaRoot, folderName);
         try {
           await fs.access(moviesPath);
-          await this.scanMoviesFolder(moviesPath, stats);
+          await this.scanMoviesFolder(moviesPath, stats, existingFolders);
           moviesScanned = true;
           break;
         } catch (error) {
@@ -492,7 +557,7 @@ export class LibraryService {
         const seriesPath = path.join(mediaRoot, folderName);
         try {
           await fs.access(seriesPath);
-          await this.scanSeriesFolder(seriesPath, stats);
+          await this.scanSeriesFolder(seriesPath, stats, existingFolders);
           seriesScanned = true;
           break;
         } catch (error) {
@@ -505,6 +570,9 @@ export class LibraryService {
         logger.warn('No series folder found in media root');
       }
 
+      // Remove content from database if folder no longer exists
+      await this.cleanupMissingContent(existingFolders, stats);
+
       logger.info('Library scan completed', stats);
       return stats;
     } catch (error) {
@@ -514,11 +582,45 @@ export class LibraryService {
   }
 
   /**
+   * Remove content from database if the folder no longer exists
+   */
+  private async cleanupMissingContent(
+    existingFolders: Set<string>,
+    stats: { removed: number }
+  ): Promise<void> {
+    try {
+      // Get all content from database
+      const allContent = await Content.findAll();
+
+      for (const content of allContent) {
+        if (!content.filePath) continue;
+
+        // Check if the folder still exists
+        const folderPath = path.dirname(content.filePath);
+        
+        try {
+          await fs.access(folderPath);
+          // Folder exists, add to set
+          existingFolders.add(folderPath);
+        } catch (error) {
+          // Folder doesn't exist, remove from database
+          logger.info(`Removing content ${content.id} (${content.title}) - folder no longer exists: ${folderPath}`);
+          await content.destroy();
+          stats.removed++;
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to cleanup missing content:', error);
+    }
+  }
+
+  /**
    * Scan movies folder
    */
   private async scanMoviesFolder(
     moviesPath: string,
-    stats: { added: number; updated: number; errors: string[] }
+    stats: { added: number; updated: number; errors: string[] },
+    existingFolders: Set<string>
   ): Promise<void> {
     try {
       const entries = await fs.readdir(moviesPath, { withFileTypes: true });
@@ -582,19 +684,82 @@ export class LibraryService {
             });
 
             if (existing) {
-              // Update file path if changed
-              if (existing.filePath !== filePath) {
-                await existing.update({ filePath });
+              // Update metadata if missing or file path changed
+              const needsUpdate = 
+                !existing.overview || 
+                !existing.posterPath || 
+                !existing.backdropPath ||
+                existing.filePath !== filePath;
+
+              logger.debug(`Checking if ${metadata.title} needs update: overview=${!!existing.overview}, posterPath=${!!existing.posterPath}, backdropPath=${!!existing.backdropPath}, filePathMatch=${existing.filePath === filePath}`);
+
+              if (needsUpdate) {
+                logger.info(`Updating metadata for ${metadata.title} (id: ${existing.id})`);
+                await existing.update({
+                  title: metadata.title,
+                  originalTitle: metadata.originalTitle,
+                  overview: metadata.overview,
+                  releaseDate: new Date(metadata.releaseDate),
+                  posterPath: metadata.posterPath,
+                  backdropPath: metadata.backdropPath,
+                  voteAverage: metadata.voteAverage,
+                  voteCount: metadata.voteCount,
+                  genres: JSON.stringify(metadata.genres),
+                  runtime: metadata.runtime,
+                  status: metadata.status,
+                  filePath
+                });
                 stats.updated++;
+                logger.info(`Successfully updated metadata for ${metadata.title}`);
               }
+              // Track this folder as existing
+              existingFolders.add(movieFolder);
             } else {
               // Add to library
               await this.addToLibrary(metadata.tmdbId, 'movie', filePath);
               stats.added++;
+              // Track this folder as existing
+              existingFolders.add(movieFolder);
             }
           } else {
-            logger.warn(`No metadata found for movie in ${movieFolder}`);
-            stats.errors.push(`No metadata: ${entry.name}`);
+            // Try to search for metadata using folder name
+            logger.info(`No metadata file found for ${entry.name}, attempting to fetch from TMDB`);
+
+            try {
+              // Parse movie title and year from folder name
+              const match = entry.name.match(/^(.+?)\s*\((\d{4})\)/);
+              if (match) {
+                const [, title, year] = match;
+
+                // Import tmdbClient
+                const { tmdbClient } = await import('../clients');
+
+                // Search for movie
+                const searchResults = await tmdbClient.searchMovie(title);
+                const movieMatch = searchResults.results.find(m =>
+                  m.release_date && m.release_date.startsWith(year)
+                );
+
+                if (movieMatch) {
+                  logger.info(`Found TMDB match for ${title} (${year}): ${movieMatch.id}`);
+
+                  // Add to library (this will fetch and save metadata)
+                  await this.addToLibrary(movieMatch.id, 'movie', filePath);
+                  stats.added++;
+                  // Track this folder as existing
+                  existingFolders.add(movieFolder);
+                } else {
+                  logger.warn(`No TMDB match found for ${title} (${year})`);
+                  stats.errors.push(`No TMDB match: ${entry.name}`);
+                }
+              } else {
+                logger.warn(`Could not parse movie title and year from folder name: ${entry.name}`);
+                stats.errors.push(`Invalid folder name format: ${entry.name}`);
+              }
+            } catch (error) {
+              logger.error(`Failed to fetch metadata for ${entry.name}:`, error);
+              stats.errors.push(`Failed to fetch metadata: ${entry.name}`);
+            }
           }
         } catch (error) {
           logger.warn(`Failed to process movie folder ${entry.name}:`, error);
@@ -614,7 +779,8 @@ export class LibraryService {
    */
   private async scanSeriesFolder(
     seriesPath: string,
-    stats: { added: number; updated: number; errors: string[] }
+    stats: { added: number; updated: number; errors: string[] },
+    existingFolders: Set<string>
   ): Promise<void> {
     try {
       const entries = await fs.readdir(seriesPath, { withFileTypes: true });
@@ -643,6 +809,44 @@ export class LibraryService {
             // Add series to library (without specific file path for now)
             content = await this.addToLibrary(metadata.tmdbId, 'series', seriesFolder);
             stats.added++;
+            // Track this folder as existing
+            existingFolders.add(seriesFolder);
+          } else {
+            // Update metadata if missing
+            const needsUpdate = 
+              !content.overview || 
+              !content.posterPath || 
+              !content.backdropPath;
+
+            if (needsUpdate) {
+              const seriesMetadata = metadata as any;
+              await content.update({
+                title: metadata.title,
+                originalTitle: metadata.originalTitle,
+                overview: metadata.overview,
+                releaseDate: new Date(seriesMetadata.firstAirDate),
+                posterPath: metadata.posterPath,
+                backdropPath: metadata.backdropPath,
+                voteAverage: metadata.voteAverage,
+                voteCount: metadata.voteCount,
+                genres: JSON.stringify(metadata.genres),
+                status: metadata.status
+              });
+              stats.updated++;
+              logger.info(`Updated metadata for ${metadata.title}`);
+            }
+
+            // Track this folder as existing
+            existingFolders.add(seriesFolder);
+            // Check if episode metadata exists, if not fetch it
+            const episodeCount = await SeriesEpisode.count({
+              where: { contentId: content.id }
+            });
+
+            if (episodeCount === 0) {
+              logger.info(`No episode metadata found for series ${content.id}, fetching from TMDB`);
+              await this.fetchAndStoreEpisodeMetadata(content.id, metadata.tmdbId);
+            }
           }
 
           // Scan season folders for episodes
@@ -691,13 +895,35 @@ export class LibraryService {
                   stats.updated++;
                 }
               } else {
-                // Create episode entry
-                await SeriesEpisode.create({
-                  contentId: content.id,
-                  seasonNumber,
-                  episodeNumber,
-                  filePath
-                });
+                // Create episode entry with file path
+                // Try to fetch metadata from TMDB if not already stored
+                const { tmdbClient } = await import('../clients');
+                try {
+                  const seasonDetails = await tmdbClient.getSeasonDetails(metadata.tmdbId, seasonNumber);
+                  const episodeData = seasonDetails.episodes.find(
+                    (ep: any) => ep.episode_number === episodeNumber
+                  );
+
+                  await SeriesEpisode.create({
+                    contentId: content.id,
+                    seasonNumber,
+                    episodeNumber,
+                    title: episodeData?.name,
+                    overview: episodeData?.overview,
+                    airDate: episodeData?.air_date ? new Date(episodeData.air_date) : undefined,
+                    stillPath: episodeData?.still_path || undefined,
+                    filePath
+                  });
+                } catch (error) {
+                  // If metadata fetch fails, create episode with just file path
+                  logger.warn(`Failed to fetch metadata for S${seasonNumber}E${episodeNumber}:`, error);
+                  await SeriesEpisode.create({
+                    contentId: content.id,
+                    seasonNumber,
+                    episodeNumber,
+                    filePath
+                  });
+                }
                 stats.added++;
               }
             }

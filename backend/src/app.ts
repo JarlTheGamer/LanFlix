@@ -21,6 +21,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/images/posters', express.static(config.media.posterCachePath));
 app.use('/images/backdrops', express.static(config.media.backdropCachePath));
 
+// Serve media files (posters, backdrops, metadata) directly from media folders
+app.use('/media', express.static(config.media.rootPath));
+
 // Inject API status into all responses
 app.use(injectApiStatus);
 

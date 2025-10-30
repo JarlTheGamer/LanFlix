@@ -150,7 +150,7 @@ export class SonarrClient {
   updateConfig(baseURL?: string, apiKey?: string): void {
     if (baseURL) this.baseURL = baseURL;
     if (apiKey) this.apiKey = apiKey;
-    
+
     // Reinitialize the client with new config
     this.client = axios.create({
       baseURL: this.baseURL,
@@ -173,7 +173,7 @@ export class SonarrClient {
         throw error;
       }
     );
-    
+
     logger.info('Sonarr configuration updated');
   }
 
@@ -334,6 +334,83 @@ export class SonarrClient {
       return response.data;
     } catch (error) {
       logger.error('Failed to get quality profiles from Sonarr', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Get episodes for a series
+   */
+  async getEpisodes(seriesId: number): Promise<Array<{
+    id: number;
+    seriesId: number;
+    seasonNumber: number;
+    episodeNumber: number;
+    title: string;
+    monitored: boolean;
+    hasFile: boolean;
+  }>> {
+    try {
+      const response = await this.client.get('/api/v3/episode', {
+        params: { seriesId }
+      });
+      return response.data;
+    } catch (error) {
+      logger.error('Failed to get episodes from Sonarr', { seriesId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Update episode monitoring status
+   */
+  async updateEpisode(episodeId: number, updates: { monitored: boolean }): Promise<void> {
+    try {
+      // First get the episode
+      const episode = await this.client.get(`/api/v3/episode/${episodeId}`);
+
+      // Update with new values
+      await this.client.put(`/api/v3/episode/${episodeId}`, {
+        ...episode.data,
+        ...updates
+      });
+
+      logger.info('Episode updated in Sonarr', { episodeId, updates });
+    } catch (error) {
+      logger.error('Failed to update episode in Sonarr', { episodeId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Search for a specific episode
+   */
+  async searchEpisode(episodeId: number): Promise<void> {
+    try {
+      await this.client.post('/api/v3/command', {
+        name: 'EpisodeSearch',
+        episodeIds: [episodeId]
+      });
+      logger.info('Episode search triggered in Sonarr', { episodeId });
+    } catch (error) {
+      logger.error('Failed to trigger episode search in Sonarr', { episodeId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Search for all episodes in a season
+   */
+  async searchSeason(seriesId: number, seasonNumber: number): Promise<void> {
+    try {
+      await this.client.post('/api/v3/command', {
+        name: 'SeasonSearch',
+        seriesId,
+        seasonNumber
+      });
+      logger.info('Season search triggered in Sonarr', { seriesId, seasonNumber });
+    } catch (error) {
+      logger.error('Failed to trigger season search in Sonarr', { seriesId, seasonNumber, error });
       throw error;
     }
   }

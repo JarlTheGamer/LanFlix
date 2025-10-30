@@ -13,6 +13,23 @@ interface QueueDownloadOptions {
   profileId: number;
 }
 
+interface QueueEpisodeDownloadOptions {
+  tmdbId: number;
+  title: string;
+  seasonNumber: number;
+  episodeNumber: number;
+  year?: number;
+  profileId: number;
+}
+
+interface QueueSeasonDownloadOptions {
+  tmdbId: number;
+  title: string;
+  seasonNumber: number;
+  year?: number;
+  profileId: number;
+}
+
 interface DownloadStatus {
   id: number;
   contentId: number;
@@ -179,6 +196,180 @@ export class DownloadManager {
       return queueEntry;
     } catch (error) {
       logger.error('Failed to queue download:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Queue a specific episode download via Sonarr
+   */
+  async queueEpisodeDownload(options: QueueEpisodeDownloadOptions): Promise<DownloadQueue> {
+    try {
+      logger.info(`Queueing episode download: ${options.title} S${options.seasonNumber}E${options.episodeNumber}`);
+
+      // Check if content already exists in library
+      let content = await Content.findOne({
+        where: { tmdbId: options.tmdbId, type: 'series' }
+      });
+
+      let contentId: number;
+
+      if (!content) {
+        // Create placeholder content entry
+        content = await Content.create({
+          tmdbId: options.tmdbId,
+          type: 'series',
+          title: options.title,
+          releaseDate: options.year ? new Date(options.year, 0, 1) : undefined
+        });
+      }
+      contentId = content.id;
+
+      // Get root folder and quality profile
+      const [rootFolders, qualityProfiles] = await Promise.all([
+        this.sonarrClient.getRootFolders(),
+        this.sonarrClient.getQualityProfiles()
+      ]);
+
+      if (rootFolders.length === 0 || qualityProfiles.length === 0) {
+        throw new Error('Sonarr is not properly configured');
+      }
+
+      // Search for series to get TVDB ID
+      const searchResults = await this.sonarrClient.searchSeries(options.title);
+      const match = searchResults.find(s => s.title === options.title);
+
+      if (!match) {
+        throw new Error(`Series not found in Sonarr: ${options.title}`);
+      }
+
+      // Add series to Sonarr with monitoring for specific episode only
+      const series = await this.sonarrClient.addSeries({
+        tvdbId: match.tvdbId,
+        title: options.title,
+        qualityProfileId: qualityProfiles[0].id,
+        rootFolderPath: rootFolders[0].path,
+        searchForMissingEpisodes: false, // Don't search for all episodes
+        seasonFolder: true
+      });
+
+      // Get the episode ID from Sonarr
+      const episodes = await this.sonarrClient.getEpisodes(series.id);
+      const targetEpisode = episodes.find(
+        ep => ep.seasonNumber === options.seasonNumber && ep.episodeNumber === options.episodeNumber
+      );
+
+      if (!targetEpisode) {
+        throw new Error(`Episode S${options.seasonNumber}E${options.episodeNumber} not found in Sonarr`);
+      }
+
+      // Monitor only this episode
+      await this.sonarrClient.updateEpisode(targetEpisode.id, { monitored: true });
+
+      // Trigger search for this specific episode
+      await this.sonarrClient.searchEpisode(targetEpisode.id);
+
+      // Create download queue entry
+      const queueEntry = await DownloadQueue.create({
+        profileId: options.profileId,
+        contentId,
+        type: 'series',
+        externalId: series.id,
+        status: 'queued',
+        progressPercent: 0
+      });
+
+      logger.info(`Episode download queued: ${queueEntry.id}`);
+      return queueEntry;
+    } catch (error) {
+      logger.error('Failed to queue episode download:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Queue an entire season download via Sonarr
+   */
+  async queueSeasonDownload(options: QueueSeasonDownloadOptions): Promise<DownloadQueue> {
+    try {
+      logger.info(`Queueing season download: ${options.title} Season ${options.seasonNumber}`);
+
+      // Check if content already exists in library
+      let content = await Content.findOne({
+        where: { tmdbId: options.tmdbId, type: 'series' }
+      });
+
+      let contentId: number;
+
+      if (!content) {
+        // Create placeholder content entry
+        content = await Content.create({
+          tmdbId: options.tmdbId,
+          type: 'series',
+          title: options.title,
+          releaseDate: options.year ? new Date(options.year, 0, 1) : undefined
+        });
+      }
+      contentId = content.id;
+
+      // Get root folder and quality profile
+      const [rootFolders, qualityProfiles] = await Promise.all([
+        this.sonarrClient.getRootFolders(),
+        this.sonarrClient.getQualityProfiles()
+      ]);
+
+      if (rootFolders.length === 0 || qualityProfiles.length === 0) {
+        throw new Error('Sonarr is not properly configured');
+      }
+
+      // Search for series to get TVDB ID
+      const searchResults = await this.sonarrClient.searchSeries(options.title);
+      const match = searchResults.find(s => s.title === options.title);
+
+      if (!match) {
+        throw new Error(`Series not found in Sonarr: ${options.title}`);
+      }
+
+      // Add series to Sonarr with monitoring for specific season only
+      const series = await this.sonarrClient.addSeries({
+        tvdbId: match.tvdbId,
+        title: options.title,
+        qualityProfileId: qualityProfiles[0].id,
+        rootFolderPath: rootFolders[0].path,
+        searchForMissingEpisodes: false, // Don't search for all episodes
+        seasonFolder: true
+      });
+
+      // Get all episodes for this season
+      const episodes = await this.sonarrClient.getEpisodes(series.id);
+      const seasonEpisodes = episodes.filter(ep => ep.seasonNumber === options.seasonNumber);
+
+      if (seasonEpisodes.length === 0) {
+        throw new Error(`Season ${options.seasonNumber} not found in Sonarr`);
+      }
+
+      // Monitor all episodes in this season
+      for (const episode of seasonEpisodes) {
+        await this.sonarrClient.updateEpisode(episode.id, { monitored: true });
+      }
+
+      // Trigger search for the season
+      await this.sonarrClient.searchSeason(series.id, options.seasonNumber);
+
+      // Create download queue entry
+      const queueEntry = await DownloadQueue.create({
+        profileId: options.profileId,
+        contentId,
+        type: 'series',
+        externalId: series.id,
+        status: 'queued',
+        progressPercent: 0
+      });
+
+      logger.info(`Season download queued: ${queueEntry.id}`);
+      return queueEntry;
+    } catch (error) {
+      logger.error('Failed to queue season download:', error);
       throw error;
     }
   }

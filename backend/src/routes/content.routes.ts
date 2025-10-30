@@ -110,21 +110,68 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
 /**
  * GET /api/content/:id/episodes
  * Get episodes for a TV series (with progressive loading)
+ * Also stores episode metadata in database for offline access
  */
 router.get('/:id/episodes', validatePathParam('id'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tmdbId = parseInt(req.params.id, 10);
     const seasonNumber = req.query.season ? parseInt(req.query.season as string) : null;
 
-    // Import tmdbClient here to avoid circular dependency
+    // Import dependencies
     const { tmdbClient } = await import('../clients');
+    const Content = (await import('../models/Content')).default;
+    const SeriesEpisode = (await import('../models/SeriesEpisode')).default;
 
     // Get TV details first to know how many seasons
     const tvDetails = await tmdbClient.getTVDetails(tmdbId);
 
+    // Check if series exists in library
+    const content = await Content.findOne({
+      where: { tmdbId, type: 'series' }
+    });
+
     // If specific season requested, return only that season
     if (seasonNumber !== null) {
       try {
+        // First check if we have episodes in database
+        if (content) {
+          const dbEpisodes = await SeriesEpisode.findAll({
+            where: {
+              contentId: content.id,
+              seasonNumber
+            },
+            order: [['episodeNumber', 'ASC']]
+          });
+
+          // If we have episodes with metadata in DB, use them
+          if (dbEpisodes.length > 0 && dbEpisodes[0].title) {
+            const seasonData = {
+              seasonNumber,
+              episodeCount: dbEpisodes.length,
+              airDate: dbEpisodes[0].airDate?.toISOString(),
+              episodes: dbEpisodes.map(ep => ({
+                id: ep.id,
+                seasonNumber: ep.seasonNumber,
+                episodeNumber: ep.episodeNumber,
+                title: ep.title,
+                overview: ep.overview,
+                airDate: ep.airDate?.toISOString(),
+                stillPath: ep.stillPath ? `https://image.tmdb.org/t/p/w300${ep.stillPath}` : null,
+                runtime: null
+              }))
+            };
+
+            return res.json({
+              tmdbId,
+              title: tvDetails.name,
+              numberOfSeasons: tvDetails.number_of_seasons,
+              numberOfEpisodes: tvDetails.number_of_episodes,
+              season: seasonData
+            });
+          }
+        }
+
+        // Fetch from TMDB if not in database
         const seasonDetails = await tmdbClient.getSeasonDetails(tmdbId, seasonNumber);
         const seasonData = {
           seasonNumber: seasonDetails.season_number,
@@ -141,6 +188,39 @@ router.get('/:id/episodes', validatePathParam('id'), async (req: Request, res: R
             runtime: ep.runtime
           }))
         };
+
+        // Store episodes in database if content exists in library
+        if (content) {
+          for (const ep of seasonDetails.episodes) {
+            const existing = await SeriesEpisode.findOne({
+              where: {
+                contentId: content.id,
+                seasonNumber: ep.season_number,
+                episodeNumber: ep.episode_number
+              }
+            });
+
+            if (!existing) {
+              await SeriesEpisode.create({
+                contentId: content.id,
+                seasonNumber: ep.season_number,
+                episodeNumber: ep.episode_number,
+                title: ep.name,
+                overview: ep.overview,
+                airDate: ep.air_date ? new Date(ep.air_date) : undefined,
+                stillPath: ep.still_path || undefined
+              });
+            } else if (!existing.title) {
+              // Update metadata if episode exists but metadata is missing
+              await existing.update({
+                title: ep.name,
+                overview: ep.overview,
+                airDate: ep.air_date ? new Date(ep.air_date) : undefined,
+                stillPath: ep.still_path || undefined
+              });
+            }
+          }
+        }
 
         return res.json({
           tmdbId,
@@ -207,6 +287,69 @@ router.post(
 
       res.status(201).json({
         message: 'Content added to download queue',
+        queueItem
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/content/:id/queue/episode
+ * Add specific episode to download queue
+ */
+router.post(
+  '/:id/queue/episode',
+  validatePathParam('id'),
+  validateBody(['profileId', 'title', 'seasonNumber', 'episodeNumber']),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tmdbId = parseInt(req.params.id, 10);
+      const { profileId, title, seasonNumber, episodeNumber, year } = req.body;
+
+      const queueItem = await downloadManager.queueEpisodeDownload({
+        tmdbId,
+        title,
+        seasonNumber,
+        episodeNumber,
+        year,
+        profileId
+      });
+
+      res.status(201).json({
+        message: `Episode S${seasonNumber}E${episodeNumber} added to download queue`,
+        queueItem
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/content/:id/queue/season
+ * Add entire season to download queue
+ */
+router.post(
+  '/:id/queue/season',
+  validatePathParam('id'),
+  validateBody(['profileId', 'title', 'seasonNumber']),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tmdbId = parseInt(req.params.id, 10);
+      const { profileId, title, seasonNumber, year } = req.body;
+
+      const queueItem = await downloadManager.queueSeasonDownload({
+        tmdbId,
+        title,
+        seasonNumber,
+        year,
+        profileId
+      });
+
+      res.status(201).json({
+        message: `Season ${seasonNumber} added to download queue`,
         queueItem
       });
     } catch (error) {

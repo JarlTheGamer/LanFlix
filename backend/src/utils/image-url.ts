@@ -3,13 +3,14 @@ import path from 'path';
 import fs from 'fs';
 
 /**
- * Generate local image URL for cached images
+ * Generate local image URL for images stored in media folders
  * Falls back to TMDB URL if local image doesn't exist
  */
 export function getImageUrl(
   imagePath: string | null | undefined,
   type: 'poster' | 'backdrop',
-  contentId?: number
+  contentId?: number,
+  filePath?: string | null
 ): string | undefined {
   if (!imagePath) return undefined;
 
@@ -18,15 +19,36 @@ export function getImageUrl(
     return imagePath;
   }
 
-  // Check if local cached image exists
+  // Get the backend URL (for absolute URLs when frontend is on different port)
+  const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+
+  // First, try to serve from the media folder (where the movie/series is stored)
+  if (filePath) {
+    const mediaFolder = path.dirname(filePath);
+    const localImagePath = path.join(mediaFolder, `${type}.jpg`);
+
+    if (fs.existsSync(localImagePath)) {
+      // Return URL to serve from media folder
+      // Convert to relative path from media root and normalize for URLs
+      const absoluteMediaRoot = path.resolve(config.media.rootPath);
+      const absoluteImagePath = path.resolve(localImagePath);
+      const relativePath = path.relative(absoluteMediaRoot, absoluteImagePath);
+
+      // Convert Windows backslashes to forward slashes for URLs
+      const urlPath = relativePath.split(path.sep).join('/');
+
+      return `${backendUrl}/media/${urlPath}`;
+    }
+  }
+
+  // Fall back to cached images
   if (contentId) {
     const cacheDir = type === 'poster' ? config.media.posterCachePath : config.media.backdropCachePath;
     const fileName = `${contentId}-${type}.jpg`;
     const localPath = path.join(cacheDir, fileName);
 
     if (fs.existsSync(localPath)) {
-      // Return local URL
-      return `/images/${type}s/${fileName}`;
+      return `${backendUrl}/images/${type}s/${fileName}`;
     }
   }
 
@@ -38,13 +60,13 @@ export function getImageUrl(
 /**
  * Get poster URL
  */
-export function getPosterUrl(posterPath: string | null | undefined, contentId?: number): string | undefined {
-  return getImageUrl(posterPath, 'poster', contentId);
+export function getPosterUrl(posterPath: string | null | undefined, contentId?: number, filePath?: string | null): string | undefined {
+  return getImageUrl(posterPath, 'poster', contentId, filePath);
 }
 
 /**
  * Get backdrop URL
  */
-export function getBackdropUrl(backdropPath: string | null | undefined, contentId?: number): string | undefined {
-  return getImageUrl(backdropPath, 'backdrop', contentId);
+export function getBackdropUrl(backdropPath: string | null | undefined, contentId?: number, filePath?: string | null): string | undefined {
+  return getImageUrl(backdropPath, 'backdrop', contentId, filePath);
 }

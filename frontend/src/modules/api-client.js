@@ -274,6 +274,28 @@ class ApiClient {
     });
   }
 
+  /**
+   * POST /api/content/:id/queue/episode
+   * Add specific episode to download queue
+   */
+  async queueEpisodeDownload(tmdbId, profileId, title, seasonNumber, episodeNumber, year = null) {
+    return this.request(`/content/${tmdbId}/queue/episode`, {
+      method: 'POST',
+      body: JSON.stringify({ profileId, title, seasonNumber, episodeNumber, year })
+    });
+  }
+
+  /**
+   * POST /api/content/:id/queue/season
+   * Add entire season to download queue
+   */
+  async queueSeasonDownload(tmdbId, profileId, title, seasonNumber, year = null) {
+    return this.request(`/content/${tmdbId}/queue/season`, {
+      method: 'POST',
+      body: JSON.stringify({ profileId, title, seasonNumber, year })
+    });
+  }
+
   // ==================== LIBRARY ENDPOINTS ====================
 
   /**

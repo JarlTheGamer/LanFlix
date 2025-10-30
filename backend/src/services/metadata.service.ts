@@ -353,6 +353,28 @@ export class MetadataService {
       ? this.fetchMovieMetadata(tmdbId)
       : this.fetchSeriesMetadata(tmdbId);
   }
+
+  /**
+   * Fetch season details with episodes from TMDB
+   */
+  async fetchSeasonDetails(tmdbId: number, seasonNumber: number): Promise<any> {
+    const cacheKey = cacheManager.generateKey('metadata', 'season', tmdbId, seasonNumber);
+
+    return cacheManager.get(
+      cacheKey,
+      async () => {
+        logger.info(`Fetching season ${seasonNumber} details from TMDB: ${tmdbId}`);
+
+        const seasonDetails = await this.tmdbClient.getSeasonDetails(tmdbId, seasonNumber).catch((error) => {
+          logger.error(`TMDB API unavailable for season ${seasonNumber} of series ${tmdbId}:`, error.message);
+          throw new Error('TMDB API unavailable - cannot fetch season details');
+        });
+
+        return seasonDetails;
+      },
+      { ttl: 7 * 24 * 60 * 60 * 1000 } // Cache for 7 days
+    );
+  }
 }
 
 export default new MetadataService();
