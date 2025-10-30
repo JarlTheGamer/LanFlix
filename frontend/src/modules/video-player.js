@@ -45,9 +45,23 @@ export class VideoPlayer {
     this.contentType = contentType;
     this.episodeId = episodeId;
     
+    // Ensure audio is enabled - CRITICAL: Set these BEFORE setting src
+    this.videoElement.muted = false;
+    this.videoElement.volume = 1.0;
+    
+    // Set video attributes for audio playback
+    this.videoElement.setAttribute('muted', 'false');
+    this.videoElement.removeAttribute('muted');
+    
     // Set video source
     const streamUrl = apiClient.getStreamUrl(contentId, episodeId);
     this.videoElement.src = streamUrl;
+    
+    // Force unmute after source is set (some browsers auto-mute)
+    this.videoElement.addEventListener('loadedmetadata', () => {
+      this.videoElement.muted = false;
+      this.videoElement.volume = 1.0;
+    }, { once: true });
     
     // Load subtitles
     await this.loadSubtitles();

@@ -53,6 +53,19 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
     const fileSize = stat.size;
     const range = req.headers.range;
 
+    // Detect content type based on file extension
+    const ext = path.extname(filePath).toLowerCase();
+    const contentTypeMap: { [key: string]: string } = {
+      '.mp4': 'video/mp4',
+      '.mkv': 'video/x-matroska',
+      '.webm': 'video/webm',
+      '.avi': 'video/x-msvideo',
+      '.mov': 'video/quicktime',
+      '.m4v': 'video/x-m4v',
+      '.ts': 'video/mp2t'
+    };
+    const contentType = contentTypeMap[ext] || 'video/mp4';
+
     if (range) {
       // Handle range request for seeking
       const parts = range.replace(/bytes=/, '').split('-');
@@ -66,7 +79,8 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
-        'Content-Type': 'video/mp4'
+        'Content-Type': contentType,
+        'Cache-Control': 'no-cache'
       });
 
       fileStream.pipe(res);
@@ -74,8 +88,9 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
       // Stream entire file
       res.writeHead(200, {
         'Content-Length': fileSize,
-        'Content-Type': 'video/mp4',
-        'Accept-Ranges': 'bytes'
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-cache'
       });
 
       const fileStream = fs.createReadStream(filePath);
