@@ -21,14 +21,14 @@ export class SettingsManager {
     // Load settings and profiles from backend
     await this.loadSettings();
     await this.loadProfiles();
-    
+
     this.setupNavigation();
     this.initializeCustomSelects();
     this.setupToggles();
     this.setupModals();
     this.setupProfiles();
     this.updateFocus();
-    
+
     document.addEventListener('keydown', (e) => this.handleKeyboard(e));
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.custom-select-wrapper')) {
@@ -80,9 +80,38 @@ export class SettingsManager {
         }
       }
     });
-    
+
     // Load streaming preferences for current profile
     this.loadStreamingPreferences();
+
+    // Trigger custom select updates for transcoding settings
+    this.updateCustomSelectDisplays();
+  }
+
+  /**
+   * Update custom select displays after loading settings
+   */
+  updateCustomSelectDisplays() {
+    document.querySelectorAll('.custom-select-wrapper').forEach(wrapper => {
+      const nativeSelect = wrapper._nativeSelect;
+      if (nativeSelect) {
+        const trigger = wrapper.querySelector('.custom-select-trigger');
+        const selectedText = trigger?.querySelector('.custom-select-text');
+        if (selectedText) {
+          selectedText.textContent = nativeSelect.options[nativeSelect.selectedIndex]?.text || 'Select...';
+        }
+
+        // Update selected option in dropdown
+        const dropdown = wrapper.querySelector('.custom-select-dropdown');
+        dropdown?.querySelectorAll('.custom-select-option').forEach((opt, index) => {
+          if (index === nativeSelect.selectedIndex) {
+            opt.classList.add('selected');
+          } else {
+            opt.classList.remove('selected');
+          }
+        });
+      }
+    });
   }
 
   /**
@@ -91,29 +120,56 @@ export class SettingsManager {
   async loadStreamingPreferences() {
     try {
       const profileId = stateManager.currentProfileId;
-      if (!profileId) return;
+      if (!profileId) {
+        console.log('No profile selected, using default transcoding settings');
+        return;
+      }
 
       const response = await apiClient.getSettings();
       const settingKey = `streamingPreferences_${profileId}`;
-      
+
       if (response.settings && response.settings[settingKey]) {
-        const prefs = JSON.parse(response.settings[settingKey]);
-        
+        const prefs = typeof response.settings[settingKey] === 'string'
+          ? JSON.parse(response.settings[settingKey])
+          : response.settings[settingKey];
+
+        console.log('Loaded streaming preferences:', prefs);
+
         // Apply to UI
         const transcodingMode = document.getElementById('transcoding-mode');
-        if (transcodingMode) transcodingMode.value = prefs.transcodingMode || 'direct-play';
-        
+        if (transcodingMode) {
+          transcodingMode.value = prefs.transcodingMode || 'direct-play';
+          this.settings['transcoding-mode'] = transcodingMode.value;
+        }
+
         const hwAccel = document.getElementById('use-hardware-accel');
-        if (hwAccel) hwAccel.checked = prefs.useHardwareAccel !== false;
-        
+        if (hwAccel) {
+          hwAccel.checked = prefs.useHardwareAccel !== false;
+          this.settings['use-hardware-accel'] = hwAccel.checked;
+        }
+
         const preset = document.getElementById('transcode-preset');
-        if (preset) preset.value = prefs.preset || 'p4';
-        
+        if (preset) {
+          preset.value = prefs.preset || 'p4';
+          this.settings['transcode-preset'] = preset.value;
+        }
+
         const audioTranscoding = document.getElementById('audio-transcoding');
-        if (audioTranscoding) audioTranscoding.checked = prefs.audioTranscoding !== false;
-        
+        if (audioTranscoding) {
+          audioTranscoding.checked = prefs.audioTranscoding !== false;
+          this.settings['audio-transcoding'] = audioTranscoding.checked;
+        }
+
         const videoTranscoding = document.getElementById('video-transcoding');
-        if (videoTranscoding) videoTranscoding.checked = prefs.videoTranscoding !== false;
+        if (videoTranscoding) {
+          videoTranscoding.checked = prefs.videoTranscoding !== false;
+          this.settings['video-transcoding'] = videoTranscoding.checked;
+        }
+
+        // Update custom select displays
+        this.updateCustomSelectDisplays();
+      } else {
+        console.log('No saved streaming preferences found for profile', profileId);
       }
     } catch (error) {
       console.error('Failed to load streaming preferences:', error);
@@ -299,12 +355,12 @@ export class SettingsManager {
 
     const settingKey = nativeSelect.id;
     const settingValue = nativeSelect.value;
-    
+
     console.log(`${settingKey} changed to:`, settingValue);
-    
+
     // Update local settings
     this.settings[settingKey] = settingValue;
-    
+
     // Save to backend
     await this.saveSettings();
 
@@ -327,23 +383,23 @@ export class SettingsManager {
       toggle.addEventListener('change', async (e) => {
         const settingKey = e.target.id;
         const settingValue = e.target.checked;
-        
+
         console.log(`Toggle ${settingKey} changed to:`, settingValue);
-        
+
         // Handle streaming transcode toggles specially
-        if (settingKey === 'audio-transcoding' || settingKey === 'video-transcoding' || 
-            settingKey === 'use-hardware-accel') {
+        if (settingKey === 'audio-transcoding' || settingKey === 'video-transcoding' ||
+          settingKey === 'use-hardware-accel') {
           await this.saveStreamingPreferences();
         } else {
           // Update local settings
           this.settings[settingKey] = settingValue;
-          
+
           // Save to backend
           await this.saveSettings();
         }
       });
     });
-    
+
     // Handle transcoding mode and preset select changes
     const transcodingModeSelect = document.getElementById('transcoding-mode');
     if (transcodingModeSelect) {
@@ -351,7 +407,7 @@ export class SettingsManager {
         await this.saveStreamingPreferences();
       });
     }
-    
+
     const presetSelect = document.getElementById('transcode-preset');
     if (presetSelect) {
       presetSelect.addEventListener('change', async () => {
@@ -367,7 +423,8 @@ export class SettingsManager {
     try {
       const profileId = stateManager.currentProfileId;
       if (!profileId) {
-        console.error('No profile selected');
+        console.error('No profile selected, cannot save streaming preferences');
+        alert('Please select a profile first');
         return;
       }
 
@@ -385,12 +442,58 @@ export class SettingsManager {
         preset
       };
 
+      console.log('Saving streaming preferences for profile', profileId, ':', streamingPreferences);
+
       await apiClient.updateStreamingPreferences(profileId, streamingPreferences);
-      console.log('Streaming preferences saved successfully');
+
+      // Update local settings cache
+      this.settings['transcoding-mode'] = transcodingMode;
+      this.settings['audio-transcoding'] = audioTranscoding;
+      this.settings['video-transcoding'] = videoTranscoding;
+      this.settings['use-hardware-accel'] = useHardwareAccel;
+      this.settings['transcode-preset'] = preset;
+
+      console.log('✅ Streaming preferences saved successfully');
+      this.showSaveNotification('Transcoding settings saved!');
     } catch (error) {
       console.error('Failed to save streaming preferences:', error);
       alert('Failed to save streaming preferences. Please try again.');
     }
+  }
+
+  /**
+   * Show save notification
+   */
+  showSaveNotification(message) {
+    let notification = document.getElementById('settings-save-notification');
+
+    if (!notification) {
+      notification = document.createElement('div');
+      notification.id = 'settings-save-notification';
+      notification.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: #4caf50;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 10000;
+        font-size: 14px;
+        font-weight: 500;
+        opacity: 0;
+        transition: opacity 0.3s;
+      `;
+      document.body.appendChild(notification);
+    }
+
+    notification.textContent = message;
+    notification.style.opacity = '1';
+
+    setTimeout(() => {
+      notification.style.opacity = '0';
+    }, 2000);
   }
 
   setupModals() {
@@ -400,7 +503,7 @@ export class SettingsManager {
     document.getElementById('save-profile')?.addEventListener('click', async () => {
       const name = document.getElementById('profile-name').value;
       const profileId = this.currentProfileCard?.dataset.profileId;
-      
+
       if (!name || !profileId || !this.selectedColor) {
         alert('Please fill in all fields');
         return;
@@ -416,7 +519,7 @@ export class SettingsManager {
 
     document.getElementById('create-profile')?.addEventListener('click', async () => {
       const name = document.getElementById('new-profile-name').value;
-      
+
       if (!name || !this.selectedColor) {
         alert('Please fill in all fields');
         return;
@@ -553,11 +656,11 @@ export class SettingsManager {
 
     const elements = [];
     const settingsItems = section.querySelectorAll('.settings-item');
-    
+
     settingsItems.forEach((item) => {
       const wrapper = item.querySelector('.custom-select-wrapper');
       const toggle = item.querySelector('.settings-toggle');
-      
+
       if (wrapper) {
         elements.push(wrapper);
       } else if (toggle) {
@@ -736,7 +839,7 @@ export class SettingsManager {
 
       if (this.focusedArea === 'content' && interactiveElements[this.focusedContentIndex]) {
         interactiveElements[this.focusedContentIndex].classList.add('focused');
-        
+
         const parentGroup = interactiveElements[this.focusedContentIndex].closest('.settings-group');
         if (parentGroup) {
           parentGroup.style.zIndex = '100';

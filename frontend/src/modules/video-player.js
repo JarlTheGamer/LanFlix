@@ -27,6 +27,9 @@ export class VideoPlayer {
     this.volume = 1.0;
     this.isMuted = false;
     this.isFullscreen = false;
+    
+    // Transcoding offset - tracks where we started in the original video
+    this.startOffset = 0;
 
     // Subtitles
     this.availableSubtitles = [];
@@ -126,6 +129,9 @@ export class VideoPlayer {
           this.videoElement.currentTime = startPosition;
         }
       }, { once: true });
+    } else {
+      // Starting from beginning - reset offset
+      this.startOffset = 0;
     }
 
     // Start playing once video is ready
@@ -164,6 +170,11 @@ export class VideoPlayer {
       const directPlay = response.headers.get('X-Direct-Play');
 
       this.isTranscoding = !!transcodeMode && !directPlay;
+
+      console.log('=== Transcoding Detection ===');
+      console.log('X-Transcode-Mode:', transcodeMode);
+      console.log('X-Direct-Play:', directPlay);
+      console.log('isTranscoding:', this.isTranscoding);
 
       if (this.isTranscoding) {
         console.log('🎬 Transcoding mode detected:', transcodeMode);
@@ -221,7 +232,15 @@ export class VideoPlayer {
     });
 
     this.videoElement.addEventListener('timeupdate', () => {
-      this.currentTime = this.videoElement.currentTime;
+      // For transcoded streams, add the start offset to get actual position
+      const rawTime = this.videoElement.currentTime;
+      this.currentTime = rawTime + this.startOffset;
+      
+      // Debug log every 5 seconds
+      if (Math.floor(this.currentTime) % 5 === 0 && Math.floor(rawTime) !== Math.floor(rawTime - 0.1)) {
+        console.log(`Time: ${this.currentTime.toFixed(1)}s (raw: ${rawTime.toFixed(1)}s + offset: ${this.startOffset}s)`);
+      }
+      
       this.updateProgressBar();
     });
 
@@ -478,13 +497,16 @@ export class VideoPlayer {
    */
   seek(time) {
     const targetTime = Math.max(0, Math.min(time, this.duration));
+    console.log(`Seeking to ${targetTime}s (duration: ${this.duration}s, isTranscoding: ${this.isTranscoding})`);
 
     if (this.isTranscoding) {
       // For transcoded streams, always reload at new position
       // This ensures proper seeking without buffering issues
+      console.log('Using transcode seek (reload stream)');
       this.reloadStreamAtTime(targetTime);
     } else {
       // For direct play, use normal seeking
+      console.log('Using direct play seek');
       this.videoElement.currentTime = targetTime;
     }
   }
@@ -502,6 +524,10 @@ export class VideoPlayer {
     // Stop progress tracking during reload
     this.stopProgressTracking();
 
+    // Update start offset - this is where we are in the original video
+    this.startOffset = time;
+    console.log(`Set start offset to ${this.startOffset}s`);
+
     // Reload stream with start parameter
     const streamUrl = apiClient.getStreamUrl(this.contentId, this.episodeId, this.profileId, time);
     console.log('New stream URL:', streamUrl);
@@ -512,7 +538,7 @@ export class VideoPlayer {
 
     // Resume playback when ready
     const onCanPlay = () => {
-      console.log('Stream reloaded and ready at', this.videoElement.currentTime);
+      console.log(`Stream reloaded - video element at ${this.videoElement.currentTime}s, actual position: ${this.currentTime}s`);
       if (wasPlaying) {
         this.play();
       }

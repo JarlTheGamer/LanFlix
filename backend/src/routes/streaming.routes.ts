@@ -81,13 +81,13 @@ router.head('/:id', validatePathParam('id'), async (req: Request, res: Response,
 /**
  * GET /api/stream/:id
  * Stream media file with HTTP range request support
- * Direct play only - no transcoding
+ * Supports both direct play and transcoding with seeking
  */
 router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = parseInt(req.params.id, 10);
     const episodeId = req.query.episodeId ? parseInt(req.query.episodeId as string) : undefined;
-    const forceTranscode = req.query.transcode === 'true';
+    const startTime = req.query.start ? parseFloat(req.query.start as string) : undefined;
     const profileId = req.query.profileId ? parseInt(req.query.profileId as string) : undefined;
 
     let filePath: string | undefined;
@@ -133,30 +133,53 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
       return next(error);
     }
 
-    // Check if audio needs transcoding
+    // Load user's transcoding preferences
+    let audioTranscodingEnabled = true;
+    let videoTranscodingEnabled = true;
+
+    if (profileId) {
+      try {
+        const settingKey = `streamingPreferences_${profileId}`;
+        const setting = await Settings.findOne({ where: { key: settingKey } });
+
+        if (setting) {
+          const prefs = JSON.parse(setting.value);
+          audioTranscodingEnabled = prefs.audioTranscoding !== false;
+          videoTranscodingEnabled = prefs.videoTranscoding !== false;
+          logger.info(`Profile ${profileId} transcoding preferences: audio=${audioTranscodingEnabled}, video=${videoTranscodingEnabled}`);
+        }
+      } catch (error) {
+        logger.warn('Failed to load transcoding preferences, using defaults:', error);
+      }
+    }
+
+    // Check if audio/video needs transcoding
     const compatCheck = await mediaConverterService.checkCompatibility(filePath);
     const range = req.headers.range;
 
-    // Only transcode audio if needed, always copy video
-    const needsAudioTranscode = compatCheck.transcodeAudio;
+    // Determine if we should transcode based on compatibility AND user preferences
+    const shouldTranscodeAudio = compatCheck.transcodeAudio && audioTranscodingEnabled;
+    const shouldTranscodeVideo = compatCheck.transcodeVideo && videoTranscodingEnabled;
 
-    if (needsAudioTranscode) {
-      logger.info(`Transcoding audio only for content ${id} (audio codec: ${compatCheck.mediaInfo.audioCodec})`);
+    if (shouldTranscodeAudio || shouldTranscodeVideo) {
+      const transcodeMode = shouldTranscodeVideo ? 'video+audio' : 'audio-only';
+      logger.info(`Transcoding ${transcodeMode} for content ${id} (audio codec: ${compatCheck.mediaInfo.audioCodec}, video codec: ${compatCheck.mediaInfo.videoCodec})`);
 
-      // Create transcode stream with audio transcoding only
+      // For transcoded streams with seeking, use startTime parameter
       const transcodeStream = mediaConverterService.createCPUTranscodeStream(filePath, {
-        transcodeAudio: true,
-        transcodeVideo: false,
-        startTime: undefined
+        transcodeAudio: shouldTranscodeAudio,
+        transcodeVideo: shouldTranscodeVideo,
+        startTime: startTime
       });
 
       res.writeHead(200, {
         'Content-Type': 'video/mp4',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Range',
+        'Access-Control-Expose-Headers': 'Content-Type',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
-        'X-Transcode-Mode': 'audio-only',
+        'X-Transcode-Mode': transcodeMode,
         'X-Direct-Play': 'false'
       });
 
