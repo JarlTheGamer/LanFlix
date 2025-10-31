@@ -1091,40 +1091,52 @@ export class VideoPlayer {
    * Setup Cast API
    */
   setupCastAPI() {
-    const castContext = cast.framework.CastContext.getInstance();
-    
-    castContext.setOptions({
-      receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
-      autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
-    });
-
-    // Show cast button
-    const castBtn = document.querySelector('.cast-btn');
-    if (castBtn) {
-      castBtn.style.display = 'flex';
+    // Check if cast API is available
+    if (!window.cast || !window.chrome || !window.chrome.cast) {
+      console.warn('Cast API not available');
+      return;
     }
 
-    // Listen for cast state changes
-    castContext.addEventListener(
-      cast.framework.CastContextEventType.CAST_STATE_CHANGED,
-      (event) => {
-        this.handleCastStateChange(event.castState);
-      }
-    );
+    try {
+      const castContext = cast.framework.CastContext.getInstance();
+      
+      castContext.setOptions({
+        receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+        autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+      });
 
-    // Listen for session state changes
-    castContext.addEventListener(
-      cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
-      (event) => {
-        this.handleSessionStateChange(event.sessionState);
+      // Show cast button
+      const castBtn = document.querySelector('.cast-btn');
+      if (castBtn) {
+        castBtn.style.display = 'flex';
       }
-    );
+
+      // Listen for cast state changes
+      castContext.addEventListener(
+        cast.framework.CastContextEventType.CAST_STATE_CHANGED,
+        (event) => {
+          this.handleCastStateChange(event.castState);
+        }
+      );
+
+      // Listen for session state changes
+      castContext.addEventListener(
+        cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+        (event) => {
+          this.handleSessionStateChange(event.sessionState);
+        }
+      );
+    } catch (error) {
+      console.warn('Failed to initialize Cast API:', error);
+    }
   }
 
   /**
    * Handle cast state changes
    */
   handleCastStateChange(castState) {
+    if (!window.cast) return;
+    
     const castBtn = document.querySelector('.cast-btn');
     
     switch (castState) {
@@ -1144,17 +1156,23 @@ export class VideoPlayer {
    * Handle session state changes
    */
   handleSessionStateChange(sessionState) {
-    const castContext = cast.framework.CastContext.getInstance();
+    if (!window.cast) return;
     
-    switch (sessionState) {
-      case cast.framework.SessionState.SESSION_STARTED:
-        this.castSession = castContext.getCurrentSession();
-        this.loadMediaToCast();
-        break;
-      case cast.framework.SessionState.SESSION_ENDED:
-        this.castSession = null;
-        this.isCasting = false;
-        break;
+    try {
+      const castContext = cast.framework.CastContext.getInstance();
+      
+      switch (sessionState) {
+        case cast.framework.SessionState.SESSION_STARTED:
+          this.castSession = castContext.getCurrentSession();
+          this.loadMediaToCast();
+          break;
+        case cast.framework.SessionState.SESSION_ENDED:
+          this.castSession = null;
+          this.isCasting = false;
+          break;
+      }
+    } catch (error) {
+      console.warn('Error handling session state change:', error);
     }
   }
 
@@ -1162,22 +1180,32 @@ export class VideoPlayer {
    * Initiate casting
    */
   initiateCast() {
-    const castContext = cast.framework.CastContext.getInstance();
+    if (!window.cast) {
+      this.showNotification('Cast not available');
+      return;
+    }
     
-    if (this.isCasting) {
-      // Stop casting
-      castContext.endCurrentSession(true);
-    } else {
-      // Start casting
-      castContext.requestSession().then(
-        () => {
-          console.log('Cast session started');
-        },
-        (error) => {
-          console.error('Error starting cast session:', error);
-          this.showNotification('Failed to connect to Cast device');
-        }
-      );
+    try {
+      const castContext = cast.framework.CastContext.getInstance();
+      
+      if (this.isCasting) {
+        // Stop casting
+        castContext.endCurrentSession(true);
+      } else {
+        // Start casting
+        castContext.requestSession().then(
+          () => {
+            console.log('Cast session started');
+          },
+          (error) => {
+            console.error('Error starting cast session:', error);
+            this.showNotification('Failed to connect to Cast device');
+          }
+        );
+      }
+    } catch (error) {
+      console.warn('Error initiating cast:', error);
+      this.showNotification('Cast not available');
     }
   }
 
@@ -1185,47 +1213,52 @@ export class VideoPlayer {
    * Load media to cast device
    */
   loadMediaToCast() {
-    if (!this.castSession) return;
+    if (!this.castSession || !window.cast || !window.chrome) return;
 
-    const streamUrl = apiClient.getStreamUrl(this.contentId, this.episodeId, this.profileId);
-    const currentTime = this.currentTime;
+    try {
+      const streamUrl = apiClient.getStreamUrl(this.contentId, this.episodeId, this.profileId);
+      const currentTime = this.currentTime;
 
-    const mediaInfo = new chrome.cast.media.MediaInfo(streamUrl, 'video/mp4');
-    mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
-    mediaInfo.metadata.title = document.title || 'Video';
-    
-    const request = new chrome.cast.media.LoadRequest(mediaInfo);
-    request.currentTime = currentTime;
-    request.autoplay = true;
+      const mediaInfo = new chrome.cast.media.MediaInfo(streamUrl, 'video/mp4');
+      mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
+      mediaInfo.metadata.title = document.title || 'Video';
+      
+      const request = new chrome.cast.media.LoadRequest(mediaInfo);
+      request.currentTime = currentTime;
+      request.autoplay = true;
 
-    this.castSession.loadMedia(request).then(
-      () => {
-        console.log('Media loaded to cast device');
-        this.showNotification('Now playing on Cast device');
-        
-        // Pause local video
-        this.videoElement.pause();
-        
-        // Get remote player
-        const remotePlayerController = new cast.framework.RemotePlayerController(
-          new cast.framework.RemotePlayer()
-        );
-        
-        // Sync progress
-        remotePlayerController.addEventListener(
-          cast.framework.RemotePlayerEventType.CURRENT_TIME_CHANGED,
-          () => {
-            const remotePlayer = remotePlayerController.getRemotePlayer();
-            this.currentTime = remotePlayer.currentTime + this.startOffset;
-            this.updateProgressBar();
-          }
-        );
-      },
-      (error) => {
-        console.error('Error loading media to cast:', error);
-        this.showNotification('Failed to load media on Cast device');
-      }
-    );
+      this.castSession.loadMedia(request).then(
+        () => {
+          console.log('Media loaded to cast device');
+          this.showNotification('Now playing on Cast device');
+          
+          // Pause local video
+          this.videoElement.pause();
+          
+          // Get remote player
+          const remotePlayerController = new cast.framework.RemotePlayerController(
+            new cast.framework.RemotePlayer()
+          );
+          
+          // Sync progress
+          remotePlayerController.addEventListener(
+            cast.framework.RemotePlayerEventType.CURRENT_TIME_CHANGED,
+            () => {
+              const remotePlayer = remotePlayerController.getRemotePlayer();
+              this.currentTime = remotePlayer.currentTime + this.startOffset;
+              this.updateProgressBar();
+            }
+          );
+        },
+        (error) => {
+          console.error('Error loading media to cast:', error);
+          this.showNotification('Failed to load media on Cast device');
+        }
+      );
+    } catch (error) {
+      console.warn('Error loading media to cast:', error);
+      this.showNotification('Failed to load media on Cast device');
+    }
   }
 
   /**
@@ -1241,9 +1274,13 @@ export class VideoPlayer {
     }
 
     // End cast session if active
-    if (this.isCasting) {
-      const castContext = cast.framework.CastContext.getInstance();
-      castContext.endCurrentSession(true);
+    if (this.isCasting && window.cast) {
+      try {
+        const castContext = cast.framework.CastContext.getInstance();
+        castContext.endCurrentSession(true);
+      } catch (error) {
+        console.warn('Error ending cast session:', error);
+      }
     }
   }
 }

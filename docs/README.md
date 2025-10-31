@@ -84,5 +84,5 @@ Welcome to the comprehensive Lanflix documentation. This wiki contains everythin
 
 This documentation is maintained alongside the codebase and follows GitHub wiki conventions. Each document is written in Markdown and organized into logical folders for easy navigation.
 
-**Last Updated**: October 30, 2025  
-**Version**: 1.0.0
+**Last Updated**: October 3.1, 2025  
+**Version**: 0.4.0
