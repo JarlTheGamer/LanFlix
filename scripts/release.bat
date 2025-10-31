@@ -281,12 +281,12 @@ if "!MANUAL_UPLOAD!"=="1" (
 
 echo.
 echo ========================================
-echo   Release Complete! 🎉
+echo   Release Complete!
 echo ========================================
 echo.
-echo Version: v%VERSION%
-echo APK: %APK_DEST%
-echo Release: https://github.com/JarlTheGamer/Applications./releases/tag/v%VERSION%
+echo Version: v!VERSION!
+echo APK: !APK_DEST!
+echo Release: https://github.com/JarlTheGamer/Applications./releases/tag/v!VERSION!
 echo.
 echo Users can now update via the in-app updater!
 echo.
