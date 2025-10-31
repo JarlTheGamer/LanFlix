@@ -349,7 +349,7 @@ redis-cli INFO memory
 
 ### Progressive Transcoding (YouTube-Style)
 - Video now transcodes continuously ahead of playback (not just 10 seconds)
-- Buffered content shown as **grey bar** in progress indicator
+- Buffered content shown as **blue bar** in progress indicator
 - Current playback shown as **red bar**
 - Controls only hide when mouse leaves player area (not after 3 seconds)
 - More intuitive and less distracting control behavior
