@@ -112,7 +112,7 @@ Users can control transcoding behavior in Settings → Playback:
 5. **Encoding Preset**
    - P1-P7 (NVENC) or ultrafast-veryslow (CPU)
    - Balances speed vs quality
-   - P4/medium recommended
+   - P7 (maximum quality) is now the default for near-lossless transcoding
 
 ## Implementation Details
 

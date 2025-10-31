@@ -143,6 +143,7 @@ main {
   color: rgba(255, 236, 225, 0.86);
 }
 
+.notifications-btn,
 .settings-btn {
   width: 36px;
   height: 36px;
@@ -155,8 +156,14 @@ main {
   transition: all var(--transition);
   outline: 0px solid rgba(255, 255, 255, 0);
   outline-offset: 4px;
+  position: relative;
 }
 
+.notifications-btn {
+  margin-right: 8px;
+}
+
+.notifications-btn svg,
 .settings-btn svg {
   width: 18px;
   height: 18px;
@@ -164,6 +171,9 @@ main {
   transition: fill var(--transition);
 }
 
+.notifications-btn:hover,
+.notifications-btn:focus-visible,
+.notifications-btn.focused,
 .settings-btn:hover,
 .settings-btn:focus-visible,
 .settings-btn.focused {
@@ -171,10 +181,35 @@ main {
   transform: translateY(-1px);
 }
 
+.notifications-btn:hover svg,
+.notifications-btn:focus-visible svg,
+.notifications-btn.focused svg,
 .settings-btn:hover svg,
 .settings-btn:focus-visible svg,
 .settings-btn.focused svg {
   fill: rgba(0, 0, 0, 0.8);
+}
+
+.notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  background: var(--accent);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: white;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  box-shadow: 0 2px 8px rgba(229, 9, 20, 0.5);
+}
+
+.notification-badge.active {
+  display: flex;
 }
 
 .menu {

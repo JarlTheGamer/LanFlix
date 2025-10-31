@@ -3,6 +3,7 @@ import { ContentDisplay } from '../modules/content-display.js';
 import { Navigation } from '../modules/navigation.js';
 import searchModule from '../modules/search.js';
 import stateManager from '../modules/data.js';
+import { notificationBadge } from '../modules/notification-badge.js';
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
@@ -44,6 +45,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         searchModule.open();
       });
     }
+
+    // Initialize notification badge
+    notificationBadge.init();
 
   } catch (error) {
     console.error('Failed to initialize application:', error);

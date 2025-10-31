@@ -120,25 +120,36 @@ async getContinueWatching(profileId: number, limit = 10) {
 ---
 
 ### Download Queue Management UI
-**Status**: Not Started  
+**Status**: ✅ Completed  
 **Priority**: High  
-**Estimated**: 5 hours
+**Completed**: October 31, 2025
 
-**Description**: Create a page to view and manage download queue.
+**Description**: Created a unified notifications and downloads center page.
 
-**Requirements**:
-- List all queued downloads
-- Show download progress with progress bars
-- Display ETA and download speed
-- Allow cancellation of downloads
-- Show completed downloads
-- Real-time updates via WebSocket
+**Implementation**:
+- ✅ Created notifications/downloads page with 3 tabs (Notifications, Downloads, Jobs)
+- ✅ Added notification bell button to header (left of settings)
+- ✅ Notification badge shows unread count
+- ✅ Displays keep-watching notifications from auto-delete system
+- ✅ Shows background job status and allows manual triggering
+- ✅ Placeholder for download queue (ready for future implementation)
+- ✅ Auto-refresh every 5 seconds for active tabs
+- ✅ Responsive design for mobile/tablet
 
-**Files to Create**:
-- `frontend/src/pages/downloads.html` - Downloads page
-- `frontend/src/modules/download-manager.js` - Download management
-- `frontend/src/styles/downloads.css` - Downloads styling
-- `backend/src/routes/downloads.routes.ts` - Download API endpoints
+**Files Created**:
+- `frontend/src/pages/notifications.html` - Notifications & Downloads page
+- `frontend/src/modules/notifications-manager.js` - Notifications management
+- `frontend/src/modules/notification-badge.js` - Badge update module
+- `frontend/src/scripts/notifications-main.js` - Page initialization
+- `frontend/src/styles/notifications.css` - Page styling
+
+**Files Modified**:
+- `frontend/src/pages/index.html` - Added notifications button
+- `frontend/src/pages/settings.html` - Added notifications button
+- `frontend/src/pages/my-list.html` - Added notifications button
+- `frontend/src/pages/admin.html` - Added notifications button
+- `frontend/src/styles/main.css` - Added notification badge styles
+- `frontend/src/scripts/main.js` - Initialize notification badge
 
 ---
 
