@@ -110,7 +110,7 @@ cd ..
 echo.
 
 REM Step 4: Build APK
-echo [4/7] Building release APK...
+echo [4/7] Building debug APK (auto-signed)...
 
 REM Set JAVA_HOME to Java 21 for Gradle compatibility
 set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot"
@@ -119,7 +119,7 @@ echo Using Java 21 for Gradle build...
 
 cd frontend\build-tools\android\android
 if exist "gradlew.bat" (
-    call gradlew.bat assembleRelease
+    call gradlew.bat assembleDebug
 ) else (
     echo ERROR: gradlew.bat not found. Run 'npm run android:init' first.
     cd ..\..\..\..
@@ -141,19 +141,17 @@ REM Step 5: Copy APK to releases folder
 echo [5/7] Preparing release files...
 if not exist "releases" mkdir releases
 
-REM Try to find the APK (signed or unsigned)
+REM Find the debug APK (auto-signed)
 set APK_SOURCE=
-if exist "frontend\build-tools\android\android\app\build\outputs\apk\release\app-release.apk" (
-    set APK_SOURCE=frontend\build-tools\android\android\app\build\outputs\apk\release\app-release.apk
-) else if exist "frontend\build-tools\android\android\app\build\outputs\apk\release\app-release-unsigned.apk" (
-    set APK_SOURCE=frontend\build-tools\android\android\app\build\outputs\apk\release\app-release-unsigned.apk
-    echo Note: Using unsigned APK. For production, configure signing in build.gradle
+if exist "frontend\build-tools\android\android\app\build\outputs\apk\debug\app-debug.apk" (
+    set APK_SOURCE=frontend\build-tools\android\android\app\build\outputs\apk\debug\app-debug.apk
+    echo Note: Using debug-signed APK. For production, set up release signing.
 )
 
 if "!APK_SOURCE!"=="" (
     echo ERROR: APK not found at expected location
-    echo Searched in: frontend\build-tools\android\android\app\build\outputs\apk\release\
-    dir /b frontend\build-tools\android\android\app\build\outputs\apk\release\
+    echo Searched in: frontend\build-tools\android\android\app\build\outputs\apk\debug\
+    dir /b frontend\build-tools\android\android\app\build\outputs\apk\debug\ 2>nul
     pause
     exit /b 1
 )
