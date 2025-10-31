@@ -345,6 +345,19 @@ export class TVNavigation {
    * Handle back button
    */
   handleBack() {
+    // If an input field is focused, blur it and return to TV navigation
+    if (document.activeElement && 
+        (document.activeElement.tagName === 'INPUT' || 
+         document.activeElement.tagName === 'SELECT' ||
+         document.activeElement.tagName === 'TEXTAREA')) {
+      document.activeElement.blur();
+      // Re-focus the TV navigation element
+      if (this.focusedElement) {
+        this.focusedElement.classList.add('tv-focused');
+      }
+      return;
+    }
+
     // Check if we're in a modal or overlay
     const modal = document.querySelector('.content-modal.active');
     if (modal) {
