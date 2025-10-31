@@ -4,6 +4,7 @@
   "description": "Self-hosted streaming media server",
   "scripts": {
     "release": "scripts\\release.bat",
+    "release:force": "scripts\\release-force.bat",
     "release:interactive": "scripts\\release-interactive.bat",
     "version:bump": "node scripts/bump-version.js"
   },
