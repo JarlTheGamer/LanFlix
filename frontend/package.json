@@ -1,6 +1,6 @@
 {
   "name": "lanflix-ui",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Lanflix streaming media frontend",
   "main": "src/main.js",
   "scripts": {

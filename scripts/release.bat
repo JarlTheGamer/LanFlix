@@ -111,6 +111,12 @@ echo.
 
 REM Step 4: Build APK
 echo [4/7] Building release APK...
+
+REM Set JAVA_HOME to Java 21 for Gradle compatibility
+set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot"
+set "PATH=%JAVA_HOME%\bin;%PATH%"
+echo Using Java 21 for Gradle build...
+
 cd frontend\build-tools\android\android
 if exist "gradlew.bat" (
     call gradlew.bat assembleRelease
