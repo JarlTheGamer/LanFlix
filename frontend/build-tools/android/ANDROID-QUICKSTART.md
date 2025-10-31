@@ -59,8 +59,9 @@ Then click the green "Run" button in Android Studio.
 When the app launches for the first time:
 
 1. You'll be redirected to the configuration screen
-2. Enter your backend server URL:
-   - Example: `http://192.168.1.100:3000`
+2. Click **Auto-Discover Server** to automatically find your server, or
+3. Enter your backend server URL manually:
+   - Example: `http://192.168.1.100:6129`
    - Use your computer's local IP address
    - Make sure your Android device is on the same WiFi network
 3. Click "Test Connection"

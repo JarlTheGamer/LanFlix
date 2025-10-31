@@ -11,9 +11,9 @@ export class AppConfig {
       return JSON.parse(stored);
     }
     
-    // Default configuration
+    // Default configuration - empty URL forces first-run setup
     return {
-      backendUrl: 'http://192.168.178.13:3000', // Default - user should change this
+      backendUrl: '', // User must configure on first run
       autoPlay: true,
       quality: 'auto',
       subtitles: true

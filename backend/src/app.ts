@@ -13,7 +13,15 @@ import path from 'path';
 
 const app = express();
 
-app.use(cors());
+// Configure CORS to allow requests from any origin (for local network access)
+app.use(cors({
+  origin: '*', // Allow all origins (safe for local network)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
+  maxAge: 86400 // 24 hours
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -23,6 +31,9 @@ app.use('/images/backdrops', express.static(config.media.backdropCachePath));
 
 // Serve media files (posters, backdrops, metadata) directly from media folders
 app.use('/media', express.static(config.media.rootPath));
+
+// Handle preflight requests for all routes
+app.options('*', cors());
 
 // Inject API status into all responses
 app.use(injectApiStatus);
@@ -56,19 +67,19 @@ const ensureDirectories = () => {
 const startServer = async () => {
   try {
     ensureDirectories();
-    
+
     await initializeDatabase();
-    
+
     // Load API keys from database
     const { loadApiKeysFromDatabase } = await import('./clients');
     await loadApiKeysFromDatabase();
-    
+
     // Initialize cache manager
     await cacheManager.initialize();
-    
+
     // Start job scheduler
     jobScheduler.start();
-    
+
     app.listen(config.server.port, () => {
       logger.info(`Server running on port ${config.server.port}`);
       logger.info(`Environment: ${config.server.nodeEnv}`);

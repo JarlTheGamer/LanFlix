@@ -24,13 +24,16 @@ class ApiClient {
       const config = localStorage.getItem('lanflix_config');
       if (config) {
         const parsed = JSON.parse(config);
-        return `${parsed.backendUrl}/api`;
+        if (parsed.backendUrl) {
+          return `${parsed.backendUrl}/api`;
+        }
       }
     } catch (e) {
       console.warn('Failed to load backend URL from config:', e);
     }
-    // Default fallback
-    return 'http://localhost:3000/api';
+    // Default fallback - use relative URL for web, works with proxy
+    // For native apps, this will be configured via app-config.html
+    return '/api';
   }
 
   /**

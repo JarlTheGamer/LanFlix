@@ -66,7 +66,7 @@ When you first launch the app on Android:
 
 1. The app will open to the home screen
 2. Navigate to **Settings** → **App Configuration**
-3. Enter your backend server URL (e.g., `http://192.168.1.100:3000`)
+3. Click **Auto-Discover Server** or enter your backend server URL manually (e.g., `http://192.168.1.100:6129`)
 4. Click **Test Connection** to verify
 5. Click **Save Configuration**
 
@@ -129,9 +129,10 @@ sudo ufw allow 3000/tcp
 
 ### App Won't Connect to Backend
 
-1. Verify backend is running: `http://YOUR_IP:3000/api/settings`
-2. Check firewall settings
+1. Verify backend is running: `http://YOUR_IP:6129/health`
+2. Check firewall settings (allow port 6129)
 3. Ensure devices are on same network
+4. Try the Auto-Discover feature in app configuration
 4. Try using IP address instead of hostname
 5. Check Android app logs in Android Studio Logcat
 

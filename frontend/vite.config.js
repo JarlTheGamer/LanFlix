@@ -32,7 +32,19 @@ export default defineConfig({
     open: '/pages/index.html',
     proxy: {
       '/api': {
-        target: 'http://192.168.178.13:3000',
+        target: 'http://localhost:6129',
+        changeOrigin: true
+      },
+      '/health': {
+        target: 'http://localhost:6129',
+        changeOrigin: true
+      },
+      '/media': {
+        target: 'http://localhost:6129',
+        changeOrigin: true
+      },
+      '/images': {
+        target: 'http://localhost:6129',
         changeOrigin: true
       }
     }
