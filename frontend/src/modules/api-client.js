@@ -195,6 +195,16 @@ class ApiClient {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  /**
+   * Get TMDB image URL
+   */
+  getImageUrl(path, size = 'w500') {
+    if (!path) return null;
+    // Remove leading slash if present
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    return `https://image.tmdb.org/t/p/${size}/${cleanPath}`;
+  }
+
   // ==================== CONTENT ENDPOINTS ====================
 
   /**

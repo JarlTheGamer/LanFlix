@@ -101,7 +101,7 @@ class SearchModule {
         e.preventDefault();
         this.open();
       }
-      
+
       // Close search with Escape
       if (e.key === 'Escape' && this.isOpen) {
         this.close();
@@ -114,7 +114,7 @@ class SearchModule {
    */
   handleSearchInput(query) {
     const clearBtn = this.searchOverlay.querySelector('.search-clear-btn');
-    
+
     // Show/hide clear button
     if (query.length > 0) {
       clearBtn.style.display = 'block';
@@ -142,10 +142,10 @@ class SearchModule {
 
     try {
       this.showLoading();
-      
+
       // Search TMDB for discovery content
       const response = await apiClient.searchTMDB(query);
-      
+
       // Handle different response formats
       let results = [];
       if (Array.isArray(response)) {
@@ -155,7 +155,7 @@ class SearchModule {
       } else if (response && response.data && Array.isArray(response.data)) {
         results = response.data;
       }
-      
+
       if (results.length === 0) {
         this.showEmptyState('No results found');
       } else {
@@ -178,57 +178,116 @@ class SearchModule {
       return;
     }
 
-    this.searchResults.innerHTML = `
-      <div class="search-results-grid">
-        ${results.map(item => this.createResultCard(item)).join('')}
-      </div>
-    `;
+    // Create grid container
+    const grid = document.createElement('div');
+    grid.className = 'search-results-grid';
 
-    // Attach click handlers
-    this.searchResults.querySelectorAll('.search-result-card').forEach((card, index) => {
+    // Create cards
+    results.forEach(item => {
+      const card = this.createResultCard(item);
       card.addEventListener('click', () => {
-        this.handleResultClick(results[index]);
+        this.handleResultClick(item);
       });
+      grid.appendChild(card);
     });
+
+    // Replace content
+    this.searchResults.innerHTML = '';
+    this.searchResults.appendChild(grid);
   }
 
   /**
-   * Create result card HTML
+   * Create result card element
    */
   createResultCard(item) {
-    const posterUrl = item.posterPath 
-      ? apiClient.getImageUrl(item.posterPath, 'w342')
-      : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="342" height="513" viewBox="0 0 342 513"%3E%3Crect fill="%23222" width="342" height="513"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24" fill="%23666"%3ENo Image%3C/text%3E%3C/svg%3E';
-    
+    // Get poster URL - backend returns full URL in posterUrl field
+    const posterUrl = item.posterUrl || null;
+
     const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : '';
     const typeLabel = item.type === 'movie' ? 'Movie' : 'TV Show';
     const rating = item.voteAverage ? item.voteAverage.toFixed(1) : 'N/A';
 
-    return `
-      <div class="search-result-card" data-id="${item.id}">
-        <div class="search-result-poster">
-          <img src="${posterUrl}" alt="${item.title}" loading="lazy">
-          <div class="search-result-overlay">
-            <svg viewBox="0 0 24 24" width="48" height="48">
-              <path fill="white" d="M8 5v14l11-7z"/>
-            </svg>
-          </div>
-        </div>
-        <div class="search-result-info">
-          <h3 class="search-result-title">${item.title}</h3>
-          <div class="search-result-meta">
-            <span class="search-result-type">${typeLabel}</span>
-            ${year ? `<span class="search-result-year">${year}</span>` : ''}
-            <span class="search-result-rating">
-              <svg viewBox="0 0 24 24" width="14" height="14">
-                <path fill="currentColor" d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-              </svg>
-              ${rating}
-            </span>
-          </div>
-        </div>
-      </div>
+    // Create card element
+    const card = document.createElement('div');
+    card.className = 'search-result-card';
+    card.dataset.id = item.id;
+
+    // Create poster container
+    const posterContainer = document.createElement('div');
+    posterContainer.className = 'search-result-poster';
+
+    // Create image
+    const img = document.createElement('img');
+    if (posterUrl) {
+      img.src = posterUrl;
+      img.alt = item.title;
+      img.loading = 'lazy';
+    } else {
+      // Create placeholder
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="342" height="513" viewBox="0 0 342 513">
+          <rect fill="#222" width="342" height="513"/>
+          <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24" fill="#666">No Image</text>
+        </svg>
+      `);
+      img.alt = item.title;
+    }
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'search-result-overlay';
+    overlay.innerHTML = `
+      <svg viewBox="0 0 24 24" width="48" height="48">
+        <path fill="white" d="M8 5v14l11-7z"/>
+      </svg>
     `;
+
+    posterContainer.appendChild(img);
+    posterContainer.appendChild(overlay);
+
+    // Create info container
+    const info = document.createElement('div');
+    info.className = 'search-result-info';
+
+    // Create title
+    const title = document.createElement('h3');
+    title.className = 'search-result-title';
+    title.textContent = item.title;
+
+    // Create meta
+    const meta = document.createElement('div');
+    meta.className = 'search-result-meta';
+
+    const typeSpan = document.createElement('span');
+    typeSpan.className = 'search-result-type';
+    typeSpan.textContent = typeLabel;
+    meta.appendChild(typeSpan);
+
+    if (year) {
+      const yearSpan = document.createElement('span');
+      yearSpan.className = 'search-result-year';
+      yearSpan.textContent = year;
+      meta.appendChild(yearSpan);
+    }
+
+    const ratingSpan = document.createElement('span');
+    ratingSpan.className = 'search-result-rating';
+    ratingSpan.innerHTML = `
+      <svg viewBox="0 0 24 24" width="14" height="14">
+        <path fill="currentColor" d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+      </svg>
+      ${rating}
+    `;
+    meta.appendChild(ratingSpan);
+
+    info.appendChild(title);
+    info.appendChild(meta);
+
+    // Assemble card
+    card.appendChild(posterContainer);
+    card.appendChild(info);
+
+    return card;
   }
 
   /**
@@ -236,7 +295,7 @@ class SearchModule {
    */
   handleResultClick(item) {
     this.close();
-    
+
     // Import and show content modal
     import('./content-modal.js').then(module => {
       const ContentModal = module.default;

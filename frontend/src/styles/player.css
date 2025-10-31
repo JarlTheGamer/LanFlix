@@ -372,6 +372,25 @@ body {
   }
 }
 
+/* Cast button styling */
+.cast-btn.casting {
+  color: var(--yt-red);
+}
+
+.cast-btn.casting svg {
+  fill: var(--yt-red);
+  animation: castPulse 2s ease-in-out infinite;
+}
+
+@keyframes castPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .player-controls {
