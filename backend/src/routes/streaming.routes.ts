@@ -232,7 +232,7 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
       }
     }
 
-    // Also check global hardware acceleration setting as fallback
+    // Check global hardware acceleration setting when no profile is specified
     if (!profileId) {
       try {
         const hwAccelSetting = await Settings.findOne({ where: { key: 'useHardwareAccel' } });
@@ -241,7 +241,7 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
           logger.info(`Hardware acceleration (global): ${useHardwareAccel ? 'ENABLED (GPU)' : 'DISABLED (CPU)'}`);
         }
       } catch (error) {
-        logger.warn('Failed to load hardware acceleration setting, using CPU:', error);
+        logger.warn('Failed to load hardware acceleration setting:', error);
       }
     }
 
@@ -330,12 +330,18 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
       logger.info(`${transcodeMode} for content ${id} (${compatCheck.reason}) - Using ${useHardwareAccel ? 'GPU (NVENC)' : 'CPU (libx264)'}`);
 
       // For transcoded streams with seeking, use startTime parameter
-      // Always use GPU transcoding when hardware acceleration is enabled
-      const transcodeStream = mediaConverterService.createTranscodeStream(filePath, {
-        transcodeAudio: shouldTranscodeAudio,
-        transcodeVideo: shouldTranscodeVideo,
-        startTime: startTime
-      });
+      // Use GPU or CPU transcoding based on hardware acceleration setting
+      const transcodeStream = useHardwareAccel
+        ? mediaConverterService.createTranscodeStream(filePath, {
+            transcodeAudio: shouldTranscodeAudio,
+            transcodeVideo: shouldTranscodeVideo,
+            startTime: startTime
+          })
+        : mediaConverterService.createCPUTranscodeStream(filePath, {
+            transcodeAudio: shouldTranscodeAudio,
+            transcodeVideo: shouldTranscodeVideo,
+            startTime: startTime
+          });
 
       res.writeHead(200, {
         'Content-Type': 'video/mp4',

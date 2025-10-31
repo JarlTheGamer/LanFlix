@@ -247,12 +247,6 @@ export class MediaConverterService {
       })
       .on('error', (err) => {
         logger.error('FFmpeg stream error:', err.message);
-
-        // Try CPU fallback on GPU error
-        if (err.message.includes('nvenc') || err.message.includes('cuda')) {
-          logger.warn('GPU error detected, client should retry with CPU fallback');
-        }
-
         outputStream.destroy(err);
       })
       .on('end', () => {
