@@ -4,8 +4,9 @@
  */
 
 class ApiClient {
-  constructor(baseURL = 'http://localhost:3000/api') {
-    this.baseURL = baseURL;
+  constructor(baseURL = null) {
+    // Dynamic base URL - will be loaded from config
+    this.baseURL = baseURL || this.getBaseURL();
     this.authToken = null;
     this.retryAttempts = 0; // No retries - fail fast
     this.retryDelay = 1000; // ms
@@ -13,6 +14,30 @@ class ApiClient {
     this.offlineRetryInterval = 10 * 60 * 1000; // 10 minutes
     this.lastOfflineCheck = null;
     this.offlineCheckTimer = null;
+  }
+
+  /**
+   * Get base URL from app config or default
+   */
+  getBaseURL() {
+    try {
+      const config = localStorage.getItem('lanflix_config');
+      if (config) {
+        const parsed = JSON.parse(config);
+        return `${parsed.backendUrl}/api`;
+      }
+    } catch (e) {
+      console.warn('Failed to load backend URL from config:', e);
+    }
+    // Default fallback
+    return 'http://localhost:3000/api';
+  }
+
+  /**
+   * Update base URL (call this when user changes backend URL in settings)
+   */
+  setBaseURL(url) {
+    this.baseURL = `${url}/api`;
   }
 
   /**

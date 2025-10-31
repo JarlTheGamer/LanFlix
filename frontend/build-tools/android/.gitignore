@@ -1,0 +1,29 @@
+# Android build outputs
+android/
+
+# Gradle files
+.gradle/
+build/
+gradle/
+gradlew
+gradlew.bat
+
+# Local configuration
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+.externalNativeBuild
+.cxx/
+
+# Keystore files (keep these private!)
+*.keystore
+*.jks
+
+# APK files
+*.apk
+*.aab
+
+# Signing configs
+signing.properties

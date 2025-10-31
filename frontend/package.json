@@ -6,16 +6,29 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "android:init": "npx cap add android",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:run": "npm run android:sync && npx cap run android",
+    "android:build": "npm run android:sync && cd build-tools/android/android && gradlew assembleDebug"
   },
-  "keywords": ["streaming", "media", "ui"],
+  "keywords": [
+    "streaming",
+    "media",
+    "ui"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^7.4.4",
     "axios": "^1.6.0",
     "video.js": "^8.6.1"
   },
   "devDependencies": {
+    "typescript": "^5.9.3",
     "vite": "^5.0.0"
   }
 }

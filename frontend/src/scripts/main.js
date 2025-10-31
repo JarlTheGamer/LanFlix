@@ -4,9 +4,14 @@ import { Navigation } from '../modules/navigation.js';
 import searchModule from '../modules/search.js';
 import stateManager from '../modules/data.js';
 import { notificationBadge } from '../modules/notification-badge.js';
+import { checkFirstRun, isNativeApp } from '../modules/first-run.js';
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
+  // Check for first-run configuration (Android app only)
+  if (isNativeApp() && !checkFirstRun()) {
+    return; // Will redirect to config page
+  }
   try {
     // Check if we have a saved profile, if not redirect to profiles page
     if (!stateManager.currentProfileId) {

@@ -14,8 +14,10 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
+        index: resolve(__dirname, 'src/index.html'),
         main: resolve(__dirname, 'src/pages/index.html'),
-        settings: resolve(__dirname, 'src/pages/settings.html')
+        settings: resolve(__dirname, 'src/pages/settings.html'),
+        appConfig: resolve(__dirname, 'src/pages/app-config.html')
       }
     }
   },
@@ -24,7 +26,7 @@ export default defineConfig({
     open: '/pages/index.html',
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://192.168.178.13:3000',
         changeOrigin: true
       }
     }
