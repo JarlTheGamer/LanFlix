@@ -20,7 +20,8 @@ export function getImageUrl(
   }
 
   // Get the backend URL (for absolute URLs when frontend is on different port)
-  const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+  const port = config.server.port || process.env.PORT || 3000;
+  const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
 
   // First, try to serve from the media folder (where the movie/series is stored)
   if (filePath) {
@@ -88,7 +89,8 @@ export function getEpisodeStillUrl(
     return stillPath;
   }
 
-  const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+  const port = config.server.port || process.env.PORT || 3000;
+  const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
 
   // Check if it's a local filename (e.g., "S01E01.jpg")
   if (stillPath.match(/^S\d+E\d+\.jpg$/i)) {
