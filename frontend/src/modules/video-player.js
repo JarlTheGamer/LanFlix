@@ -34,6 +34,9 @@ export class VideoPlayer {
     // Duration guard to avoid spamming notifications while metadata loads
     this.durationWarningShown = false;
 
+    // Buffered progress tracking (for transcoding)
+    this.bufferedEnd = 0;
+
     // Subtitles
     this.availableSubtitles = [];
     this.currentSubtitleTrack = null;
@@ -41,7 +44,6 @@ export class VideoPlayer {
     // Controls
     this.controlsTimeout = null;
     this.controlsVisible = true;
-    this.controlsHideDelay = 3000; // 3 seconds
 
     // Cast
     this.castSession = null;
@@ -62,6 +64,9 @@ export class VideoPlayer {
 
     // Setup controls
     this.setupControls();
+
+    // Show controls initially
+    this.showControls();
 
     // Ensure audio is enabled - CRITICAL: Set these BEFORE setting src
     this.videoElement.muted = false;
@@ -285,6 +290,7 @@ export class VideoPlayer {
       }
 
       this.updateProgressBar();
+      this.updateBufferedProgress();
     });
 
     // Show loading spinner when buffering
@@ -296,6 +302,17 @@ export class VideoPlayer {
     this.videoElement.addEventListener('playing', () => {
       console.log('Video playing');
       this.hideLoadingSpinner();
+    });
+
+    // Update buffered progress as data loads
+    this.videoElement.addEventListener('progress', () => {
+      this.updateBufferedProgress();
+    });
+
+    // Track when enough data is buffered for smooth playback
+    this.videoElement.addEventListener('canplaythrough', () => {
+      console.log('Enough data buffered for smooth playback');
+      this.updateBufferedProgress();
     });
 
     this.videoElement.addEventListener('loadedmetadata', () => {
@@ -325,10 +342,6 @@ export class VideoPlayer {
     // Mouse/touch events for controls
     this.videoElement.addEventListener('click', () => {
       this.togglePlayPause();
-    });
-
-    this.videoElement.addEventListener('mousemove', () => {
-      this.showControls();
     });
 
     // Keyboard controls
@@ -512,28 +525,27 @@ export class VideoPlayer {
       this.toggleFullscreen();
     });
 
-    // Show controls on mouse move
-    let controlsTimeout;
+    // Show controls on mouse move - only hide when mouse leaves screen
     const playerContainer = document.querySelector('.player-container');
     const controls = document.querySelector('.player-controls');
+    const backButton = document.querySelector('.back-button');
 
     const showControls = () => {
       controls?.classList.add('visible');
-      clearTimeout(controlsTimeout);
+      if (backButton) backButton.style.opacity = '1';
+      playerContainer?.classList.add('show-cursor');
+    };
 
+    const hideControls = () => {
       if (this.isPlaying) {
-        controlsTimeout = setTimeout(() => {
-          controls?.classList.remove('visible');
-        }, 3000);
+        controls?.classList.remove('visible');
+        if (backButton) backButton.style.opacity = '0';
+        playerContainer?.classList.remove('show-cursor');
       }
     };
 
     playerContainer?.addEventListener('mousemove', showControls);
-    playerContainer?.addEventListener('mouseleave', () => {
-      if (this.isPlaying) {
-        controls?.classList.remove('visible');
-      }
-    });
+    playerContainer?.addEventListener('mouseleave', hideControls);
 
     // Initialize Cast API
     this.initializeCastAPI();
@@ -842,6 +854,42 @@ export class VideoPlayer {
   }
 
   /**
+   * Update buffered progress indicator (grey to blue)
+   */
+  updateBufferedProgress() {
+    const effectiveDuration = this.getEffectiveDuration();
+    if (!effectiveDuration) return;
+
+    const bufferedBar = document.querySelector('.player-progress-buffered');
+    if (!bufferedBar) return;
+
+    // Get buffered ranges from video element
+    const buffered = this.videoElement.buffered;
+    if (buffered.length > 0) {
+      // Find the buffered range that contains current time
+      let bufferedEnd = 0;
+      for (let i = 0; i < buffered.length; i++) {
+        const start = buffered.start(i);
+        const end = buffered.end(i);
+        
+        // Check if current time is in this range
+        if (this.videoElement.currentTime >= start && this.videoElement.currentTime <= end) {
+          bufferedEnd = end + this.startOffset;
+          break;
+        }
+        // Or if this is the furthest buffered range
+        if (end > bufferedEnd) {
+          bufferedEnd = end + this.startOffset;
+        }
+      }
+
+      this.bufferedEnd = bufferedEnd;
+      const bufferedPercent = (bufferedEnd / effectiveDuration) * 100;
+      bufferedBar.style.width = `${Math.min(bufferedPercent, 100)}%`;
+    }
+  }
+
+  /**
    * Update duration display
    */
   updateDurationDisplay() {
@@ -917,31 +965,40 @@ export class VideoPlayer {
    */
   showControls() {
     const controls = document.getElementById('player-controls');
+    const backButton = document.querySelector('.back-button');
+    const playerContainer = document.querySelector('.player-container');
+    
     if (controls) {
       controls.classList.add('visible');
       this.controlsVisible = true;
     }
-
-    // Reset hide timer
-    if (this.controlsTimeout) {
-      clearTimeout(this.controlsTimeout);
+    if (backButton) {
+      backButton.style.opacity = '1';
     }
-
-    this.controlsTimeout = setTimeout(() => {
-      if (this.isPlaying) {
-        this.hideControls();
-      }
-    }, this.controlsHideDelay);
+    if (playerContainer) {
+      playerContainer.classList.add('show-cursor');
+    }
   }
 
   /**
-   * Hide controls
+   * Hide controls (only called when mouse leaves screen)
    */
   hideControls() {
+    if (!this.isPlaying) return; // Don't hide when paused
+    
     const controls = document.getElementById('player-controls');
+    const backButton = document.querySelector('.back-button');
+    const playerContainer = document.querySelector('.player-container');
+    
     if (controls) {
       controls.classList.remove('visible');
       this.controlsVisible = false;
+    }
+    if (backButton) {
+      backButton.style.opacity = '0';
+    }
+    if (playerContainer) {
+      playerContainer.classList.remove('show-cursor');
     }
   }
 

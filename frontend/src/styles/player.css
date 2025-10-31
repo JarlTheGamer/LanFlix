@@ -1,5 +1,6 @@
 :root {
   --yt-red: #ff0000;
+  --yt-blue: #2196F3;
   --yt-bg: #000;
   --yt-text: #fff;
   --yt-gray: #909090;
@@ -114,6 +115,18 @@ body {
   height: 5px;
 }
 
+.player-progress-buffered {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--yt-blue);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.3s ease;
+  z-index: 1;
+}
+
 .player-progress-bar {
   position: absolute;
   top: 0;
@@ -123,6 +136,7 @@ body {
   border-radius: 2px;
   width: 0%;
   transition: width 0.1s linear;
+  z-index: 2;
 }
 
 .player-progress-thumb {
@@ -135,20 +149,11 @@ body {
   background: var(--yt-red);
   border-radius: 50%;
   transition: transform 0.1s ease;
+  z-index: 3;
 }
 
 .player-progress-container:hover .player-progress-thumb {
   transform: translateY(-50%) scale(1);
-}
-
-.player-progress-buffered {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.4);
-  border-radius: 2px;
-  width: 0%;
 }
 
 /* Controls bottom bar */
@@ -256,18 +261,14 @@ body {
   border: none;
 }
 
-/* Show controls on hover or pause */
-.player-container:hover .player-controls,
-.player-container:hover .back-button {
-  opacity: 1;
-}
-
+/* Show controls when paused or when cursor is visible */
 .player-container.paused .player-controls,
 .player-container.paused .back-button {
   opacity: 1;
+  transform: translateY(0);
 }
 
-.player-container:hover {
+.player-container.show-cursor {
   cursor: default;
 }
 
@@ -362,10 +363,13 @@ body {
 }
 
 @keyframes spinPulse {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: scale(1);
     opacity: 1;
   }
+
   50% {
     transform: scale(1.05);
     opacity: 0.95;
@@ -383,9 +387,12 @@ body {
 }
 
 @keyframes castPulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.6;
   }

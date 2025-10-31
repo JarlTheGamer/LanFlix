@@ -158,6 +158,7 @@ export class MediaConverterService {
       transcodeAudio: boolean;
       transcodeVideo: boolean;
       startTime?: number;
+      progressCallback?: (progress: { timemark: string; percent?: number }) => void;
     }
   ): PassThrough {
     const outputStream = new PassThrough();
@@ -234,6 +235,9 @@ export class MediaConverterService {
         logger.info('FFmpeg stream started:', commandLine);
       })
       .on('progress', (progress) => {
+        if (options.progressCallback) {
+          options.progressCallback(progress);
+        }
         if (progress.percent) {
           logger.debug(`Stream progress: ${progress.percent.toFixed(1)}%`);
         }
@@ -268,6 +272,7 @@ export class MediaConverterService {
       transcodeAudio: boolean;
       transcodeVideo: boolean;
       startTime?: number;
+      progressCallback?: (progress: { timemark: string; percent?: number }) => void;
     }
   ): PassThrough {
     const outputStream = new PassThrough();
@@ -316,6 +321,11 @@ export class MediaConverterService {
       .addOutputOption('-max_muxing_queue_size', '1024')
       .on('start', (commandLine) => {
         logger.info('FFmpeg CPU stream started:', commandLine);
+      })
+      .on('progress', (progress) => {
+        if (options.progressCallback) {
+          options.progressCallback(progress);
+        }
       })
       .on('error', (err) => {
         logger.error('FFmpeg CPU stream error:', err);

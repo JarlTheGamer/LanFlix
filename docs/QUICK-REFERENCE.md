@@ -254,6 +254,7 @@ ffmpeg -i input.mp4 -c copy -movflags +faststart output.mp4
 - [Quick Start Guide](./getting-started/quick-start.md)
 - [API Reference](./api/overview.md)
 - [Video Player Guide](./features/video-player.md)
+- [Progressive Transcoding](./features/progressive-transcoding.md) ⭐ NEW
 - [Known Issues](./tasks/known-issues.md)
 - [Troubleshooting](./troubleshooting/video-playback.md)
 - [Version History](./versions/README.md)
@@ -344,7 +345,18 @@ ps aux | grep node
 redis-cli INFO memory
 ```
 
+## ⭐ Recent Updates
+
+### Progressive Transcoding (YouTube-Style)
+- Video now transcodes continuously ahead of playback (not just 10 seconds)
+- Buffered content shown as **grey bar** in progress indicator
+- Current playback shown as **red bar**
+- Controls only hide when mouse leaves player area (not after 3 seconds)
+- More intuitive and less distracting control behavior
+
+See [Progressive Transcoding Guide](./features/progressive-transcoding.md) for details.
+
 ---
 
-**Last Updated**: October 30, 2025  
+**Last Updated**: October 31, 2025  
 **For detailed information, see the [full documentation](./README.md)**
