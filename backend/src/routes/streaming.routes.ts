@@ -212,6 +212,7 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
     let audioTranscodingEnabled = true;
     let videoTranscodingEnabled = true;
     let useHardwareAccel = false;
+    let transcodePreset = 'p4'; // Default preset
 
     if (profileId) {
       try {
@@ -225,7 +226,8 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
           videoTranscodingEnabled = prefs.videoTranscoding !== false;
           // Check for hardware acceleration in profile preferences
           useHardwareAccel = prefs.useHardwareAccel !== false;
-          logger.info(`Profile ${profileId} transcoding preferences: mode=${transcodingMode}, audio=${audioTranscodingEnabled}, video=${videoTranscodingEnabled}, hwAccel=${useHardwareAccel}`);
+          transcodePreset = prefs.preset || 'p4';
+          logger.info(`Profile ${profileId} transcoding preferences: mode=${transcodingMode}, audio=${audioTranscodingEnabled}, video=${videoTranscodingEnabled}, hwAccel=${useHardwareAccel}, preset=${transcodePreset}`);
         }
       } catch (error) {
         logger.warn('Failed to load transcoding preferences, using defaults:', error);
@@ -335,12 +337,14 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
         ? mediaConverterService.createTranscodeStream(filePath, {
             transcodeAudio: shouldTranscodeAudio,
             transcodeVideo: shouldTranscodeVideo,
-            startTime: startTime
+            startTime: startTime,
+            preset: transcodePreset
           })
         : mediaConverterService.createCPUTranscodeStream(filePath, {
             transcodeAudio: shouldTranscodeAudio,
             transcodeVideo: shouldTranscodeVideo,
-            startTime: startTime
+            startTime: startTime,
+            preset: transcodePreset
           });
 
       res.writeHead(200, {

@@ -158,6 +158,7 @@ export class MediaConverterService {
       transcodeAudio: boolean;
       transcodeVideo: boolean;
       startTime?: number;
+      preset?: string;
       progressCallback?: (progress: { timemark: string; percent?: number }) => void;
     }
   ): PassThrough {
@@ -193,10 +194,11 @@ export class MediaConverterService {
 
     // Video transcoding with NVENC (GPU encode)
     if (options.transcodeVideo) {
-      logger.info('VIDEO: Transcoding with NVDEC decode + NVENC encode (full GPU pipeline)');
+      const preset = options.preset || 'p4';
+      logger.info(`VIDEO: Transcoding with NVDEC decode + NVENC encode (full GPU pipeline) using preset ${preset}`);
       command = command
         .videoCodec('h264_nvenc')
-        .addOutputOption('-preset', 'p4')           // Balanced preset (fast + good quality)
+        .addOutputOption('-preset', preset)         // Use user's preset setting (p1-p7)
         .addOutputOption('-tune', 'hq')
         .addOutputOption('-rc', 'vbr')
         .addOutputOption('-cq', '23')               // Good quality, not overkill
@@ -269,6 +271,7 @@ export class MediaConverterService {
       transcodeAudio: boolean;
       transcodeVideo: boolean;
       startTime?: number;
+      preset?: string;
       progressCallback?: (progress: { timemark: string; percent?: number }) => void;
     }
   ): PassThrough {
@@ -293,10 +296,22 @@ export class MediaConverterService {
 
     // CPU video transcoding
     if (options.transcodeVideo) {
-      logger.info('Using CPU encoding (libx264)');
+      // Map NVENC presets (p1-p7) to libx264 presets
+      const presetMap: { [key: string]: string } = {
+        'p1': 'ultrafast',
+        'p2': 'superfast',
+        'p3': 'veryfast',
+        'p4': 'faster',
+        'p5': 'fast',
+        'p6': 'medium',
+        'p7': 'slow'
+      };
+      const nvencPreset = options.preset || 'p4';
+      const cpuPreset = presetMap[nvencPreset] || 'faster';
+      logger.info(`Using CPU encoding (libx264) with preset ${cpuPreset} (mapped from ${nvencPreset})`);
       command = command
         .videoCodec('libx264')
-        .addOutputOption('-preset', 'veryfast')    // Fast CPU preset
+        .addOutputOption('-preset', cpuPreset)     // Map NVENC preset to CPU preset
         .addOutputOption('-crf', '23')
         .addOutputOption('-profile:v', 'high')
         .addOutputOption('-level', '4.1')

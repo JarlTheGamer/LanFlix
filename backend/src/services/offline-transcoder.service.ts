@@ -108,7 +108,7 @@ export class MediaConverterService {
                 logger.info('Transcoding video to H.264 with GPU acceleration (NVENC)');
                 command = command
                     .videoCodec('h264_nvenc')
-                    .addOutputOption('-preset', 'p4')
+                    .addOutputOption('-preset', 'p7')
                     .addOutputOption('-tune', 'hq')
                     .addOutputOption('-rc', 'vbr')
                     .addOutputOption('-cq', '19')
