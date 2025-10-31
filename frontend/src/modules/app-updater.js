@@ -5,7 +5,7 @@
 
 export class AppUpdater {
   constructor() {
-    this.currentVersion = '1.2.5'; // Will be read from package.json
+    this.currentVersion = '1.2.6'; // Will be read from package.json
     this.updateCheckUrl = 'https://api.github.com/repos/JarlTheGamer/Applications./releases/latest';
     this.checkInterval = 24 * 60 * 60 * 1000; // Check once per day
     this.lastCheckKey = 'lanflix_last_update_check';

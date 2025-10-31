@@ -9,7 +9,7 @@ export class TVNavigation {
     this.focusedElement = null;
     this.focusableElements = [];
     this.currentIndex = 0;
-    
+
     // Grid navigation state
     this.gridRows = [];
     this.currentRow = 0;
@@ -125,11 +125,29 @@ export class TVNavigation {
    * Handle D-pad input
    */
   handleDPad(e) {
+    const key = e.key;
+
+    // Special handling for Back/Escape - always process these
+    if (key === 'Escape' || key === 'Back') {
+      e.preventDefault();
+      e.stopPropagation();
+      this.handleBack();
+      return;
+    }
+
+    // If a text input is actively focused (user is typing), don't intercept navigation
+    // except for Back/Escape which we handled above
+    if (document.activeElement &&
+      (document.activeElement.tagName === 'INPUT' ||
+        document.activeElement.tagName === 'SELECT' ||
+        document.activeElement.tagName === 'TEXTAREA')) {
+      // Let the input handle the key naturally
+      return;
+    }
+
     // Update focusable elements on each keypress (in case DOM changed)
     this.updateFocusableElements();
 
-    const key = e.key;
-    
     // Prevent default scrolling
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(key)) {
       e.preventDefault();
@@ -151,10 +169,6 @@ export class TVNavigation {
       case 'Enter':
         this.activateFocused();
         break;
-      case 'Escape':
-      case 'Back':
-        this.handleBack();
-        break;
     }
   }
 
@@ -175,16 +189,16 @@ export class TVNavigation {
     // Find closest element above
     this.focusableElements.forEach(el => {
       if (el === current) return;
-      
+
       const rect = el.getBoundingClientRect();
-      
+
       // Must be above current element
       if (rect.bottom <= currentRect.top) {
         // Calculate distance (prefer elements in same column)
         const verticalDistance = currentRect.top - rect.bottom;
         const horizontalDistance = Math.abs(rect.left - currentRect.left);
         const distance = verticalDistance + horizontalDistance * 0.5;
-        
+
         if (distance < bestDistance) {
           bestDistance = distance;
           bestMatch = el;
@@ -215,16 +229,16 @@ export class TVNavigation {
     // Find closest element below
     this.focusableElements.forEach(el => {
       if (el === current) return;
-      
+
       const rect = el.getBoundingClientRect();
-      
+
       // Must be below current element
       if (rect.top >= currentRect.bottom) {
         // Calculate distance (prefer elements in same column)
         const verticalDistance = rect.top - currentRect.bottom;
         const horizontalDistance = Math.abs(rect.left - currentRect.left);
         const distance = verticalDistance + horizontalDistance * 0.5;
-        
+
         if (distance < bestDistance) {
           bestDistance = distance;
           bestMatch = el;
@@ -255,16 +269,16 @@ export class TVNavigation {
     // Find closest element to the left
     this.focusableElements.forEach(el => {
       if (el === current) return;
-      
+
       const rect = el.getBoundingClientRect();
-      
+
       // Must be to the left of current element
       if (rect.right <= currentRect.left) {
         // Calculate distance (prefer elements in same row)
         const horizontalDistance = currentRect.left - rect.right;
         const verticalDistance = Math.abs(rect.top - currentRect.top);
         const distance = horizontalDistance + verticalDistance * 0.5;
-        
+
         if (distance < bestDistance) {
           bestDistance = distance;
           bestMatch = el;
@@ -295,16 +309,16 @@ export class TVNavigation {
     // Find closest element to the right
     this.focusableElements.forEach(el => {
       if (el === current) return;
-      
+
       const rect = el.getBoundingClientRect();
-      
+
       // Must be to the right of current element
       if (rect.left >= currentRect.right) {
         // Calculate distance (prefer elements in same row)
         const horizontalDistance = rect.left - currentRect.right;
         const verticalDistance = Math.abs(rect.top - currentRect.top);
         const distance = horizontalDistance + verticalDistance * 0.5;
-        
+
         if (distance < bestDistance) {
           bestDistance = distance;
           bestMatch = el;
@@ -326,14 +340,29 @@ export class TVNavigation {
 
     // Handle input fields differently
     if (this.focusedElement.tagName === 'INPUT' || this.focusedElement.tagName === 'SELECT') {
-      // For text inputs, focus them so user can type
-      this.focusedElement.focus();
-      
       // For checkboxes, toggle them
       if (this.focusedElement.type === 'checkbox') {
         this.focusedElement.checked = !this.focusedElement.checked;
         this.focusedElement.dispatchEvent(new Event('change', { bubbles: true }));
+        return;
       }
+
+      // For text inputs, focus them so user can type
+      // Remove TV focus styling while typing
+      this.focusedElement.classList.remove('tv-focused');
+      this.focusedElement.focus();
+
+      // Add blur listener to return to TV navigation
+      const handleBlur = () => {
+        this.focusedElement.removeEventListener('blur', handleBlur);
+        this.updateFocusableElements();
+        // Re-establish TV focus on the same element
+        const index = this.focusableElements.indexOf(this.focusedElement);
+        if (index >= 0) {
+          this.setFocus(index);
+        }
+      };
+      this.focusedElement.addEventListener('blur', handleBlur);
       return;
     }
 
@@ -346,15 +375,26 @@ export class TVNavigation {
    */
   handleBack() {
     // If an input field is focused, blur it and return to TV navigation
-    if (document.activeElement && 
-        (document.activeElement.tagName === 'INPUT' || 
-         document.activeElement.tagName === 'SELECT' ||
-         document.activeElement.tagName === 'TEXTAREA')) {
+    if (document.activeElement &&
+      (document.activeElement.tagName === 'INPUT' ||
+        document.activeElement.tagName === 'SELECT' ||
+        document.activeElement.tagName === 'TEXTAREA')) {
       document.activeElement.blur();
-      // Re-focus the TV navigation element
-      if (this.focusedElement) {
-        this.focusedElement.classList.add('tv-focused');
+
+      // Force update focusable elements and move to next element
+      this.updateFocusableElements();
+
+      // Find the next non-input element to focus
+      let nextIndex = this.currentIndex;
+      for (let i = 0; i < this.focusableElements.length; i++) {
+        const el = this.focusableElements[i];
+        if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT' && el.tagName !== 'TEXTAREA') {
+          nextIndex = i;
+          break;
+        }
       }
+
+      this.setFocus(nextIndex);
       return;
     }
 
@@ -379,7 +419,7 @@ export class TVNavigation {
    */
   refresh() {
     this.updateFocusableElements();
-    
+
     // Try to maintain focus on same element
     if (this.focusedElement && this.focusableElements.includes(this.focusedElement)) {
       const index = this.focusableElements.indexOf(this.focusedElement);
