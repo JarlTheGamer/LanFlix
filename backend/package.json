@@ -1,6 +1,6 @@
 {
   "name": "lanflix-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Lanflix streaming media server backend",
   "main": "dist/app.js",
   "scripts": {
@@ -11,7 +11,11 @@
     "migrate:undo": "sequelize-cli db:migrate:undo",
     "seed": "sequelize-cli db:seed:all"
   },
-  "keywords": ["streaming", "media", "server"],
+  "keywords": [
+    "streaming",
+    "media",
+    "server"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {

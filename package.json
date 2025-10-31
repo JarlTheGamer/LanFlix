@@ -1,0 +1,22 @@
+{
+  "name": "lanflix",
+  "version": "1.0.0",
+  "description": "Self-hosted streaming media server",
+  "scripts": {
+    "release": "scripts\\release.bat",
+    "release:interactive": "scripts\\release-interactive.bat",
+    "version:bump": "node scripts/bump-version.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JarlTheGamer/Applications."
+  },
+  "keywords": [
+    "streaming",
+    "media-server",
+    "android",
+    "self-hosted"
+  ],
+  "author": "",
+  "license": "MIT"
+}

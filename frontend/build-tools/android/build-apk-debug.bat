@@ -1,11 +1,11 @@
 @echo off
 REM ============================================
-REM Lanflix Android APK Builder (No Android Studio Required)
+REM Lanflix Android Debug APK Builder (Fast)
 REM ============================================
 
 echo.
 echo ========================================
-echo   Lanflix Android APK Builder
+echo   Lanflix Debug APK Builder
 echo ========================================
 echo.
 
@@ -39,11 +39,11 @@ if errorlevel 1 (
 echo ✓ Synced to Capacitor successfully
 echo.
 
-REM Step 3: Build APK with Gradle
-echo [3/4] Building APK with Gradle...
+REM Step 3: Build Debug APK with Gradle
+echo [3/4] Building Debug APK with Gradle...
 cd build-tools\android\android
 if exist "gradlew.bat" (
-    call gradlew.bat assembleRelease
+    call gradlew.bat assembleDebug
 ) else (
     echo ERROR: gradlew.bat not found. Please run 'npm run android:init' first.
     cd ..\..\..
@@ -57,51 +57,35 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-echo ✓ APK built successfully
+echo ✓ Debug APK built successfully
 echo.
 
 REM Step 4: Copy APK to releases folder
-echo [4/4] Copying APK to releases folder...
+echo [4/4] Copying APK...
 cd ..\..\..
 
 REM Create releases folder if it doesn't exist
 if not exist "releases" mkdir releases
 
-REM Get version from package.json (simple approach)
-for /f "tokens=2 delims=:, " %%a in ('findstr /C:"\"version\"" package.json') do set VERSION=%%a
-set VERSION=%VERSION:"=%
+REM Copy debug APK
+set APK_SOURCE=build-tools\android\android\app\build\outputs\apk\debug\app-debug.apk
+set APK_DEST=releases\lanflix-android-debug.apk
 
-REM Try to find the APK (signed or unsigned)
-set APK_SOURCE=
-if exist "build-tools\android\android\app\build\outputs\apk\release\app-release.apk" (
-    set APK_SOURCE=build-tools\android\android\app\build\outputs\apk\release\app-release.apk
-) else if exist "build-tools\android\android\app\build\outputs\apk\release\app-release-unsigned.apk" (
-    set APK_SOURCE=build-tools\android\android\app\build\outputs\apk\release\app-release-unsigned.apk
-    echo Note: Using unsigned APK
-)
-
-set APK_DEST=releases\lanflix-android-v%VERSION%.apk
-
-if not "%APK_SOURCE%"=="" (
+if exist "%APK_SOURCE%" (
     copy "%APK_SOURCE%" "%APK_DEST%"
-    echo ✓ APK copied to: %APK_DEST%
+    echo ✓ Debug APK copied to: %APK_DEST%
 ) else (
     echo WARNING: APK not found at expected location
-    echo Looking for APK in build outputs...
-    dir /s /b build-tools\android\android\app\build\outputs\apk\*.apk
 )
 
 echo.
 echo ========================================
-echo   Build Complete!
+echo   Debug Build Complete!
 echo ========================================
 echo.
 echo APK Location: %APK_DEST%
-echo Version: %VERSION%
 echo.
-echo Next steps:
-echo   1. Test the APK on your device
-echo   2. Upload to GitHub releases
-echo   3. Tag the release as v%VERSION%
+echo This is a DEBUG build - not for production!
+echo Use build-apk.bat for release builds.
 echo.
 pause

@@ -206,16 +206,38 @@ Vite will provide hot module replacement for instant updates.
 
 ### Frontend Deployment
 
+#### Android APK (Automated Release)
+
+**One-command release to GitHub:**
+```bash
+npm run release
+```
+
+This will:
+- ✅ Bump version numbers
+- ✅ Build web assets and APK
+- ✅ Commit and tag in Git
+- ✅ Create GitHub release
+- ✅ Upload APK automatically
+
+Users can then update via the in-app updater!
+
+**See:** [AUTOMATED-RELEASES.md](docs/AUTOMATED-RELEASES.md) for complete guide.
+
+#### Android APK (Manual Build)
+
+Without Android Studio:
+```bash
+cd frontend/build-tools/android
+build-apk.bat
+```
+
+**See:** [BUILD-WITHOUT-STUDIO.md](frontend/build-tools/android/BUILD-WITHOUT-STUDIO.md)
+
 #### Electron (PC)
 ```bash
 cd frontend
 npm run build:electron
-```
-
-#### Capacitor (Android/Android TV)
-```bash
-cd frontend
-npm run build:android
 ```
 
 ## License

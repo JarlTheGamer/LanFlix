@@ -39,7 +39,13 @@ app.options('*', cors());
 app.use(injectApiStatus);
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    port: config.server.port,
+    version: '1.0.0',
+    name: 'Lanflix'
+  });
 });
 
 // Mount API routes

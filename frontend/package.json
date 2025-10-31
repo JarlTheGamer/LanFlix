@@ -1,6 +1,6 @@
 {
   "name": "lanflix-ui",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Lanflix streaming media frontend",
   "main": "src/main.js",
   "scripts": {
@@ -11,7 +11,10 @@
     "android:sync": "npm run build && npx cap sync android",
     "android:open": "npx cap open android",
     "android:run": "npm run android:sync && npx cap run android",
-    "android:build": "npm run android:sync && cd build-tools/android/android && gradlew assembleDebug"
+    "android:build": "npm run android:sync && cd build-tools/android/android && gradlew assembleDebug",
+    "android:build-release": "cd build-tools/android && build-apk.bat",
+    "android:build-debug": "cd build-tools/android && build-apk-debug.bat",
+    "version:bump": "node ../scripts/bump-version.js"
   },
   "keywords": [
     "streaming",

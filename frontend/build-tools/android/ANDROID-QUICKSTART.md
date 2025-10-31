@@ -128,7 +128,7 @@ Look for "IPv4 Address" (e.g., 192.168.1.100)
 1. Check your backend is running: `npm run dev` in the backend folder
 2. Verify the IP address is correct
 3. Make sure both devices are on the same WiFi network
-4. Check Windows Firewall allows port 3000
+4. Check Windows Firewall allows port 6129 (or your configured backend port)
 
 ### "Build failed"
 

@@ -5,16 +5,28 @@
 
 export class ServerDiscovery {
   constructor() {
-    this.port = 6129; // Custom Lanflix port
+    this.ports = [6129, 6219, 3000]; // Try multiple common ports
     this.timeout = 2000; // 2 second timeout per attempt
     this.healthEndpoint = '/health';
   }
 
   /**
-   * Try to connect to a specific IP address
+   * Try to connect to a specific IP address on multiple ports
    */
   async tryServer(ip) {
-    const url = `http://${ip}:${this.port}${this.healthEndpoint}`;
+    // Try all ports in parallel for this IP
+    const portPromises = this.ports.map(port => this.tryServerPort(ip, port));
+    const results = await Promise.all(portPromises);
+    
+    // Return the first successful connection
+    return results.find(result => result !== null) || null;
+  }
+
+  /**
+   * Try to connect to a specific IP address and port
+   */
+  async tryServerPort(ip, port) {
+    const url = `http://${ip}:${port}${this.healthEndpoint}`;
     
     try {
       const controller = new AbortController();
@@ -31,11 +43,12 @@ export class ServerDiscovery {
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'ok') {
-          return `http://${ip}:${this.port}`;
+          console.log(`✅ Found server at ${ip}:${port}`);
+          return `http://${ip}:${port}`;
         }
       }
     } catch (error) {
-      // Connection failed, server not found at this IP
+      // Connection failed, server not found at this IP:port
       return null;
     }
     
@@ -147,7 +160,7 @@ export class ServerDiscovery {
       '10.0.0.100',
     ];
     
-    console.log('🔍 Quick server discovery...');
+    console.log(`🔍 Quick server discovery (trying ports: ${this.ports.join(', ')})...`);
     
     const results = await Promise.all(
       priorityIPs.map(ip => this.tryServer(ip))

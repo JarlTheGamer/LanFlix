@@ -113,11 +113,11 @@ ip addr show
 
 ### Firewall Configuration
 
-Make sure port 3000 (or your backend port) is open:
+Make sure port 6129 (or your configured backend port) is open:
 
 **Windows Firewall:**
 ```powershell
-netsh advfirewall firewall add rule name="Lanflix Backend" dir=in action=allow protocol=TCP localport=3000
+netsh advfirewall firewall add rule name="Lanflix Backend" dir=in action=allow protocol=TCP localport=6129
 ```
 
 **Linux (ufw):**
