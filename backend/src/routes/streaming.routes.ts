@@ -211,6 +211,7 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
     let transcodingMode = 'auto'; // auto, direct-play, direct-stream, transcode
     let audioTranscodingEnabled = true;
     let videoTranscodingEnabled = true;
+    let useHardwareAccel = false;
 
     if (profileId) {
       try {
@@ -222,10 +223,25 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
           transcodingMode = prefs.transcodingMode || 'auto';
           audioTranscodingEnabled = prefs.audioTranscoding !== false;
           videoTranscodingEnabled = prefs.videoTranscoding !== false;
-          logger.info(`Profile ${profileId} transcoding preferences: mode=${transcodingMode}, audio=${audioTranscodingEnabled}, video=${videoTranscodingEnabled}`);
+          // Check for hardware acceleration in profile preferences
+          useHardwareAccel = prefs.useHardwareAccel !== false;
+          logger.info(`Profile ${profileId} transcoding preferences: mode=${transcodingMode}, audio=${audioTranscodingEnabled}, video=${videoTranscodingEnabled}, hwAccel=${useHardwareAccel}`);
         }
       } catch (error) {
         logger.warn('Failed to load transcoding preferences, using defaults:', error);
+      }
+    }
+
+    // Also check global hardware acceleration setting as fallback
+    if (!profileId) {
+      try {
+        const hwAccelSetting = await Settings.findOne({ where: { key: 'useHardwareAccel' } });
+        if (hwAccelSetting) {
+          useHardwareAccel = JSON.parse(hwAccelSetting.value) === true;
+          logger.info(`Hardware acceleration (global): ${useHardwareAccel ? 'ENABLED (GPU)' : 'DISABLED (CPU)'}`);
+        }
+      } catch (error) {
+        logger.warn('Failed to load hardware acceleration setting, using CPU:', error);
       }
     }
 
@@ -314,11 +330,18 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
       logger.info(`${transcodeMode} for content ${id} (${compatCheck.reason})`);
 
       // For transcoded streams with seeking, use startTime parameter
-      const transcodeStream = mediaConverterService.createCPUTranscodeStream(filePath, {
-        transcodeAudio: shouldTranscodeAudio,
-        transcodeVideo: shouldTranscodeVideo,
-        startTime: startTime
-      });
+      // Use GPU if hardware acceleration is enabled, otherwise fall back to CPU
+      const transcodeStream = useHardwareAccel
+        ? mediaConverterService.createTranscodeStream(filePath, {
+          transcodeAudio: shouldTranscodeAudio,
+          transcodeVideo: shouldTranscodeVideo,
+          startTime: startTime
+        })
+        : mediaConverterService.createCPUTranscodeStream(filePath, {
+          transcodeAudio: shouldTranscodeAudio,
+          transcodeVideo: shouldTranscodeVideo,
+          startTime: startTime
+        });
 
       res.writeHead(200, {
         'Content-Type': 'video/mp4',
