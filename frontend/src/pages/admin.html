@@ -22,8 +22,16 @@
 
     <main class="admin-main">
         <div class="admin-container">
-            <h1>System Configuration</h1>
-            <p class="admin-subtitle">Configure API keys, storage paths, and external services</p>
+            <!-- Tab Navigation -->
+            <div class="admin-tabs">
+                <button class="admin-tab active" data-tab="config">⚙️ Configuration</button>
+                <button class="admin-tab" data-tab="media">🎬 Media Library</button>
+            </div>
+
+            <!-- Configuration Tab -->
+            <div class="admin-tab-content active" id="config-tab">
+                <h1>System Configuration</h1>
+                <p class="admin-subtitle">Configure API keys, storage paths, and external services</p>
 
             <section class="admin-section">
                 <h2>📁 Storage Paths</h2>
@@ -143,11 +151,52 @@
                 </div>
             </section>
 
-            <div class="admin-actions">
-                <button class="save-btn" id="save-btn">💾 Save Configuration</button>
-                <button class="cancel-btn" onclick="window.location.href='settings.html'">Cancel</button>
+                <div class="admin-actions">
+                    <button class="save-btn" id="save-btn">💾 Save Configuration</button>
+                    <button class="cancel-btn" onclick="window.location.href='settings.html'">Cancel</button>
+                </div>
+                <div id="status"></div>
             </div>
-            <div id="status"></div>
+
+            <!-- Media Library Tab -->
+            <div class="admin-tab-content" id="media-tab">
+                <h1>Media Library Management</h1>
+                <p class="admin-subtitle">View and manage your media files, trigger transcoding</p>
+
+                <section class="admin-section">
+                    <h2>🎬 Movies</h2>
+                    <div class="admin-card">
+                        <div class="media-filters">
+                            <input type="text" id="movie-search" placeholder="Search movies..." class="search-input" />
+                            <select id="movie-sort" class="filter-select">
+                                <option value="title">Sort by Title</option>
+                                <option value="year">Sort by Year</option>
+                                <option value="dateAdded">Sort by Date Added</option>
+                            </select>
+                        </div>
+                        <div id="movies-list" class="media-list">
+                            <div class="loading">Loading movies...</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="admin-section">
+                    <h2>📺 TV Series</h2>
+                    <div class="admin-card">
+                        <div class="media-filters">
+                            <input type="text" id="series-search" placeholder="Search series..." class="search-input" />
+                            <select id="series-sort" class="filter-select">
+                                <option value="title">Sort by Title</option>
+                                <option value="year">Sort by Year</option>
+                                <option value="dateAdded">Sort by Date Added</option>
+                            </select>
+                        </div>
+                        <div id="series-list" class="media-list">
+                            <div class="loading">Loading series...</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
         </div>
     </main>
     <script type="module" src="../scripts/admin-main.js"></script>

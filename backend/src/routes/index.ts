@@ -7,6 +7,7 @@ import settingsRoutes from './settings.routes';
 import notificationRoutes from './notification.routes';
 import jobsRoutes from './jobs.routes';
 import webhookRoutes from './webhook.routes';
+import transcodeRoutes from './transcode.routes';
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use('/settings', settingsRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/jobs', jobsRoutes);
 router.use('/webhook', webhookRoutes);
+router.use('/transcode', transcodeRoutes);
 
 export default router;

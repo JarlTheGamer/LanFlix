@@ -212,25 +212,35 @@
                                 <option value="direct-play">Direct Play - No transcoding (fastest)</option>
                                 <option value="direct-stream">Direct Stream - Audio transcode only</option>
                                 <option value="transcode">Transcode - Full video+audio transcoding</option>
+                                <option value="custom">Custom - Manual audio/video control</option>
                             </select>
                         </div>
-                        <div class="settings-item">
+                        <div class="settings-info-box" id="custom-mode-warning" style="display: none; background: #ff9800; border-left: 4px solid #f57c00;">
+                            <svg viewBox="0 0 24 24" width="20" height="20">
+                                <path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+                            </svg>
+                            <div>
+                                <strong>⚠️ Warning: Custom Mode</strong>
+                                <p>Custom mode may not work with all footage. Some codec combinations can cause playback issues or seeking problems. Use Auto mode for best compatibility.</p>
+                            </div>
+                        </div>
+                        <div class="settings-item" id="audio-transcoding-item">
                             <div class="settings-item-info">
                                 <label>Audio Transcoding</label>
-                                <p class="settings-item-description">Convert incompatible audio codecs to AAC</p>
+                                <p class="settings-item-description">Convert incompatible audio codecs to AAC (Custom mode only)</p>
                             </div>
                             <label class="settings-toggle">
-                                <input type="checkbox" id="audio-transcoding" checked />
+                                <input type="checkbox" id="audio-transcoding" checked disabled />
                                 <span class="settings-toggle-slider"></span>
                             </label>
                         </div>
-                        <div class="settings-item">
+                        <div class="settings-item" id="video-transcoding-item">
                             <div class="settings-item-info">
                                 <label>Video Transcoding</label>
-                                <p class="settings-item-description">Convert incompatible video codecs to H.264</p>
+                                <p class="settings-item-description">Convert incompatible video codecs to H.264 (Custom mode only)</p>
                             </div>
                             <label class="settings-toggle">
-                                <input type="checkbox" id="video-transcoding" checked />
+                                <input type="checkbox" id="video-transcoding" checked disabled />
                                 <span class="settings-toggle-slider"></span>
                             </label>
                         </div>

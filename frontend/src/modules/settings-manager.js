@@ -404,8 +404,11 @@ export class SettingsManager {
     const transcodingModeSelect = document.getElementById('transcoding-mode');
     if (transcodingModeSelect) {
       transcodingModeSelect.addEventListener('change', async () => {
+        this.handleTranscodingModeChange();
         await this.saveStreamingPreferences();
       });
+      // Initialize on load
+      this.handleTranscodingModeChange();
     }
 
     const presetSelect = document.getElementById('transcode-preset');
@@ -413,6 +416,32 @@ export class SettingsManager {
       presetSelect.addEventListener('change', async () => {
         await this.saveStreamingPreferences();
       });
+    }
+  }
+
+  /**
+   * Handle transcoding mode change - show/hide custom warning and enable/disable toggles
+   */
+  handleTranscodingModeChange() {
+    const transcodingMode = document.getElementById('transcoding-mode')?.value;
+    const customWarning = document.getElementById('custom-mode-warning');
+    const audioTranscodingToggle = document.getElementById('audio-transcoding');
+    const videoTranscodingToggle = document.getElementById('video-transcoding');
+
+    if (transcodingMode === 'custom') {
+      // Show warning
+      if (customWarning) customWarning.style.display = 'flex';
+      
+      // Enable toggles
+      if (audioTranscodingToggle) audioTranscodingToggle.disabled = false;
+      if (videoTranscodingToggle) videoTranscodingToggle.disabled = false;
+    } else {
+      // Hide warning
+      if (customWarning) customWarning.style.display = 'none';
+      
+      // Disable toggles (they're controlled by the mode)
+      if (audioTranscodingToggle) audioTranscodingToggle.disabled = true;
+      if (videoTranscodingToggle) videoTranscodingToggle.disabled = true;
     }
   }
 
