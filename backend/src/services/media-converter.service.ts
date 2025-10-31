@@ -24,12 +24,12 @@ export class MediaConverterService {
    */
   isContainerCompatible(container?: string): boolean {
     if (!container) return false;
-    
+
     // MP4 and its variants
     const mp4Containers = ['mp4', 'mov', 'm4v', 'mp4,mov,m4a,3gp,3g2,mj2'];
     // WebM
     const webmContainers = ['webm', 'matroska,webm'];
-    
+
     const compatible = [...mp4Containers, ...webmContainers];
     return compatible.some(c => container.toLowerCase().includes(c));
   }
@@ -167,11 +167,6 @@ export class MediaConverterService {
 
     let command = ffmpeg(filePath);
 
-    // Seek if needed (before decoding for efficiency)
-    if (options.startTime && options.startTime > 0) {
-      command = command.seekInput(options.startTime);
-    }
-
     // NVDEC hardware-accelerated decoding (GPU decode)
     // Only use hardware decode if we're transcoding video
     if (options.transcodeVideo) {
@@ -181,6 +176,13 @@ export class MediaConverterService {
           '-hwaccel_output_format', 'cuda',
           '-extra_hw_frames', '8'
         ]);
+    }
+
+    // Seek if needed - use input seeking with noaccurate_seek for better sync
+    if (options.startTime && options.startTime > 0) {
+      command = command
+        .seekInput(options.startTime)
+        .inputOptions(['-noaccurate_seek']); // Fast seek, better for A/V sync
     }
 
     command = command
@@ -231,6 +233,7 @@ export class MediaConverterService {
     command = command
       .addOutputOption('-avoid_negative_ts', 'make_zero')
       .addOutputOption('-max_muxing_queue_size', '1024')
+      .addOutputOption('-fflags', '+genpts')  // Generate presentation timestamps
       .on('start', (commandLine) => {
         logger.info('FFmpeg stream started:', commandLine);
       })
@@ -244,12 +247,12 @@ export class MediaConverterService {
       })
       .on('error', (err) => {
         logger.error('FFmpeg stream error:', err.message);
-        
+
         // Try CPU fallback on GPU error
         if (err.message.includes('nvenc') || err.message.includes('cuda')) {
           logger.warn('GPU error detected, client should retry with CPU fallback');
         }
-        
+
         outputStream.destroy(err);
       })
       .on('end', () => {
@@ -281,8 +284,11 @@ export class MediaConverterService {
 
     let command = ffmpeg(filePath);
 
+    // Seek if needed - use input seeking with noaccurate_seek for better sync
     if (options.startTime && options.startTime > 0) {
-      command = command.seekInput(options.startTime);
+      command = command
+        .seekInput(options.startTime)
+        .inputOptions(['-noaccurate_seek']); // Fast seek, better for A/V sync
     }
 
     command = command
@@ -319,6 +325,7 @@ export class MediaConverterService {
     command = command
       .addOutputOption('-avoid_negative_ts', 'make_zero')
       .addOutputOption('-max_muxing_queue_size', '1024')
+      .addOutputOption('-fflags', '+genpts')  // Generate presentation timestamps
       .on('start', (commandLine) => {
         logger.info('FFmpeg CPU stream started:', commandLine);
       })
