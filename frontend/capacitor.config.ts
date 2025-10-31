@@ -11,7 +11,8 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: true
   },
   server: {
-    androidScheme: 'https',
+    androidScheme: 'http',
+    hostname: 'localhost',
     // Allow cleartext traffic for local backend connection
     cleartext: true
   }

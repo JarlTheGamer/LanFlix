@@ -1,13 +1,20 @@
 # Android Quick Start Guide
 
-Get your Lanflix app running on Android in 5 minutes!
+Get your Lanflix app running on Android phones, tablets, Android TV, and Fire TV in 5 minutes!
 
 ## Prerequisites Check
 
 Before starting, make sure you have:
 - [ ] Node.js installed (v18+)
 - [ ] Android Studio installed
-- [ ] Android device or emulator ready
+- [ ] Android device, emulator, or TV ready
+
+## Supported Devices
+
+✅ **Android Phones & Tablets** - Full touch support
+✅ **Android TV** - D-pad navigation with remote
+✅ **Fire TV / Fire TV Stick** - Optimized for 10-foot UI
+✅ **Google TV** - Full compatibility
 
 ## Step-by-Step Setup
 
@@ -69,9 +76,49 @@ Look for "IPv4 Address" (e.g., 192.168.1.100)
 
 ### 5. Start Using the App!
 
-- Browse content
-- Create profiles
-- Start streaming
+**On Mobile:**
+- Touch to navigate
+- Tap to select
+- Swipe to browse
+
+**On TV (Android TV / Fire TV):**
+- Use D-pad (arrow keys) to navigate
+- Press Enter/OK to select
+- Press Back to go back
+- Automatic TV mode detection
+
+## TV-Specific Features
+
+### 🎮 Remote Control Support
+- **Arrow Keys**: Navigate through menus and content
+- **Enter/OK**: Select items and play videos
+- **Back**: Return to previous screen
+- **Play/Pause**: Control video playback
+
+### 📺 Optimized for TV
+- Large, easy-to-read text
+- Clear focus indicators
+- 10-foot UI design
+- Smooth D-pad navigation
+
+### 🔥 Fire TV Installation
+
+1. **Enable ADB on Fire TV:**
+   - Settings → My Fire TV → Developer Options
+   - Turn on "ADB Debugging"
+   - Turn on "Apps from Unknown Sources"
+
+2. **Connect via ADB:**
+   ```bash
+   adb connect YOUR_FIRETV_IP:5555
+   ```
+
+3. **Install APK:**
+   ```bash
+   adb install app-debug.apk
+   ```
+
+4. **Launch the app** from Fire TV home screen
 
 ## Common Issues
 
@@ -93,6 +140,20 @@ npx cap sync android
 ### "Android Studio won't open"
 
 Make sure Android Studio is installed and in your PATH, or open it manually and import the `android/` folder.
+
+### "TV navigation not working"
+
+1. Verify you're on a TV device (Android TV/Fire TV)
+2. Try using keyboard arrow keys to test
+3. Check browser console for errors
+4. Ensure app is up to date
+
+### "Video not playing on TV"
+
+1. Check transcoding is enabled in settings
+2. Verify backend is accessible from TV
+3. Test with a different video format
+4. Check network speed
 
 ## Making Changes
 

@@ -12,12 +12,18 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, 'dist'),
     emptyOutDir: true,
+    target: 'esnext',
     rollupOptions: {
       input: {
         index: resolve(__dirname, 'src/index.html'),
         main: resolve(__dirname, 'src/pages/index.html'),
+        profiles: resolve(__dirname, 'src/pages/profiles.html'),
         settings: resolve(__dirname, 'src/pages/settings.html'),
-        appConfig: resolve(__dirname, 'src/pages/app-config.html')
+        appConfig: resolve(__dirname, 'src/pages/app-config.html'),
+        myList: resolve(__dirname, 'src/pages/my-list.html'),
+        notifications: resolve(__dirname, 'src/pages/notifications.html'),
+        player: resolve(__dirname, 'src/pages/player.html'),
+        admin: resolve(__dirname, 'src/pages/admin.html')
       }
     }
   },

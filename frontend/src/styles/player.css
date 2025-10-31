@@ -38,6 +38,16 @@ body {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  background: #000;
+}
+
+/* Ensure video plays inline on mobile */
+.video-element::-webkit-media-controls {
+  display: none !important;
+}
+
+.video-element::-webkit-media-controls-enclosure {
+  display: none !important;
 }
 
 .back-button {

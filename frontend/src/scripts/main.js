@@ -5,6 +5,7 @@ import searchModule from '../modules/search.js';
 import stateManager from '../modules/data.js';
 import { notificationBadge } from '../modules/notification-badge.js';
 import { checkFirstRun, isNativeApp } from '../modules/first-run.js';
+import tvNavigation from '../modules/tv-navigation.js';
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
@@ -12,10 +13,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (isNativeApp() && !checkFirstRun()) {
     return; // Will redirect to config page
   }
+  
   try {
     // Check if we have a saved profile, if not redirect to profiles page
     if (!stateManager.currentProfileId) {
-      window.location.href = 'profiles.html';
+      window.location.replace('profiles.html');
       return;
     }
 
@@ -39,6 +41,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     await contentDisplay.initialize();
     navigation.initialize();
+    
+    // Initialize TV navigation if on TV platform
+    tvNavigation.initialize();
     
     // Initialize search module
     searchModule.initialize();

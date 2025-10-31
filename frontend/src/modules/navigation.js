@@ -13,6 +13,33 @@ export class Navigation {
     // Page transition state
     this.isTransitioning = false;
     this.transitionDuration = 300; // ms
+
+    // Detect if device has touch capability
+    this.isTouchDevice = this.detectTouchDevice();
+    
+    // Detect if running on Android TV
+    this.isAndroidTV = this.detectAndroidTV();
+  }
+
+  /**
+   * Detect if device is touch-capable (mobile/tablet)
+   */
+  detectTouchDevice() {
+    return (('ontouchstart' in window) ||
+      (navigator.maxTouchPoints > 0) ||
+      (navigator.msMaxTouchPoints > 0)) &&
+      window.innerWidth < 1024; // Exclude large touch screens like Surface
+  }
+
+  /**
+   * Detect if running on Android TV
+   */
+  detectAndroidTV() {
+    const userAgent = navigator.userAgent.toLowerCase();
+    return userAgent.includes('android') && 
+           (userAgent.includes('tv') || 
+            userAgent.includes('aftm') || // Fire TV
+            userAgent.includes('aftb')); // Fire TV Stick
   }
 
   initialize() {
@@ -220,16 +247,48 @@ export class Navigation {
   }
 
   setupKeyboardNavigation() {
-    const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
-    menuButtons.forEach((btn) => btn.classList.remove('active'));
-    menuButtons[this.focusedMenuIndex].classList.add('active');
+    // Only enable keyboard navigation for non-touch devices or Android TV
+    if (!this.isTouchDevice || this.isAndroidTV) {
+      const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
+      menuButtons.forEach((btn) => btn.classList.remove('active'));
+      if (menuButtons[this.focusedMenuIndex]) {
+        menuButtons[this.focusedMenuIndex].classList.add('active');
+      }
 
-    document.addEventListener('keydown', (e) => this.handleKeyboard(e));
+      document.addEventListener('keydown', (e) => this.handleKeyboard(e));
 
-    // Add support for Android TV remote control buttons
-    this.setupRemoteControlSupport();
+      // Add support for Android TV remote control buttons
+      if (this.isAndroidTV) {
+        this.setupRemoteControlSupport();
+      }
 
-    this.updateFocus();
+      this.updateFocus();
+    } else {
+      // For touch devices, ensure touch interactions work smoothly
+      this.setupTouchNavigation();
+    }
+  }
+
+  /**
+   * Setup touch-friendly navigation for mobile devices
+   */
+  setupTouchNavigation() {
+    // Disable focus styles on touch devices
+    document.body.classList.add('touch-device');
+    
+    // Add CSS to hide focus indicators on touch devices
+    const style = document.createElement('style');
+    style.textContent = `
+      .touch-device .focused {
+        outline: none !important;
+        box-shadow: none !important;
+        transform: none !important;
+      }
+      .touch-device .movie-card.expanded {
+        transform: none !important;
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   /**
@@ -263,6 +322,11 @@ export class Navigation {
   }
 
   handleKeyboard(e) {
+    // Skip keyboard navigation on touch devices (unless Android TV)
+    if (this.isTouchDevice && !this.isAndroidTV) {
+      return;
+    }
+
     // Prevent default for arrow keys to avoid page scrolling
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
       e.preventDefault();

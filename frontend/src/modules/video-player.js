@@ -75,6 +75,11 @@ export class VideoPlayer {
     // Set video attributes for audio playback
     this.videoElement.setAttribute('muted', 'false');
     this.videoElement.removeAttribute('muted');
+    
+    // Set attributes for mobile/TV playback
+    this.videoElement.setAttribute('playsinline', '');
+    this.videoElement.setAttribute('webkit-playsinline', '');
+    this.videoElement.setAttribute('preload', 'auto');
 
     // Set video source
     const streamUrl = apiClient.getStreamUrl(contentId, episodeId, this.profileId);

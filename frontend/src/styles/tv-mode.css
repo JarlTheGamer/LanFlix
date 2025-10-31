@@ -1,0 +1,230 @@
+/**
+ * TV Mode Styles
+ * Optimized for Android TV, Fire TV, and other TV platforms
+ */
+
+/* TV Mode Body */
+body.tv-mode {
+  cursor: none;
+  overflow: hidden;
+}
+
+/* TV Focus Indicator */
+.tv-mode .tv-focused {
+  outline: 4px solid rgba(255, 255, 255, 0.95) !important;
+  outline-offset: 4px;
+  transform: scale(1.05);
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s ease;
+}
+
+/* Menu Items */
+.tv-mode .menu-item.tv-focused {
+  background: rgba(255, 255, 255, 0.95);
+  color: #000000;
+  transform: translateY(-2px) scale(1.05);
+}
+
+/* Tabs */
+.tv-mode .tab.tv-focused {
+  background: rgba(255, 255, 255, 0.95);
+  color: #000000;
+  outline: 4px solid rgba(255, 255, 255, 0.95);
+}
+
+/* Movie Cards */
+.tv-mode .movie-card.tv-focused {
+  outline: 4px solid rgba(255, 255, 255, 0.95);
+  outline-offset: 4px;
+  transform: translateY(-8px) scale(1.05);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+  z-index: 100;
+}
+
+.tv-mode .movie-card.tv-focused .movie-title {
+  text-shadow: 
+    0 0 20px rgba(255, 255, 255, 0.8),
+    0 0 40px rgba(255, 255, 255, 0.6);
+}
+
+/* Hero Carousel */
+.tv-mode .hero.tv-focused::before {
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.95);
+}
+
+/* Buttons */
+.tv-mode button.tv-focused,
+.tv-mode .profile.tv-focused,
+.tv-mode .settings-btn.tv-focused,
+.tv-mode .notifications-btn.tv-focused {
+  background: rgba(255, 255, 255, 0.95);
+  transform: translateY(-2px) scale(1.05);
+}
+
+.tv-mode .profile.tv-focused .profile-arrow,
+.tv-mode .settings-btn.tv-focused svg,
+.tv-mode .notifications-btn.tv-focused svg {
+  fill: rgba(0, 0, 0, 0.8);
+}
+
+/* Player Controls */
+.tv-mode .player-btn.tv-focused {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.15);
+  outline: 3px solid rgba(255, 255, 255, 0.95);
+  outline-offset: 2px;
+}
+
+/* Profile Selection */
+.tv-mode .profile-item.tv-focused {
+  transform: scale(1.15);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+  background: rgba(255, 255, 255, 0.2);
+  outline: 4px solid rgba(255, 255, 255, 0.95);
+}
+
+/* Disable hover effects in TV mode */
+.tv-mode *:hover {
+  /* Let TV focus handle the styling */
+}
+
+/* Larger touch targets for TV */
+.tv-mode .menu-item,
+.tv-mode .tab,
+.tv-mode button {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 12px 20px;
+}
+
+/* Hide mouse cursor elements */
+.tv-mode .center-play-button {
+  display: none !important;
+}
+
+/* Ensure controls are always visible in TV mode */
+.tv-mode .player-controls {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+.tv-mode .back-button {
+  opacity: 1 !important;
+}
+
+/* Smooth scrolling for TV navigation */
+.tv-mode * {
+  scroll-behavior: smooth;
+}
+
+/* Optimize text rendering for TV screens */
+.tv-mode {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Larger fonts for TV viewing distance */
+.tv-mode .menu-item {
+  font-size: 1.1rem;
+}
+
+.tv-mode .hero-title {
+  font-size: clamp(2.5rem, 4vw, 4rem);
+}
+
+.tv-mode .movie-title {
+  font-size: 2rem;
+}
+
+/* Progress bar more visible in TV mode */
+.tv-mode .player-progress-wrapper {
+  height: 6px;
+}
+
+.tv-mode .player-progress-thumb {
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%) scale(1);
+}
+
+/* Settings and notifications buttons */
+.tv-mode .settings-btn.tv-focused svg,
+.tv-mode .notifications-btn.tv-focused svg {
+  fill: rgba(0, 0, 0, 0.8);
+}
+
+/* CTA Buttons */
+.tv-mode .cta.tv-focused {
+  transform: translateY(-4px) scale(1.1);
+  box-shadow: 0 24px 48px rgba(229, 9, 20, 0.5);
+}
+
+/* Search button */
+.tv-mode .menu-item.search-home.tv-focused svg {
+  fill: rgba(0, 0, 0, 0.8);
+}
+
+/* Responsive adjustments for different TV sizes */
+@media (min-width: 1920px) {
+  /* 1080p TVs */
+  .tv-mode .menu-item {
+    font-size: 1.2rem;
+  }
+  
+  .tv-mode .hero-title {
+    font-size: clamp(3rem, 5vw, 5rem);
+  }
+}
+
+@media (min-width: 3840px) {
+  /* 4K TVs */
+  .tv-mode .menu-item {
+    font-size: 1.4rem;
+  }
+  
+  .tv-mode .hero-title {
+    font-size: clamp(4rem, 6vw, 6rem);
+  }
+  
+  .tv-mode .movie-title {
+    font-size: 2.5rem;
+  }
+}
+
+/* Animation for focus transitions */
+.tv-mode .tv-focused {
+  animation: tvFocusPulse 0.3s ease-out;
+}
+
+@keyframes tvFocusPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1.05);
+  }
+}
+
+/* Loading states */
+.tv-mode .loading-spinner {
+  width: 80px;
+  height: 80px;
+}
+
+/* Ensure video fills screen properly on TV */
+.tv-mode .video-element {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Profile avatar focus */
+.tv-mode .profile.tv-focused .profile-avatar::before {
+  background: rgba(0, 0, 0, 0.8);
+  box-shadow: 0 16px 0 -6px rgba(0, 0, 0, 0.8);
+}

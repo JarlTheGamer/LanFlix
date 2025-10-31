@@ -6,7 +6,7 @@ export function checkFirstRun() {
   if (!config) {
     // Check if we're already on the config page
     if (!window.location.pathname.includes('app-config.html')) {
-      window.location.href = '/pages/app-config.html';
+      window.location.replace('app-config.html');
       return false;
     }
   }
