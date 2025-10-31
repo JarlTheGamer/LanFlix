@@ -30,6 +30,7 @@ router.head('/:id', validatePathParam('id'), async (req: Request, res: Response,
   try {
     const id = parseInt(req.params.id, 10);
     const episodeId = req.query.episodeId ? parseInt(req.query.episodeId as string) : undefined;
+    const profileId = req.query.profileId ? parseInt(req.query.profileId as string) : undefined;
 
     let filePath: string | undefined;
 
@@ -64,14 +65,87 @@ router.head('/:id', validatePathParam('id'), async (req: Request, res: Response,
     };
     const contentType = contentTypeMap[ext] || 'video/mp4';
 
-    res.writeHead(200, {
+    // Load user's transcoding preferences (if any)
+    let transcodingMode = 'auto';
+    let audioTranscodingEnabled = true;
+    let videoTranscodingEnabled = true;
+
+    if (profileId) {
+      try {
+        const settingKey = `streamingPreferences_${profileId}`;
+        const setting = await Settings.findOne({ where: { key: settingKey } });
+
+        if (setting) {
+          const prefs = JSON.parse(setting.value);
+          transcodingMode = prefs.transcodingMode || 'auto';
+          audioTranscodingEnabled = prefs.audioTranscoding !== false;
+          videoTranscodingEnabled = prefs.videoTranscoding !== false;
+        }
+      } catch (error) {
+        logger.warn('Failed to load transcoding preferences for HEAD request, using defaults:', error);
+      }
+    }
+
+    const compatCheck = await mediaConverterService.checkCompatibility(filePath);
+
+    let actualPlaybackMode = compatCheck.playbackMode;
+
+    if (transcodingMode !== 'auto') {
+      if (transcodingMode === 'direct-play') {
+        actualPlaybackMode = 'direct-play';
+      } else if (transcodingMode === 'direct-stream') {
+        actualPlaybackMode = 'direct-stream';
+      } else if (transcodingMode === 'transcode') {
+        actualPlaybackMode = 'transcode';
+      }
+    }
+
+    let shouldTranscodeAudio = compatCheck.transcodeAudio && audioTranscodingEnabled;
+    let shouldTranscodeVideo = compatCheck.transcodeVideo && videoTranscodingEnabled;
+
+    if (actualPlaybackMode === 'direct-play') {
+      shouldTranscodeAudio = false;
+      shouldTranscodeVideo = false;
+    } else if (actualPlaybackMode === 'remux') {
+      shouldTranscodeAudio = false;
+      shouldTranscodeVideo = false;
+    } else if (actualPlaybackMode === 'direct-stream') {
+      shouldTranscodeVideo = false;
+      shouldTranscodeAudio = compatCheck.transcodeAudio;
+    } else if (actualPlaybackMode === 'transcode') {
+      shouldTranscodeAudio = compatCheck.transcodeAudio;
+      shouldTranscodeVideo = compatCheck.transcodeVideo;
+    }
+
+    const exposeHeaders = new Set(['Content-Length', 'Accept-Ranges', 'X-Direct-Play']);
+    const headers: Record<string, string | number> = {
       'Content-Length': stat.size,
       'Content-Type': contentType,
       'Accept-Ranges': 'bytes',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Expose-Headers': 'Content-Length, Accept-Ranges',
       'Cache-Control': 'public, max-age=3600'
-    });
+    };
+
+    if (actualPlaybackMode === 'remux' && !shouldTranscodeAudio && !shouldTranscodeVideo) {
+      headers['X-Playback-Mode'] = 'remux';
+      headers['X-Transcode-Mode'] = 'remux';
+      headers['X-Direct-Play'] = 'false';
+      exposeHeaders.add('X-Playback-Mode');
+      exposeHeaders.add('X-Transcode-Mode');
+    } else if (shouldTranscodeAudio || shouldTranscodeVideo) {
+      const transcodeMode = shouldTranscodeVideo ? 'transcode' : 'direct-stream';
+      headers['X-Playback-Mode'] = transcodeMode;
+      headers['X-Transcode-Mode'] = transcodeMode;
+      headers['X-Direct-Play'] = 'false';
+      exposeHeaders.add('X-Playback-Mode');
+      exposeHeaders.add('X-Transcode-Mode');
+    } else {
+      headers['X-Direct-Play'] = 'true';
+    }
+
+    headers['Access-Control-Expose-Headers'] = Array.from(exposeHeaders).join(', ');
+
+    res.writeHead(200, headers);
     res.end();
   } catch (error) {
     next(error);
@@ -207,7 +281,7 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
         'Content-Type': 'video/mp4',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Range',
-        'Access-Control-Expose-Headers': 'Content-Type',
+        'Access-Control-Expose-Headers': 'Content-Type, X-Playback-Mode, X-Transcode-Mode, X-Direct-Play',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'X-Playback-Mode': 'remux',
@@ -250,7 +324,7 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
         'Content-Type': 'video/mp4',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Range',
-        'Access-Control-Expose-Headers': 'Content-Type',
+        'Access-Control-Expose-Headers': 'Content-Type, X-Playback-Mode, X-Transcode-Mode, X-Direct-Play',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'X-Playback-Mode': transcodeMode,
@@ -325,7 +399,7 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
         'Content-Type': contentType,
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Range',
-        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
+        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, X-Direct-Play',
         'Cache-Control': 'public, max-age=3600',
         'X-Direct-Play': 'true'
       });
@@ -339,7 +413,7 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
         'Accept-Ranges': 'bytes',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Range',
-        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
+        'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, X-Direct-Play',
         'Cache-Control': 'public, max-age=3600',
         'X-Direct-Play': 'true'
       });
