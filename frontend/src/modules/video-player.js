@@ -27,9 +27,12 @@ export class VideoPlayer {
     this.volume = 1.0;
     this.isMuted = false;
     this.isFullscreen = false;
-    
+
     // Transcoding offset - tracks where we started in the original video
     this.startOffset = 0;
+
+    // Duration guard to avoid spamming notifications while metadata loads
+    this.durationWarningShown = false;
 
     // Subtitles
     this.availableSubtitles = [];
@@ -105,8 +108,13 @@ export class VideoPlayer {
 
       // If duration is still not set from probe, use video element duration
       if (!this.duration || this.duration === 0) {
-        this.duration = this.videoElement.duration;
-        console.log(`Duration fallback from video element: ${this.duration}s`);
+        const elementDuration = Number(this.videoElement.duration);
+
+        if (Number.isFinite(elementDuration) && elementDuration > 0 && elementDuration !== Infinity) {
+          this.duration = elementDuration;
+          this.durationWarningShown = false;
+          console.log(`Duration fallback from video element: ${this.duration}s`);
+        }
       }
 
       // Update duration display once we have it
@@ -149,7 +157,8 @@ export class VideoPlayer {
       const data = await apiClient.getMediaInfo(this.contentId, this.episodeId);
 
       if (data.mediaInfo && data.mediaInfo.duration) {
-        this.duration = data.mediaInfo.duration;
+        this.duration = Number(data.mediaInfo.duration);
+        this.durationWarningShown = false;
         console.log(`Duration from media probe: ${this.duration}s (${Math.floor(this.duration / 60)} minutes)`);
       }
     } catch (error) {
@@ -448,7 +457,19 @@ export class VideoPlayer {
     progressContainer?.addEventListener('click', (e) => {
       const rect = progressContainer.getBoundingClientRect();
       const percent = (e.clientX - rect.left) / rect.width;
-      const seekTime = percent * this.duration;
+      const effectiveDuration = this.getEffectiveDuration();
+
+      if (!effectiveDuration) {
+        console.warn('Cannot seek yet - duration still loading');
+        if (!this.durationWarningShown) {
+          this.showNotification('Still loading video duration. Please try again.');
+          this.durationWarningShown = true;
+        }
+        return;
+      }
+
+      this.durationWarningShown = false;
+      const seekTime = percent * effectiveDuration;
       this.seek(seekTime);
     });
 
@@ -525,8 +546,15 @@ export class VideoPlayer {
    * Seek to specific time
    */
   seek(time) {
-    const targetTime = Math.max(0, Math.min(time, this.duration));
-    console.log(`Seeking to ${targetTime}s (duration: ${this.duration}s, isTranscoding: ${this.isTranscoding})`);
+    const requestedTime = Math.max(0, time);
+    const effectiveDuration = this.getEffectiveDuration();
+    const targetTime = effectiveDuration ? Math.min(requestedTime, effectiveDuration) : requestedTime;
+
+    if (!effectiveDuration) {
+      console.warn('Duration unknown – seeking without clamp');
+    }
+
+    console.log(`Seeking to ${targetTime}s (duration: ${effectiveDuration ?? 'unknown'}s, isTranscoding: ${this.isTranscoding})`);
 
     if (this.isTranscoding) {
       // For transcoded streams, always reload at new position
@@ -538,6 +566,22 @@ export class VideoPlayer {
       console.log('Using direct play seek');
       this.videoElement.currentTime = targetTime;
     }
+  }
+
+  /**
+   * Get best known duration value for seeking/progress calculations
+   */
+  getEffectiveDuration() {
+    if (Number.isFinite(this.duration) && this.duration > 0) {
+      return this.duration;
+    }
+
+    const elementDuration = this.videoElement.duration;
+    if (Number.isFinite(elementDuration) && elementDuration > 0 && elementDuration !== Infinity) {
+      return elementDuration;
+    }
+
+    return null;
   }
 
   /**
@@ -714,11 +758,13 @@ export class VideoPlayer {
     }
 
     try {
+      const effectiveDuration = this.getEffectiveDuration();
+
       await apiClient.updateWatchProgress(
         this.contentId,
         this.profileId,
         Math.floor(this.currentTime),
-        Math.floor(this.duration),
+        effectiveDuration ? Math.floor(effectiveDuration) : null,
         this.episodeId
       );
 
@@ -732,9 +778,11 @@ export class VideoPlayer {
    * Update progress bar
    */
   updateProgressBar() {
+    const effectiveDuration = this.getEffectiveDuration();
+
     const progressBar = document.querySelector('.player-progress-bar');
-    if (progressBar && this.duration > 0) {
-      const percent = (this.currentTime / this.duration) * 100;
+    if (progressBar && effectiveDuration) {
+      const percent = (this.currentTime / effectiveDuration) * 100;
       progressBar.style.width = `${percent}%`;
     }
 
@@ -749,8 +797,10 @@ export class VideoPlayer {
    */
   updateDurationDisplay() {
     const durationDisplay = document.querySelector('.duration');
+    const effectiveDuration = this.getEffectiveDuration();
+
     if (durationDisplay) {
-      durationDisplay.textContent = this.formatTime(this.duration);
+      durationDisplay.textContent = effectiveDuration ? this.formatTime(effectiveDuration) : '--:--';
     }
   }
 
