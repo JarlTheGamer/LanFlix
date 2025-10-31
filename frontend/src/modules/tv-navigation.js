@@ -71,6 +71,11 @@ export class TVNavigation {
       '.notifications-btn',
       'button:not([disabled])',
       'a[href]',
+      'input[type="text"]',
+      'input[type="url"]',
+      'input[type="checkbox"]',
+      'select',
+      '.setting-input',
       '.player-btn'
     ];
 
@@ -319,7 +324,20 @@ export class TVNavigation {
   activateFocused() {
     if (!this.focusedElement) return;
 
-    // Trigger click event
+    // Handle input fields differently
+    if (this.focusedElement.tagName === 'INPUT' || this.focusedElement.tagName === 'SELECT') {
+      // For text inputs, focus them so user can type
+      this.focusedElement.focus();
+      
+      // For checkboxes, toggle them
+      if (this.focusedElement.type === 'checkbox') {
+        this.focusedElement.checked = !this.focusedElement.checked;
+        this.focusedElement.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return;
+    }
+
+    // Trigger click event for buttons and links
     this.focusedElement.click();
   }
 
