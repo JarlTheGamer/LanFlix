@@ -71,18 +71,11 @@ REM Get version from package.json (simple approach)
 for /f "tokens=2 delims=:, " %%a in ('findstr /C:"\"version\"" package.json') do set VERSION=%%a
 set VERSION=%VERSION:"=%
 
-REM Try to find the APK (signed or unsigned)
-set APK_SOURCE=
-if exist "build-tools\android\android\app\build\outputs\apk\release\app-release.apk" (
-    set APK_SOURCE=build-tools\android\android\app\build\outputs\apk\release\app-release.apk
-) else if exist "build-tools\android\android\app\build\outputs\apk\release\app-release-unsigned.apk" (
-    set APK_SOURCE=build-tools\android\android\app\build\outputs\apk\release\app-release-unsigned.apk
-    echo Note: Using unsigned APK
-)
-
+REM Copy and rename APK
+set APK_SOURCE=build-tools\android\android\app\build\outputs\apk\release\app-release.apk
 set APK_DEST=releases\lanflix-android-v%VERSION%.apk
 
-if not "%APK_SOURCE%"=="" (
+if exist "%APK_SOURCE%" (
     copy "%APK_SOURCE%" "%APK_DEST%"
     echo ✓ APK copied to: %APK_DEST%
 ) else (

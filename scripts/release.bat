@@ -179,7 +179,7 @@ if errorlevel 1 (
     echo WARNING: Failed to push to main branch
 )
 
-git push origin v%VERSION%
+git push origin v!VERSION!
 if errorlevel 1 (
     echo ERROR: Failed to push tag
     pause
@@ -201,31 +201,31 @@ if "!MANUAL_UPLOAD!"=="1" (
     echo Please upload the APK manually:
     echo.
     echo 1. Go to: https://github.com/JarlTheGamer/Applications./releases/new
-    echo 2. Choose tag: v%VERSION%
-    echo 3. Release title: Lanflix v%VERSION%
-    echo 4. Upload APK: %APK_DEST%
-    echo 5. Add release notes (see template below)
+    echo 2. Choose tag: v!VERSION!
+    echo 3. Release title: Lanflix v!VERSION!
+    echo 4. Upload APK: !APK_DEST!
+    echo 5. Add release notes ^(see template below^)
     echo 6. Click "Publish release"
     echo.
     echo Release Notes Template:
     echo ------------------------
-    echo ## What's New in v%VERSION%
+    echo ## What's New in v!VERSION!
     echo.
-    echo ### ✨ New Features
+    echo ### New Features
     echo - Feature 1
     echo - Feature 2
     echo.
-    echo ### 🐛 Bug Fixes
+    echo ### Bug Fixes
     echo - Fix 1
     echo - Fix 2
     echo.
-    echo ### 🚀 Performance
+    echo ### Performance
     echo - Improvement 1
     echo.
     echo ## Installation
     echo Download the APK and install on your Android device.
     echo.
-    start https://github.com/JarlTheGamer/Applications./releases/new?tag=v%VERSION%
+    start https://github.com/JarlTheGamer/Applications./releases/new?tag=v!VERSION!
 ) else (
     REM Check if gh is authenticated
     gh auth status >nul 2>nul
@@ -240,16 +240,16 @@ if "!MANUAL_UPLOAD!"=="1" (
     )
 
     REM Create release notes file
-    echo ## What's New in v%VERSION% > release-notes.tmp
+    echo ## What's New in v!VERSION! > release-notes.tmp
     echo. >> release-notes.tmp
-    echo ### ✨ New Features >> release-notes.tmp
+    echo ### New Features >> release-notes.tmp
     echo - Automated release system >> release-notes.tmp
     echo - In-app update notifications >> release-notes.tmp
     echo. >> release-notes.tmp
-    echo ### 🐛 Bug Fixes >> release-notes.tmp
+    echo ### Bug Fixes >> release-notes.tmp
     echo - Various bug fixes and improvements >> release-notes.tmp
     echo. >> release-notes.tmp
-    echo ### 🚀 Performance >> release-notes.tmp
+    echo ### Performance >> release-notes.tmp
     echo - Improved app performance >> release-notes.tmp
     echo. >> release-notes.tmp
     echo ## Installation >> release-notes.tmp
@@ -260,8 +260,8 @@ if "!MANUAL_UPLOAD!"=="1" (
     echo - Backend server running on your network >> release-notes.tmp
 
     echo Creating GitHub release...
-    gh release create v%VERSION% "%APK_DEST%" ^
-        --title "Lanflix v%VERSION%" ^
+    gh release create v!VERSION! "!APK_DEST!" ^
+        --title "Lanflix v!VERSION!" ^
         --notes-file release-notes.tmp ^
         --repo JarlTheGamer/Applications.
 
@@ -269,7 +269,7 @@ if "!MANUAL_UPLOAD!"=="1" (
         echo ERROR: Failed to create GitHub release
         echo.
         echo You can create it manually at:
-        echo https://github.com/JarlTheGamer/Applications./releases/new?tag=v%VERSION%
+        echo https://github.com/JarlTheGamer/Applications./releases/new?tag=v!VERSION!
         del release-notes.tmp
         pause
         exit /b 1
