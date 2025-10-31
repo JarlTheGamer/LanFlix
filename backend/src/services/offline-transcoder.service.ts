@@ -3,7 +3,6 @@ import fs from 'fs';
 import path from 'path';
 import logger from '../utils/logger';
 import { probeMedia, isAudioCompatible, isVideoCompatible } from '../utils/ffmpeg';
-import Settings from '../models/Settings';
 
 export class MediaConverterService {
     private conversionQueue: Map<string, boolean> = new Map();
@@ -76,13 +75,13 @@ export class MediaConverterService {
     }
 
     /**
-     * Convert media file to browser-compatible format
+     * Convert media file to browser-compatible format (Always uses GPU/NVENC)
      */
     private async convertFile(
         inputPath: string,
-        options: { transcodeAudio: boolean; transcodeVideo: boolean; useHardwareAccel?: boolean }
+        options: { transcodeAudio: boolean; transcodeVideo: boolean }
     ): Promise<string> {
-        return new Promise(async (resolve, reject) => {
+        return new Promise((resolve, reject) => {
             // Mark as converting
             this.conversionQueue.set(inputPath, true);
 
@@ -91,23 +90,10 @@ export class MediaConverterService {
             const basename = path.basename(inputPath, ext);
             const tempOutput = path.join(dir, `${basename}.converting.mp4`);
 
-            // Check hardware acceleration setting if not explicitly provided
-            let useHardwareAccel = options.useHardwareAccel ?? false;
-            if (options.useHardwareAccel === undefined) {
-                try {
-                    const hwAccelSetting = await Settings.findOne({ where: { key: 'useHardwareAccel' } });
-                    if (hwAccelSetting) {
-                        useHardwareAccel = JSON.parse(hwAccelSetting.value) === true;
-                    }
-                } catch (error) {
-                    logger.warn('Failed to load hardware acceleration setting, using CPU:', error);
-                }
-            }
-
-            logger.info(`Starting HIGH QUALITY conversion: ${inputPath} -> ${inputPath}`, {
+            logger.info(`Starting HIGH QUALITY GPU conversion: ${inputPath} -> ${inputPath}`, {
                 transcodeAudio: options.transcodeAudio,
                 transcodeVideo: options.transcodeVideo,
-                useHardwareAccel,
+                encoder: 'NVENC (GPU)',
                 quality: 'near-lossless'
             });
 
@@ -117,35 +103,24 @@ export class MediaConverterService {
                 .addOutputOption('-map', '0:v:0')            // Map first video stream
                 .addOutputOption('-map', '0:a:0');           // Map first audio stream
 
-            // Video handling
+            // Video handling - Always use GPU (NVENC)
             if (options.transcodeVideo) {
-                if (useHardwareAccel) {
-                    logger.info('Transcoding video to H.264 with GPU acceleration (NVENC)');
-                    command = command
-                        .videoCodec('h264_nvenc')
-                        .addOutputOption('-preset', 'p4')
-                        .addOutputOption('-tune', 'hq')
-                        .addOutputOption('-rc', 'vbr')
-                        .addOutputOption('-cq', '19')
-                        .addOutputOption('-b:v', '0')
-                        .addOutputOption('-profile:v', 'high')
-                        .addOutputOption('-level', '5.1')
-                        .addOutputOption('-pix_fmt', 'yuv420p')
-                        .addOutputOption('-spatial-aq', '1')
-                        .addOutputOption('-temporal-aq', '1')
-                        .addOutputOption('-rc-lookahead', '20')
-                        .addOutputOption('-bf', '3')
-                        .addOutputOption('-b_ref_mode', 'middle');
-                } else {
-                    logger.info('Transcoding video to H.264 with CPU (libx264)');
-                    command = command
-                        .videoCodec('libx264')
-                        .addOutputOption('-preset', 'fast')
-                        .addOutputOption('-crf', '18')
-                        .addOutputOption('-profile:v', 'high')
-                        .addOutputOption('-level', '4.1')
-                        .addOutputOption('-pix_fmt', 'yuv420p');
-                }
+                logger.info('Transcoding video to H.264 with GPU acceleration (NVENC)');
+                command = command
+                    .videoCodec('h264_nvenc')
+                    .addOutputOption('-preset', 'p4')
+                    .addOutputOption('-tune', 'hq')
+                    .addOutputOption('-rc', 'vbr')
+                    .addOutputOption('-cq', '19')
+                    .addOutputOption('-b:v', '0')
+                    .addOutputOption('-profile:v', 'high')
+                    .addOutputOption('-level', '5.1')
+                    .addOutputOption('-pix_fmt', 'yuv420p')
+                    .addOutputOption('-spatial-aq', '1')
+                    .addOutputOption('-temporal-aq', '1')
+                    .addOutputOption('-rc-lookahead', '20')
+                    .addOutputOption('-bf', '3')
+                    .addOutputOption('-b_ref_mode', 'middle');
             } else {
                 logger.info('Copying video stream (no transcoding - lossless)');
                 command = command.videoCodec('copy');

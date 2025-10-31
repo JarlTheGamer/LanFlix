@@ -327,21 +327,15 @@ router.get('/:id', validatePathParam('id'), async (req: Request, res: Response, 
     // Handle transcoding (direct-stream or full transcode)
     if (shouldTranscodeAudio || shouldTranscodeVideo) {
       const transcodeMode = shouldTranscodeVideo ? 'transcode' : 'direct-stream';
-      logger.info(`${transcodeMode} for content ${id} (${compatCheck.reason})`);
+      logger.info(`${transcodeMode} for content ${id} (${compatCheck.reason}) - Using ${useHardwareAccel ? 'GPU (NVENC)' : 'CPU (libx264)'}`);
 
       // For transcoded streams with seeking, use startTime parameter
-      // Use GPU if hardware acceleration is enabled, otherwise fall back to CPU
-      const transcodeStream = useHardwareAccel
-        ? mediaConverterService.createTranscodeStream(filePath, {
-          transcodeAudio: shouldTranscodeAudio,
-          transcodeVideo: shouldTranscodeVideo,
-          startTime: startTime
-        })
-        : mediaConverterService.createCPUTranscodeStream(filePath, {
-          transcodeAudio: shouldTranscodeAudio,
-          transcodeVideo: shouldTranscodeVideo,
-          startTime: startTime
-        });
+      // Always use GPU transcoding when hardware acceleration is enabled
+      const transcodeStream = mediaConverterService.createTranscodeStream(filePath, {
+        transcodeAudio: shouldTranscodeAudio,
+        transcodeVideo: shouldTranscodeVideo,
+        startTime: startTime
+      });
 
       res.writeHead(200, {
         'Content-Type': 'video/mp4',
