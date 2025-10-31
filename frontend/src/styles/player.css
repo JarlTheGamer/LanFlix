@@ -308,6 +308,70 @@ body {
   margin-left: 4px;
 }
 
+/* Loading spinner for transcoding seeks - Modern UI */
+.loading-spinner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.loading-spinner.visible {
+  opacity: 1;
+}
+
+.spinner-ring {
+  width: 64px;
+  height: 64px;
+  position: relative;
+  animation: spinPulse 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.spinner-ring::before,
+.spinner-ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+}
+
+.spinner-ring::before {
+  border-top-color: rgba(255, 255, 255, 0.95);
+  border-right-color: rgba(255, 255, 255, 0.95);
+  animation: spinRotate 1s linear infinite;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.spinner-ring::after {
+  border-top-color: var(--yt-red);
+  border-right-color: var(--yt-red);
+  animation: spinRotate 1s linear infinite reverse;
+  box-shadow: 0 0 24px rgba(229, 9, 20, 0.4);
+  inset: 6px;
+}
+
+@keyframes spinRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spinPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.95;
+  }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .player-controls {
@@ -336,5 +400,19 @@ body {
   .center-play-button svg {
     width: 30px;
     height: 30px;
+  }
+
+  .spinner-ring {
+    width: 52px;
+    height: 52px;
+  }
+
+  .spinner-ring::before,
+  .spinner-ring::after {
+    border-width: 2.5px;
+  }
+
+  .spinner-ring::after {
+    inset: 5px;
   }
 }

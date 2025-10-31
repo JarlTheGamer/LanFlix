@@ -282,6 +282,17 @@ export class VideoPlayer {
       this.updateProgressBar();
     });
 
+    // Show loading spinner when buffering
+    this.videoElement.addEventListener('waiting', () => {
+      console.log('Video buffering...');
+      this.showLoadingSpinner();
+    });
+
+    this.videoElement.addEventListener('playing', () => {
+      console.log('Video playing');
+      this.hideLoadingSpinner();
+    });
+
     this.videoElement.addEventListener('loadedmetadata', () => {
       // Only use video element duration if we don't have it from probe
       if (!this.duration || this.duration === 0) {
@@ -597,6 +608,9 @@ export class VideoPlayer {
     // Stop progress tracking during reload
     this.stopProgressTracking();
 
+    // Show loading spinner
+    this.showLoadingSpinner();
+
     // Update start offset - this is where we are in the original video
     this.startOffset = time;
     console.log(`Set start offset to ${this.startOffset}s`);
@@ -612,6 +626,10 @@ export class VideoPlayer {
     // Resume playback when ready
     const onCanPlay = () => {
       console.log(`Stream reloaded - video element at ${this.videoElement.currentTime}s, actual position: ${this.currentTime}s`);
+      
+      // Hide loading spinner
+      this.hideLoadingSpinner();
+      
       if (wasPlaying) {
         this.play();
       }
@@ -625,11 +643,12 @@ export class VideoPlayer {
 
     // Fallback timeout in case canplay doesn't fire
     setTimeout(() => {
+      this.hideLoadingSpinner();
       if (wasPlaying && this.videoElement.paused) {
         console.warn('Canplay timeout, forcing play');
         this.play();
       }
-    }, 3000);
+    }, 5000);
   }
 
   /**
@@ -650,17 +669,28 @@ export class VideoPlayer {
    * Toggle fullscreen
    */
   toggleFullscreen() {
+    const playerContainer = document.querySelector('.player-container');
+    
     if (!this.isFullscreen) {
-      if (this.videoElement.requestFullscreen) {
-        this.videoElement.requestFullscreen();
-      } else if (this.videoElement.webkitRequestFullscreen) {
-        this.videoElement.webkitRequestFullscreen();
+      // Request fullscreen on the container (not video element) to keep custom controls
+      if (playerContainer.requestFullscreen) {
+        playerContainer.requestFullscreen();
+      } else if (playerContainer.webkitRequestFullscreen) {
+        playerContainer.webkitRequestFullscreen();
+      } else if (playerContainer.mozRequestFullScreen) {
+        playerContainer.mozRequestFullScreen();
+      } else if (playerContainer.msRequestFullscreen) {
+        playerContainer.msRequestFullscreen();
       }
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen();
       } else if (document.webkitExitFullscreen) {
         document.webkitExitFullscreen();
+      } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
       }
     }
   }
@@ -990,6 +1020,35 @@ export class VideoPlayer {
     setTimeout(() => {
       notification.style.opacity = '0';
     }, 2000);
+  }
+
+  /**
+   * Show loading spinner during transcoding seeks
+   */
+  showLoadingSpinner() {
+    let spinner = document.getElementById('player-loading-spinner');
+
+    if (!spinner) {
+      spinner = document.createElement('div');
+      spinner.id = 'player-loading-spinner';
+      spinner.className = 'loading-spinner';
+      spinner.innerHTML = `
+        <div class="spinner-ring"></div>
+      `;
+      document.querySelector('.player-container').appendChild(spinner);
+    }
+
+    spinner.classList.add('visible');
+  }
+
+  /**
+   * Hide loading spinner
+   */
+  hideLoadingSpinner() {
+    const spinner = document.getElementById('player-loading-spinner');
+    if (spinner) {
+      spinner.classList.remove('visible');
+    }
   }
 
   /**
