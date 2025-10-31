@@ -206,7 +206,7 @@ export class MediaConverterService {
         .addOutputOption('-maxrate', '8M')
         .addOutputOption('-bufsize', '10M')
         .addOutputOption('-profile:v', 'high')
-        .addOutputOption('-level', '4.1')
+        .addOutputOption('-level', '5.1')           // Level 5.1 supports 4K content
         .addOutputOption('-pix_fmt', 'yuv420p')
         .addOutputOption('-spatial_aq', '1')
         .addOutputOption('-temporal_aq', '1')
@@ -314,7 +314,7 @@ export class MediaConverterService {
         .addOutputOption('-preset', cpuPreset)     // Map NVENC preset to CPU preset
         .addOutputOption('-crf', '23')
         .addOutputOption('-profile:v', 'high')
-        .addOutputOption('-level', '4.1')
+        .addOutputOption('-level', '5.1')          // Level 5.1 supports 4K content
         .addOutputOption('-pix_fmt', 'yuv420p');
     } else {
       command = command.videoCodec('copy');
