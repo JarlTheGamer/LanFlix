@@ -662,9 +662,11 @@ export class LibraryService {
           await fs.access(episode.filePath);
           // File exists, keep it
         } catch (error) {
-          // File doesn't exist, remove from database
-          logger.info(`Removing episode ${episode.id} (S${episode.seasonNumber}E${episode.episodeNumber}) - file no longer exists: ${episode.filePath}`);
-          await episode.destroy();
+          // File doesn't exist, clear the filePath but keep the metadata
+          logger.info(`Marking episode ${episode.id} (S${episode.seasonNumber}E${episode.episodeNumber}) as unavailable - file no longer exists: ${episode.filePath}`);
+
+          // Clear the filePath to mark as unavailable, but keep the metadata
+          await episode.update({ filePath: undefined });
           stats.removed++;
         }
       }
@@ -1013,15 +1015,10 @@ export class LibraryService {
 
             // Track this folder as existing
             existingFolders.add(seriesFolder);
-            // Check if episode metadata exists, if not fetch it
-            const episodeCount = await SeriesEpisode.count({
-              where: { contentId: content.id }
-            });
 
-            if (episodeCount === 0) {
-              logger.info(`No episode metadata found for series ${content.id}, fetching from TMDB`);
-              await this.fetchAndStoreEpisodeMetadata(content.id, metadata.tmdbId);
-            }
+            // Always fetch/update episode metadata during scan to restore any accidentally deleted episodes
+            logger.info(`Refreshing episode metadata for series ${content.id}`);
+            await this.fetchAndStoreEpisodeMetadata(content.id, metadata.tmdbId);
           }
 
           // Scan season folders for episodes
@@ -1042,7 +1039,7 @@ export class LibraryService {
 
             for (const episodeFile of episodeFiles) {
               if (!this.videoExtensions.some(ext => episodeFile.toLowerCase().endsWith(ext)) ||
-                  episodeFile.includes('.converting.')) {  // Skip incomplete conversion files
+                episodeFile.includes('.converting.')) {  // Skip incomplete conversion files
                 continue;
               }
 
