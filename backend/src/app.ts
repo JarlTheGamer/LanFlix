@@ -86,8 +86,9 @@ const startServer = async () => {
     // Start job scheduler
     jobScheduler.start();
 
-    app.listen(config.server.port, () => {
+    app.listen(config.server.port, '0.0.0.0', () => {
       logger.info(`Server running on port ${config.server.port}`);
+      logger.info(`Server accessible on all network interfaces (0.0.0.0)`);
       logger.info(`Environment: ${config.server.nodeEnv}`);
     });
   } catch (error) {
