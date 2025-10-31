@@ -160,30 +160,55 @@ echo.
 REM Step 6: Git commit and tag
 echo [6/7] Committing to Git...
 git add .
-git commit -m "Release v%VERSION%"
+git commit -m "Release v!VERSION!"
 if errorlevel 1 (
-    echo WARNING: Git commit failed (maybe no changes?)
+    echo WARNING: Git commit failed ^(maybe no changes?^)
 )
 
-echo Creating tag v%VERSION%...
-git tag v%VERSION%
+echo Creating tag v!VERSION!...
+
+REM Check if tag already exists
+git rev-parse v!VERSION! >nul 2>nul
+if not errorlevel 1 (
+    echo WARNING: Tag v!VERSION! already exists
+    echo.
+    set /p OVERWRITE="Delete and recreate tag? (y/n): "
+    if /i "!OVERWRITE!" neq "y" (
+        echo Skipping tag creation
+        goto skip_tag
+    )
+    
+    echo Deleting existing tag locally...
+    git tag -d v!VERSION!
+    
+    echo Deleting existing tag on remote...
+    git push origin :refs/tags/v!VERSION! 2>nul
+)
+
+git tag v!VERSION!
 if errorlevel 1 (
     echo ERROR: Failed to create git tag
     pause
     exit /b 1
 )
 
+:skip_tag
 echo Pushing to GitHub...
 git push origin main
 if errorlevel 1 (
     echo WARNING: Failed to push to main branch
 )
 
-git push origin v!VERSION!
+git push origin v!VERSION! 2>nul
 if errorlevel 1 (
-    echo ERROR: Failed to push tag
-    pause
-    exit /b 1
+    echo WARNING: Failed to push tag ^(may already exist on remote^)
+    echo Forcing push...
+    git push -f origin v!VERSION!
+    if errorlevel 1 (
+        echo ERROR: Failed to force push tag
+        pause
+        exit /b 1
+    )
 )
 echo ✓ Pushed to GitHub
 echo.
