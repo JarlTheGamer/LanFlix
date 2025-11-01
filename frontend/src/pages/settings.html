@@ -13,7 +13,6 @@
         rel="stylesheet" />
     <link rel="stylesheet" href="../styles/main.css" />
     <link rel="stylesheet" href="../styles/settings.css" />
-    <link rel="stylesheet" href="../styles/tv-mode.css" />
 </head>
 
 <body>
@@ -27,9 +26,11 @@
                 </button>
             </div>
             <div class="brand">
-                <button class="notifications-btn" aria-label="Notifications" onclick="window.location.href='notifications.html'">
+                <button class="notifications-btn" aria-label="Notifications"
+                    onclick="window.location.href='notifications.html'">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z" />
+                        <path
+                            d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z" />
                     </svg>
                     <span class="notification-badge" id="notification-badge"></span>
                 </button>
@@ -92,7 +93,8 @@
                         <span>About</span>
                     </button>
                     <div style="margin: 20px 0; border-top: 1px solid rgba(255,255,255,0.1);"></div>
-                    <button class="settings-nav-item" onclick="window.location.href='admin.html'" style="background: linear-gradient(135deg, #e50914 0%, #b20710 100%); margin-top: 10px;">
+                    <button class="settings-nav-item" onclick="window.location.href='admin.html'"
+                        style="background: linear-gradient(135deg, #e50914 0%, #b20710 100%); margin-top: 10px;">
                         <svg viewBox="0 0 24 24">
                             <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
                         </svg>
@@ -223,19 +225,22 @@
                                 <option value="custom">Custom - Manual audio/video control</option>
                             </select>
                         </div>
-                        <div class="settings-info-box" id="custom-mode-warning" style="display: none; background: #ff9800; border-left: 4px solid #f57c00;">
+                        <div class="settings-info-box" id="custom-mode-warning"
+                            style="display: none; background: #ff9800; border-left: 4px solid #f57c00;">
                             <svg viewBox="0 0 24 24" width="20" height="20">
-                                <path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+                                <path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
                             </svg>
                             <div>
                                 <strong>⚠️ Warning: Custom Mode</strong>
-                                <p>Custom mode may not work with all footage. Some codec combinations can cause playback issues or seeking problems. Use Auto mode for best compatibility.</p>
+                                <p>Custom mode may not work with all footage. Some codec combinations can cause playback
+                                    issues or seeking problems. Use Auto mode for best compatibility.</p>
                             </div>
                         </div>
                         <div class="settings-item" id="audio-transcoding-item">
                             <div class="settings-item-info">
                                 <label>Audio Transcoding</label>
-                                <p class="settings-item-description">Convert incompatible audio codecs to AAC (Custom mode only)</p>
+                                <p class="settings-item-description">Convert incompatible audio codecs to AAC (Custom
+                                    mode only)</p>
                             </div>
                             <label class="settings-toggle">
                                 <input type="checkbox" id="audio-transcoding" checked disabled />
@@ -245,7 +250,8 @@
                         <div class="settings-item" id="video-transcoding-item">
                             <div class="settings-item-info">
                                 <label>Video Transcoding</label>
-                                <p class="settings-item-description">Convert incompatible video codecs to H.264 (Custom mode only)</p>
+                                <p class="settings-item-description">Convert incompatible video codecs to H.264 (Custom
+                                    mode only)</p>
                             </div>
                             <label class="settings-toggle">
                                 <input type="checkbox" id="video-transcoding" checked disabled />
@@ -265,7 +271,8 @@
                         <div class="settings-item">
                             <div class="settings-item-info">
                                 <label for="transcode-preset">Encoding Preset</label>
-                                <p class="settings-item-description">Balance between speed and quality (p1=fastest, p7=best quality)</p>
+                                <p class="settings-item-description">Balance between speed and quality (p1=fastest,
+                                    p7=best quality)</p>
                             </div>
                             <select id="transcode-preset" class="settings-select">
                                 <option value="p1">P1 - Fastest (Low Quality)</option>
@@ -279,15 +286,22 @@
                         </div>
                         <div class="settings-info-box">
                             <svg viewBox="0 0 24 24" width="20" height="20">
-                                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                                <path fill="currentColor"
+                                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
                             </svg>
                             <div>
                                 <strong>Playback Modes (Jellyfin-style):</strong>
-                                <p><strong>Auto:</strong> Automatically detects what's needed - Direct Play, Remux (container change), Direct Stream (audio only), or Transcode (full).<br>
-                                <strong>Direct Play:</strong> Stream files as-is (fastest, no transcoding, requires compatible codecs).<br>
-                                <strong>Direct Stream:</strong> Transcode audio only, copy video (for incompatible audio like DTS/AC3).<br>
-                                <strong>Transcode:</strong> Full video+audio transcoding (slowest, works with everything).<br>
-                                Seeking works in all modes. Hardware acceleration uses GPU for 10-20x faster encoding.</p>
+                                <p><strong>Auto:</strong> Automatically detects what's needed - Direct Play, Remux
+                                    (container change), Direct Stream (audio only), or Transcode (full).<br>
+                                    <strong>Direct Play:</strong> Stream files as-is (fastest, no transcoding, requires
+                                    compatible codecs).<br>
+                                    <strong>Direct Stream:</strong> Transcode audio only, copy video (for incompatible
+                                    audio like DTS/AC3).<br>
+                                    <strong>Transcode:</strong> Full video+audio transcoding (slowest, works with
+                                    everything).<br>
+                                    Seeking works in all modes. Hardware acceleration uses GPU for 10-20x faster
+                                    encoding.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -457,7 +471,8 @@
                             </div>
                             <button class="settings-btn" id="check-updates-btn">
                                 <svg viewBox="0 0 24 24" width="20" height="20" style="margin-right: 8px;">
-                                    <path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                                    <path fill="currentColor"
+                                        d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
                                 </svg>
                                 Check Now
                             </button>
@@ -483,7 +498,8 @@
                             <button class="settings-link-btn">Privacy Policy</button>
                         </div>
                         <div class="settings-item">
-                            <button class="settings-link-btn" onclick="window.open('https://github.com/YOUR_USERNAME/lanflix', '_blank')">
+                            <button class="settings-link-btn"
+                                onclick="window.open('https://github.com/YOUR_USERNAME/lanflix', '_blank')">
                                 View on GitHub
                             </button>
                         </div>
@@ -579,7 +595,7 @@
 
     <script type="module">
         import tvNavigation from '../modules/tv-navigation.js';
-        
+
         // Initialize TV navigation
         document.addEventListener('DOMContentLoaded', () => {
             tvNavigation.initialize();
