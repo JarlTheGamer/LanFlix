@@ -371,7 +371,7 @@
 
 
 
-- [ ] 10. Implement SignalR hubs for real-time communication
+- [x] 10. Implement SignalR hubs for real-time communication
 
   - [x] 10.1 Create NotificationHub
 
@@ -394,7 +394,9 @@
     - Set up Redis backplane for multi-server support
     - Configure connection lifetime and reconnection
     - _Requirements: 12.5, 12.7_
-- [-] 11. Implement middleware and cross-cutting concerns
+- [x] 11. Implement middleware and cross-cutting concerns
+
+
 
 
 - [ ] 11. Implement middleware and cross-cutting concerns
@@ -408,27 +410,38 @@
     - Log all exceptions with structured logging
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
   
-  - [-] 11.2 Implement authentication and authorization
+  - [x] 11.2 Implement authentication and authorization
+
 
     - Set up JWT authentication
     - Configure authorization policies
     - Add profile-based authorization
     - _Requirements: 2.6_
   
-  - [ ] 11.3 Add rate limiting middleware
+  - [x] 11.3 Add rate limiting middleware
+
+
     - Configure global rate limiter
     - Add streaming-specific rate limits
     - Implement per-user rate limiting
     - _Requirements: 13.7_
   
-  - [ ] 11.4 Configure CORS for client applications
+  - [x] 11.4 Configure CORS for client applications
+
+
     - Allow requests from web clients
     - Configure allowed methods and headers
     - _Requirements: 2.1_
+- [x] 12. Implement migration tool
 
-- [ ] 12. Implement migration tool
 
-  - [ ] 12.1 Create LegacyDatabaseReader
+
+
+- [x] 12. Implement migration tool
+
+  - [x] 12.1 Create LegacyDatabaseReader
+
+
     - Read Content table from old SQLite database using Dapper
     - Read Profile table
     - Read WatchHistory table
@@ -436,103 +449,147 @@
     - Read SeriesEpisode table
     - _Requirements: 1.1, 1.2, 1.3, 1.4_
   
-  - [ ] 12.2 Create DataTransformer
+
+
+  - [x] 12.2 Create DataTransformer
     - Transform Content entities to new schema
     - Transform Profile entities
     - Transform WatchHistory entities
     - Transform Episode entities
     - Handle data type conversions and null values
+
+
     - _Requirements: 1.2_
   
-  - [ ] 12.3 Create MigrationOrchestrator
+  - [x] 12.3 Create MigrationOrchestrator
     - Validate legacy database accessibility
     - Execute migration in transaction
+
+
     - Verify data integrity after migration
     - Generate detailed migration report
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7_
   
-  - [ ] 12.4 Implement configuration migration
+  - [x] 12.4 Implement configuration migration
+
     - Read .env file from legacy backend
     - Transform configuration to appsettings.json format
     - Migrate media paths
     - Migrate API keys
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   
-  - [ ] 12.5 Create migration CLI tool
+  - [x] 12.5 Create migration CLI tool
+
     - Build console application for migration
     - Add dry-run mode for validation
     - Add progress reporting
     - Add rollback capability
     - _Requirements: 1.6, 10.1, 10.2, 10.3_
 
-- [ ] 13. Implement API compatibility layer
+- [x] 13. Implement API compatibility layer
 
-  - [ ] 13.1 Create legacy endpoint mappings
+
+
+
+
+  - [x] 13.1 Create legacy endpoint mappings
+
+
     - Map old endpoints to new endpoints
     - Transform request/response formats
     - Add version detection
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
   
-  - [ ] 13.2 Add response format compatibility
+  - [x] 13.2 Add response format compatibility
+
+
     - Wrap responses in legacy format when needed
     - Add success/message fields
     - _Requirements: 2.1, 2.4_
   
-  - [ ] 13.3 Implement legacy token validation
+  - [x] 13.3 Implement legacy token validation
+
+
     - Support old authentication tokens during transition
     - Add token migration endpoint
     - _Requirements: 2.6_
+- [x] 14. Add performance optimizations
+
+
+
 
 - [ ] 14. Add performance optimizations
 
-  - [ ] 14.1 Implement ArrayPool for buffer management
+  - [x] 14.1 Implement ArrayPool for buffer management
+
+
     - Use ArrayPool in streaming operations
     - Use ArrayPool in transcoding pipeline
     - _Requirements: 5.6, 14.1, 14.2_
   
-  - [ ] 14.2 Add Span and Memory usage
+  - [x] 14.2 Add Span and Memory usage
+
+
     - Replace byte[] with ReadOnlyMemory in streaming
     - Use Span for buffer operations
     - _Requirements: 5.7, 14.2_
   
-  - [ ] 14.3 Configure output caching
+  - [x] 14.3 Configure output caching
+
+
     - Add output cache policies for library endpoints
     - Add output cache policies for metadata endpoints
     - Implement tag-based cache invalidation
     - _Requirements: 14.12_
   
-  - [ ] 14.4 Optimize database queries
+  - [x] 14.4 Optimize database queries
+
+
     - Add proper indexes to all entities
     - Use compiled queries for hot paths
     - Implement query result caching
     - _Requirements: 5.1, 5.4, 14.3, 14.10_
   
-  - [ ] 14.5 Configure HTTP client pooling
+  - [x] 14.5 Configure HTTP client pooling
+
+
     - Set up HttpClientFactory for TMDB client
     - Configure connection pooling parameters
     - Set appropriate timeouts
     - _Requirements: 5.10, 14.10_
   
-  - [ ] 14.6 Implement response compression
+  - [x] 14.6 Implement response compression
+
+
     - Enable Brotli compression
     - Enable Gzip compression as fallback
     - _Requirements: 5.11_
   
-  - [ ] 14.7 Add HTTP/2 and HTTP/3 support
+  - [x] 14.7 Add HTTP/2 and HTTP/3 support
+
+
     - Configure Kestrel for HTTP/2
     - Enable HTTP/3 support
     - _Requirements: 5.12_
+-
 
-- [ ] 15. Implement monitoring and observability
+- [x] 15. Implement monitoring and observability
 
-  - [ ] 15.1 Set up OpenTelemetry
+
+
+
+  - [x] 15.1 Set up OpenTelemetry
+
+
     - Configure tracing for ASP.NET Core
     - Configure tracing for HTTP clients
     - Configure tracing for EF Core
     - Add custom tracing sources
     - _Requirements: 9.1, 9.2_
   
-  - [ ] 15.2 Create custom metrics
+  - [x] 15.2 Create custom metrics
+
+
     - Add stream start counter
     - Add stream duration histogram
     - Add active streams gauge
@@ -540,49 +597,71 @@
     - Add cache hit ratio metric
     - _Requirements: 5.5_
   
-  - [ ] 15.3 Implement health checks
+  - [x] 15.3 Implement health checks
+
+
     - Add database health check
     - Add Redis health check
     - Add FFmpeg health check
     - Add disk space health check
     - _Requirements: 11.4_
   
-  - [ ] 15.4 Configure structured logging
+  - [x] 15.4 Configure structured logging
+
+
     - Set up Serilog with structured logging
     - Configure log sinks (file, console)
     - Implement log rotation
     - Add sensitive data redaction
     - _Requirements: 9.1, 9.2, 9.4, 9.5, 9.6, 9.7_
+- [x] 16. Create deployment configurations
+
+
+
 
 - [ ] 16. Create deployment configurations
 
-  - [ ] 16.1 Set up single executable publishing
+  - [x] 16.1 Set up single executable publishing
+
+
     - Configure PublishSingleFile
     - Configure PublishTrimmed
     - Test executable on Windows
     - _Requirements: 11.1_
   
-  - [ ] 16.2 Create Docker configuration
+  - [x] 16.2 Create Docker configuration
+
+
     - Write Dockerfile with FFmpeg installation
     - Create docker-compose.yml with Redis
     - Test Docker deployment
     - _Requirements: 11.2_
   
-  - [ ] 16.3 Create configuration templates
+  - [x] 16.3 Create configuration templates
+
+
     - Create appsettings.json template
     - Create appsettings.Production.json
     - Document all configuration options
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
   
-  - [ ] 16.4 Write deployment documentation
+
+  - [x] 16.4 Write deployment documentation
+
     - Document migration process
     - Document rollback procedure
     - Document health check endpoints
     - _Requirements: 11.3, 11.4, 11.5, 11.6_
+-
 
-- [ ] 17. Write comprehensive tests
+- [-] 17. Write comprehensive tests
 
-  - [ ] 17.1 Write unit tests for streaming strategies
+
+
+
+
+  - [-] 17.1 Write unit tests for streaming strategies
+
     - Test DirectPlayStrategy.CanHandle logic
     - Test DirectStreamStrategy.CanHandle logic
     - Test TranscodeVideoStrategy.CanHandle logic
@@ -590,24 +669,36 @@
     - Test StreamingStrategySelector
     - _Requirements: 10.2_
   
-  - [ ] 17.2 Write unit tests for CQRS handlers
+  - [x] 17.2 Write unit tests for CQRS handlers
+
+
+
     - Test GetLibraryItemsQueryHandler
     - Test StartStreamCommandHandler
     - Test CreateProfileCommandHandler
     - _Requirements: 10.2_
   
-  - [ ] 17.3 Write integration tests for API endpoints
+  - [-] 17.3 Write integration tests for API endpoints
+
+
+
     - Test LibraryController endpoints
     - Test StreamingController endpoints
     - Test ProfilesController endpoints
     - Test AppUpdateController endpoints
     - _Requirements: 10.3_
+
   
   - [ ] 17.4 Write performance tests
+
+
+
     - Test concurrent streaming (10+ clients)
     - Test stream startup time (<500ms)
     - Test API response time (<100ms p95)
     - Test memory usage under load
+
+
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 10.4_
   
   - [ ] 17.5 Write migration validation tests

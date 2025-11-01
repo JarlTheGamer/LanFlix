@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Lanflix.Application.Common.Interfaces;
+using Lanflix.Infrastructure.Telemetry;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -12,18 +14,21 @@ public class HybridCacheService : ICacheService
 {
     private readonly MemoryCacheService _l1Cache;
     private readonly RedisCacheService _l2Cache;
+    private readonly CachingMetrics? _metrics;
     private readonly ILogger<HybridCacheService> _logger;
 
     public HybridCacheService(
         IMemoryCache memoryCache,
         RedisCacheService redisCacheService,
-        ILogger<HybridCacheService> logger)
+        ILogger<HybridCacheService> logger,
+        CachingMetrics? metrics = null)
     {
         _l1Cache = new MemoryCacheService(
             memoryCache,
             logger as ILogger<MemoryCacheService> ?? 
                 throw new ArgumentNullException(nameof(logger)));
         _l2Cache = redisCacheService;
+        _metrics = metrics;
         _logger = logger;
     }
 
@@ -33,10 +38,15 @@ public class HybridCacheService : ICacheService
     /// </summary>
     public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default)
     {
+        var stopwatch = Stopwatch.StartNew();
+        
         // Try L1 cache first (memory)
         var l1Value = await _l1Cache.GetAsync<T>(key, cancellationToken);
         if (l1Value != null)
         {
+            stopwatch.Stop();
+            _metrics?.RecordCacheHit("L1");
+            _metrics?.RecordOperationDuration(stopwatch.Elapsed.TotalMilliseconds, "get", "L1");
             _logger.LogTrace("L1 cache hit for key: {Key}", key);
             return l1Value;
         }
@@ -45,6 +55,9 @@ public class HybridCacheService : ICacheService
         var l2Value = await _l2Cache.GetAsync<T>(key, cancellationToken);
         if (l2Value != null)
         {
+            stopwatch.Stop();
+            _metrics?.RecordCacheHit("L2");
+            _metrics?.RecordOperationDuration(stopwatch.Elapsed.TotalMilliseconds, "get", "L2");
             _logger.LogTrace("L2 cache hit for key: {Key}, populating L1", key);
             
             // Populate L1 cache with shorter expiration (5 minutes)
@@ -53,6 +66,9 @@ public class HybridCacheService : ICacheService
             return l2Value;
         }
 
+        stopwatch.Stop();
+        _metrics?.RecordCacheMiss("hybrid");
+        _metrics?.RecordOperationDuration(stopwatch.Elapsed.TotalMilliseconds, "get", "hybrid");
         _logger.LogTrace("Cache miss (L1 and L2) for key: {Key}", key);
         return default;
     }
@@ -62,12 +78,16 @@ public class HybridCacheService : ICacheService
     /// </summary>
     public async Task SetAsync<T>(string key, T value, TimeSpan? expiration = null, CancellationToken cancellationToken = default)
     {
+        var stopwatch = Stopwatch.StartNew();
+        
         // Set in both caches
         var l1Task = _l1Cache.SetAsync(key, value, expiration, cancellationToken);
         var l2Task = _l2Cache.SetAsync(key, value, expiration, cancellationToken);
 
         await Task.WhenAll(l1Task, l2Task);
         
+        stopwatch.Stop();
+        _metrics?.RecordOperationDuration(stopwatch.Elapsed.TotalMilliseconds, "set", "hybrid");
         _logger.LogTrace("Set hybrid cache for key: {Key} with expiration: {Expiration}", key, expiration);
     }
 

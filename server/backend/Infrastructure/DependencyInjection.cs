@@ -77,8 +77,33 @@ public static class DependencyInjection
             services.AddSingleton<ICacheService, MemoryCacheService>();
         }
 
-        // HTTP Clients
-        // services.AddHttpClient<ITmdbClient, TmdbClient>();
+        // HTTP Clients with connection pooling
+        var tmdbBaseUrl = configuration["Lanflix:ExternalApis:Tmdb:BaseUrl"] ?? "https://api.themoviedb.org/3/";
+        services.AddHttpClient<ITmdbClient, Infrastructure.Services.ExternalApis.TmdbClient>(client =>
+        {
+            client.BaseAddress = new Uri(tmdbBaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+            client.DefaultRequestHeaders.Add("User-Agent", "Lanflix/2.0");
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            // Connection pooling configuration for optimal performance
+            PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+            MaxConnectionsPerServer = 10,
+            
+            // Enable automatic decompression
+            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
+            
+            // Connection settings
+            ConnectTimeout = TimeSpan.FromSeconds(10),
+            ResponseDrainTimeout = TimeSpan.FromSeconds(5),
+            
+            // Enable HTTP/2
+            EnableMultipleHttp2Connections = true
+        })
+        .SetHandlerLifetime(TimeSpan.FromMinutes(30)); // Handler lifetime for connection pool rotation
 
         // Authentication Services
         services.AddScoped<ITokenService, TokenService>();

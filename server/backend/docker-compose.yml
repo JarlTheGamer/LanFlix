@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  lanflix-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lanflix-server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5000;https://+:5001
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/lanflix.db
+      - Lanflix__Cache__Redis__Enabled=true
+      - Lanflix__Cache__Redis__ConnectionString=redis:6379
+      - Lanflix__Cache__Redis__InstanceName=lanflix:
+      - Lanflix__Transcoding__EnableHardwareAcceleration=true
+      - Lanflix__Transcoding__PreferredHwAccel=auto
+      - Lanflix__Transcoding__MaxConcurrentTranscodes=2
+    volumes:
+      # Application data (database, cache, logs)
+      - lanflix-data:/app/data
+      # Media files (mount your media directories here)
+      - ${MEDIA_PATH_MOVIES:-./media/movies}:/app/media/movies:ro
+      - ${MEDIA_PATH_SERIES:-./media/series}:/app/media/series:ro
+      # Temporary transcoding files
+      - lanflix-temp:/app/temp
+      # Logs
+      - lanflix-logs:/app/logs
+    depends_on:
+      - redis
+    networks:
+      - lanflix-network
+    # Optional: Enable GPU access for hardware transcoding
+    # Uncomment the following lines if you have NVIDIA GPU
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  redis:
+    image: redis:7-alpine
+    container_name: lanflix-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - lanflix-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  lanflix-network:
+    driver: bridge
+
+volumes:
+  lanflix-data:
+    driver: local
+  lanflix-temp:
+    driver: local
+  lanflix-logs:
+    driver: local
+  redis-data:
+    driver: local

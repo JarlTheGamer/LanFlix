@@ -6,6 +6,7 @@ using Lanflix.Application.Features.Streaming.Commands.StopStream;
 using Lanflix.Application.Features.Streaming.Commands.UpdateProgress;
 using Lanflix.Application.Features.Streaming.Queries.GetStreamInfo;
 using Lanflix.Application.Features.Streaming.Services;
+using Lanflix.Infrastructure.Telemetry;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,17 +20,20 @@ public class StreamingController : ControllerBase
     private readonly IMediator _mediator;
     private readonly IApplicationDbContext _context;
     private readonly StreamingStrategySelector _strategySelector;
+    private readonly StreamingMetrics _metrics;
     private readonly ILogger<StreamingController> _logger;
 
     public StreamingController(
         IMediator mediator,
         IApplicationDbContext context,
         StreamingStrategySelector strategySelector,
+        StreamingMetrics metrics,
         ILogger<StreamingController> logger)
     {
         _mediator = mediator;
         _context = context;
         _strategySelector = strategySelector;
+        _metrics = metrics;
         _logger = logger;
     }
 
@@ -37,6 +41,7 @@ public class StreamingController : ControllerBase
     /// Start a new streaming session
     /// </summary>
     [HttpPost("{id:int}/start")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("streaming")]
     [ProducesResponseType(typeof(StreamSessionDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -123,6 +128,11 @@ public class StreamingController : ControllerBase
         _logger.LogInformation(
             "Using {Strategy} strategy for session {SessionId}",
             strategy.Mode, sessionId);
+
+        // Record stream start metric
+        _metrics.RecordStreamStart(
+            strategy.Mode.ToString(),
+            content.Type.ToString());
 
         // Create stream request
         var streamRequest = new StreamRequest
@@ -218,6 +228,19 @@ public class StreamingController : ControllerBase
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("Stopping stream session {SessionId}", sessionId);
+
+        // Get session to record metrics before stopping
+        var session = await _context.StreamSessions
+            .FirstOrDefaultAsync(s => s.SessionId == sessionId, cancellationToken);
+
+        if (session != null && session.IsActive)
+        {
+            var duration = (DateTime.UtcNow - session.StartedAt).TotalSeconds;
+            _metrics.RecordStreamDuration(
+                duration,
+                session.Mode.ToString(),
+                completed: true);
+        }
 
         var command = new StopStreamCommand { SessionId = sessionId };
         await _mediator.Send(command, cancellationToken);

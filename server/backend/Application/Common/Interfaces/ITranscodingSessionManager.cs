@@ -74,4 +74,10 @@ public interface ITranscodingSessionManager
     Task<int> CleanupAbandonedSessionsAsync(
         TimeSpan inactivityThreshold,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the count of currently active sessions
+    /// </summary>
+    /// <returns>Number of active sessions</returns>
+    int GetActiveSessionCount();
 }

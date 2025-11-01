@@ -72,6 +72,7 @@ public class LibraryController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ScanLibraryResult>> ScanLibrary(
         [FromBody] ScanLibraryCommand command,
+        [FromServices] IOutputCacheStore cacheStore,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation(
@@ -79,6 +80,11 @@ public class LibraryController : ControllerBase
             command.Path ?? "all", command.FullScan);
 
         var result = await _mediator.Send(command, cancellationToken);
+
+        // Invalidate library cache after scan
+        await cacheStore.EvictByTagAsync("library", cancellationToken);
+        await cacheStore.EvictByTagAsync("content", cancellationToken);
+        _logger.LogDebug("Invalidated library and content cache after scan");
 
         _logger.LogInformation(
             "Library scan completed: Scanned={Scanned}, Added={Added}, Updated={Updated}, Removed={Removed}",
@@ -95,12 +101,18 @@ public class LibraryController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveContent(
         int id,
+        [FromServices] IOutputCacheStore cacheStore,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("Removing content with ID: {ContentId}", id);
 
         var command = new RemoveContentCommand { Id = id };
         await _mediator.Send(command, cancellationToken);
+
+        // Invalidate library and content cache after removal
+        await cacheStore.EvictByTagAsync("library", cancellationToken);
+        await cacheStore.EvictByTagAsync("content", cancellationToken);
+        _logger.LogDebug("Invalidated library and content cache after content removal");
 
         return NoContent();
     }

@@ -1,0 +1,55 @@
+version: '3.8'
+
+# Development Docker Compose Configuration
+# This extends the base docker-compose.yml with development-specific settings
+
+services:
+  lanflix-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: build  # Use build stage for development
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5000
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount source code for hot reload (if using dotnet watch)
+      - ./WebApi:/src/WebApi
+      - ./Application:/src/Application
+      - ./Infrastructure:/src/Infrastructure
+      - ./Domain:/src/Domain
+      # Override data volumes for development
+      - ./dev-data:/app/data
+      - ./dev-logs:/app/logs
+    command: dotnet watch run --project /src/WebApi/Lanflix.WebApi.csproj --no-restore
+
+  redis:
+    ports:
+      - "6379:6379"  # Expose Redis for development tools
+
+  # Optional: PostgreSQL for development
+  postgres:
+    image: postgres:16-alpine
+    container_name: lanflix-postgres-dev
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=lanflix
+      - POSTGRES_USER=lanflix
+      - POSTGRES_PASSWORD=lanflix_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    networks:
+      - lanflix-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lanflix"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-dev-data:
+    driver: local

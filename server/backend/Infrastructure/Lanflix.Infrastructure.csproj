@@ -19,6 +19,7 @@
     
     <!-- Dapper for performance-critical queries -->
     <PackageReference Include="Dapper" Version="2.1.35" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
     
     <!-- FFmpeg Integration -->
     <PackageReference Include="Xabe.FFmpeg" Version="6.0.2" />
@@ -36,6 +37,9 @@
     
     <!-- HTTP Client -->
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+    
+    <!-- Logging -->
+    <PackageReference Include="Serilog" Version="4.2.0" />
   </ItemGroup>
 
   <ItemGroup>

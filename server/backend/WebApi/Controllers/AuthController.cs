@@ -32,6 +32,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("strict")]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
     {
         // Get all profiles

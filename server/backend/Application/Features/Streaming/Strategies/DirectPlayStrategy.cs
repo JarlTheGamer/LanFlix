@@ -1,3 +1,4 @@
+using System.Buffers;
 using Lanflix.Application.Common.Models;
 using Lanflix.Domain.Enums;
 using Lanflix.Domain.ValueObjects;
@@ -180,6 +181,18 @@ public class DirectPlayStrategy : BaseStreamingStrategy
 
             var toRead = (int)Math.Min(count, remaining);
             var bytesRead = await _baseStream.ReadAsync(buffer.AsMemory(offset, toRead), cancellationToken);
+            _position += bytesRead;
+            return bytesRead;
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var remaining = _maxLength - _position;
+            if (remaining <= 0)
+                return 0;
+
+            var toRead = (int)Math.Min(buffer.Length, remaining);
+            var bytesRead = await _baseStream.ReadAsync(buffer.Slice(0, toRead), cancellationToken);
             _position += bytesRead;
             return bytesRead;
         }

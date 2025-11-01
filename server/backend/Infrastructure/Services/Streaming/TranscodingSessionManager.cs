@@ -261,6 +261,11 @@ public class TranscodingSessionManager : ITranscodingSessionManager
         return cleanedCount;
     }
 
+    public int GetActiveSessionCount()
+    {
+        return _activeSessions.Count;
+    }
+
     private async Task TerminateFFmpegProcessAsync(string processId)
     {
         try

@@ -19,34 +19,36 @@ public class GetContentDetailsQueryHandler : IRequestHandler<GetContentDetailsQu
         GetContentDetailsQuery request,
         CancellationToken cancellationToken)
     {
-        var content = await _context.Contents
+        // Fetch content with related entities
+        var contentEntity = await _context.Contents
             .Include(c => c.Episodes)
-            .Where(c => c.Id == request.Id)
-            .Select(c => new ContentDto
-            {
-                Id = c.Id,
-                TmdbId = c.TmdbId,
-                Type = c.Type,
-                Title = c.Title,
-                OriginalTitle = c.OriginalTitle,
-                Overview = c.Overview,
-                FilePath = c.FilePath,
-                MediaInfo = c.MediaInfo,
-                ReleaseDate = c.ReleaseDate,
-                PosterPath = c.PosterPath,
-                BackdropPath = c.BackdropPath,
-                Rating = c.Rating,
-                Genres = c.Genres,
-                AddedAt = c.AddedAt,
-                UpdatedAt = c.UpdatedAt,
-                EpisodeCount = c.Episodes.Count
-            })
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(c => c.Id == request.Id, cancellationToken);
 
-        if (content == null)
+        if (contentEntity == null)
         {
             throw new NotFoundException("Content", request.Id);
         }
+
+        // Map to DTO
+        var content = new ContentDto
+        {
+            Id = contentEntity.Id,
+            TmdbId = contentEntity.TmdbId,
+            Type = contentEntity.Type,
+            Title = contentEntity.Title,
+            OriginalTitle = contentEntity.OriginalTitle,
+            Overview = contentEntity.Overview,
+            FilePath = contentEntity.FilePath,
+            MediaInfo = contentEntity.MediaInfo,
+            ReleaseDate = contentEntity.ReleaseDate,
+            PosterPath = contentEntity.PosterPath,
+            BackdropPath = contentEntity.BackdropPath,
+            Rating = contentEntity.Rating,
+            Genres = contentEntity.Genres,
+            AddedAt = contentEntity.AddedAt,
+            UpdatedAt = contentEntity.UpdatedAt,
+            EpisodeCount = contentEntity.Episodes?.Count ?? 0
+        };
 
         return content;
     }

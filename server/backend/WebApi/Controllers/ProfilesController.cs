@@ -48,11 +48,16 @@ public class ProfilesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ProfileDto>> CreateProfile(
         [FromBody] CreateProfileCommand command,
+        [FromServices] IOutputCacheStore cacheStore,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("Creating new profile: {Name}", command.Name);
 
         var result = await _mediator.Send(command, cancellationToken);
+
+        // Invalidate profiles cache after creation
+        await cacheStore.EvictByTagAsync("profiles", cancellationToken);
+        _logger.LogDebug("Invalidated profiles cache after profile creation");
 
         return CreatedAtAction(
             nameof(GetProfiles),
@@ -70,6 +75,7 @@ public class ProfilesController : ControllerBase
     public async Task<ActionResult<ProfileDto>> UpdateProfile(
         int id,
         [FromBody] UpdateProfileCommand command,
+        [FromServices] IOutputCacheStore cacheStore,
         CancellationToken cancellationToken)
     {
         // Override Id from route
@@ -78,6 +84,10 @@ public class ProfilesController : ControllerBase
         _logger.LogInformation("Updating profile {ProfileId}: {Name}", id, command.Name);
 
         var result = await _mediator.Send(command, cancellationToken);
+
+        // Invalidate profiles cache after update
+        await cacheStore.EvictByTagAsync("profiles", cancellationToken);
+        _logger.LogDebug("Invalidated profiles cache after profile update");
 
         return Ok(result);
     }
