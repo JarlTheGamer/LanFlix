@@ -46,6 +46,11 @@ public record UserPreferences
     public bool AllowHardwareAcceleration { get; init; } = true;
 
     /// <summary>
+    /// Forces transcoding even when direct play is possible (for testing or bandwidth control)
+    /// </summary>
+    public bool ForceTranscode { get; init; }
+
+    /// <summary>
     /// Theme preference (e.g., "light", "dark", "auto")
     /// </summary>
     public string Theme { get; init; } = "dark";

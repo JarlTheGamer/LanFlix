@@ -201,44 +201,60 @@
     - Add process monitoring and health checks
     - _Requirements: 14.9_
 
-- [ ] 6. Implement streaming strategies
-  - [ ] 6.1 Create IStreamingStrategy interface and base classes
+- [x] 6. Implement streaming strategies
+
+
+
+  - [x] 6.1 Create IStreamingStrategy interface and base classes
+
+
     - Define IStreamingStrategy interface
     - Create base strategy class with common functionality
     - Implement ClientCapabilities detection logic
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.6_
   
-  - [ ] 6.2 Implement DirectPlayStrategy
+  - [x] 6.2 Implement DirectPlayStrategy
+
+
     - Write CanHandle logic for codec compatibility
     - Implement zero-copy file streaming with FileStream
     - Add HTTP range request support for seeking
     - _Requirements: 3.1, 3.7_
   
-  - [ ] 6.3 Implement DirectStreamStrategy (Remux)
+  - [x] 6.3 Implement DirectStreamStrategy (Remux)
+
+
     - Write CanHandle logic for container incompatibility
     - Implement FFmpeg remux (copy codecs, change container)
     - Stream remuxed output to client
     - _Requirements: 3.2_
   
-  - [ ] 6.4 Implement TranscodeVideoStrategy
+  - [x] 6.4 Implement TranscodeVideoStrategy
+
+
     - Write CanHandle logic for video codec incompatibility
     - Implement video transcoding with audio copy
     - Use hardware acceleration when available
     - _Requirements: 3.3, 3.5_
   
-  - [ ] 6.5 Implement FullTranscodeStrategy
+  - [x] 6.5 Implement FullTranscodeStrategy
+
+
     - Write CanHandle logic (always returns true as fallback)
     - Implement full video and audio transcoding
     - Support HLS/DASH segmented streaming
     - _Requirements: 3.4, 3.5, 14.7_
   
-  - [ ] 6.6 Create StreamingStrategySelector
+  - [x] 6.6 Create StreamingStrategySelector
+
+
     - Implement strategy selection based on client capabilities
     - Add priority ordering (DirectPlay > DirectStream > Transcode)
     - Consider user preferences in selection
     - _Requirements: 3.6_
 
 - [ ] 7. Implement transcoding session management
+
   - [ ] 7.1 Create TranscodingSessionManager
     - Implement session creation with unique IDs
     - Track active sessions in memory and database
@@ -259,6 +275,7 @@
     - _Requirements: 8.7, 12.4_
 
 - [ ] 8. Implement caching layer
+
   - [ ] 8.1 Create ICacheService interface and implementations
     - Define ICacheService interface with Get/Set/Remove/RemoveByTag
     - Implement MemoryCacheService for L1 cache
@@ -278,6 +295,7 @@
     - _Requirements: 5.5_
 
 - [ ] 9. Implement WebApi layer - Controllers
+
   - [ ] 9.1 Create LibraryController
     - Implement GET /api/library/items endpoint with pagination
     - Implement GET /api/library/items/{id} endpoint
@@ -316,6 +334,7 @@
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
 - [ ] 10. Implement SignalR hubs for real-time communication
+
   - [ ] 10.1 Create NotificationHub
     - Implement hub with group subscription methods
     - Add authentication to hub connections
@@ -333,6 +352,7 @@
     - _Requirements: 12.5, 12.7_
 
 - [ ] 11. Implement middleware and cross-cutting concerns
+
   - [ ] 11.1 Create ExceptionHandlingMiddleware
     - Handle NotFoundException with 404 response
     - Handle ValidationException with 400 response
@@ -358,6 +378,7 @@
     - _Requirements: 2.1_
 
 - [ ] 12. Implement migration tool
+
   - [ ] 12.1 Create LegacyDatabaseReader
     - Read Content table from old SQLite database using Dapper
     - Read Profile table
@@ -396,6 +417,7 @@
     - _Requirements: 1.6, 10.1, 10.2, 10.3_
 
 - [ ] 13. Implement API compatibility layer
+
   - [ ] 13.1 Create legacy endpoint mappings
     - Map old endpoints to new endpoints
     - Transform request/response formats
@@ -413,6 +435,7 @@
     - _Requirements: 2.6_
 
 - [ ] 14. Add performance optimizations
+
   - [ ] 14.1 Implement ArrayPool for buffer management
     - Use ArrayPool in streaming operations
     - Use ArrayPool in transcoding pipeline
@@ -452,6 +475,7 @@
     - _Requirements: 5.12_
 
 - [ ] 15. Implement monitoring and observability
+
   - [ ] 15.1 Set up OpenTelemetry
     - Configure tracing for ASP.NET Core
     - Configure tracing for HTTP clients
@@ -482,6 +506,7 @@
     - _Requirements: 9.1, 9.2, 9.4, 9.5, 9.6, 9.7_
 
 - [ ] 16. Create deployment configurations
+
   - [ ] 16.1 Set up single executable publishing
     - Configure PublishSingleFile
     - Configure PublishTrimmed
@@ -507,6 +532,7 @@
     - _Requirements: 11.3, 11.4, 11.5, 11.6_
 
 - [ ] 17. Write comprehensive tests
+
   - [ ] 17.1 Write unit tests for streaming strategies
     - Test DirectPlayStrategy.CanHandle logic
     - Test DirectStreamStrategy.CanHandle logic
