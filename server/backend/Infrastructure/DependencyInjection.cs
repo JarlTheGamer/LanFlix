@@ -1,9 +1,11 @@
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Infrastructure.Persistence;
 using Lanflix.Infrastructure.Persistence.Repositories;
+using Lanflix.Infrastructure.Services.FFmpeg;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Lanflix.Infrastructure;
 
@@ -55,6 +57,21 @@ public static class DependencyInjection
 
         // HTTP Clients
         // services.AddHttpClient<ITmdbClient, TmdbClient>();
+
+        // FFmpeg Services
+        services.AddSingleton<IMediaAnalyzer, MediaAnalyzer>();
+        services.AddSingleton<IHardwareAccelerationDetector, HardwareAccelerationDetector>();
+        services.AddSingleton<ITranscodingPipeline, TranscodingPipeline>();
+        
+        // FFmpeg Process Pool
+        var maxConcurrentTranscodes = configuration.GetValue<int>("Lanflix:Transcoding:MaxConcurrentTranscodes", 5);
+        services.AddSingleton(sp => 
+            new FFmpegProcessPool(
+                sp.GetRequiredService<ILogger<FFmpegProcessPool>>(),
+                maxConcurrentTranscodes));
+        
+        // FFmpeg Process Monitor (background service)
+        services.AddHostedService<FFmpegProcessMonitor>();
 
         // Background Jobs
         // services.AddHangfire(config => config.UseMemoryStorage());
