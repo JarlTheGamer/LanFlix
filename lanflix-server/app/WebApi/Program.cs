@@ -536,11 +536,18 @@ try
     Log.Information("Starting Lanflix Server v2.0.0");
     Log.Information("Environment: {Environment}", app.Environment.EnvironmentName);
     
-    // Seed database with initial data
+    // Automatically apply database migrations and seed initial data
     using (var scope = app.Services.CreateScope())
     {
         var context = scope.ServiceProvider.GetRequiredService<Lanflix.Infrastructure.Persistence.ApplicationDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Lanflix.Infrastructure.Persistence.DatabaseSeeder>>();
+        
+        // Apply any pending migrations automatically
+        Log.Information("Checking database migrations...");
+        await context.Database.MigrateAsync();
+        Log.Information("Database is up to date");
+        
+        // Seed initial data
         var seeder = new Lanflix.Infrastructure.Persistence.DatabaseSeeder(context, logger);
         await seeder.SeedAsync();
     }

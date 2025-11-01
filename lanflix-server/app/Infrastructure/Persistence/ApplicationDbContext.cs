@@ -18,6 +18,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<WatchHistory> WatchHistories => Set<WatchHistory>();
     public DbSet<Watchlist> Watchlists => Set<Watchlist>();
     public DbSet<StreamSession> StreamSessions => Set<StreamSession>();
+    public DbSet<ServerSetting> ServerSettings => Set<ServerSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

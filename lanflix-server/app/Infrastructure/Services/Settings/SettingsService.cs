@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Lanflix.Application.Common.DTOs;
 using Lanflix.Application.Common.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -9,161 +10,155 @@ namespace Lanflix.Infrastructure.Services.Settings;
 public class SettingsService : ISettingsService
 {
     private readonly IConfiguration _configuration;
+    private readonly IApplicationDbContext _context;
     private readonly ILogger<SettingsService> _logger;
-    private readonly string _settingsFilePath;
 
-    public SettingsService(IConfiguration configuration, ILogger<SettingsService> logger)
+    public SettingsService(
+        IConfiguration configuration,
+        IApplicationDbContext context,
+        ILogger<SettingsService> logger)
     {
         _configuration = configuration;
+        _context = context;
         _logger = logger;
-        _settingsFilePath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
     }
 
-    public Task<ServerSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
+    public async Task<ServerSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
+        // Helper to get setting from DB or config
+        string GetSetting(string key, string defaultValue = "")
+        {
+            var dbSetting = _context.ServerSettings
+                .FirstOrDefault(s => s.Key == key);
+            return dbSetting?.Value ?? _configuration[key] ?? defaultValue;
+        }
+
+        int GetIntSetting(string key, int defaultValue)
+        {
+            var dbSetting = _context.ServerSettings
+                .FirstOrDefault(s => s.Key == key);
+            if (dbSetting != null && int.TryParse(dbSetting.Value, out var value))
+                return value;
+            return _configuration.GetValue<int>(key, defaultValue);
+        }
+
+        bool GetBoolSetting(string key, bool defaultValue)
+        {
+            var dbSetting = _context.ServerSettings
+                .FirstOrDefault(s => s.Key == key);
+            if (dbSetting != null && bool.TryParse(dbSetting.Value, out var value))
+                return value;
+            return _configuration.GetValue<bool>(key, defaultValue);
+        }
+
         var settings = new ServerSettingsDto
         {
             MediaPaths = new MediaPathsSettings
             {
-                Movies = _configuration["Lanflix:MediaPaths:Movies"] ?? string.Empty,
-                Series = _configuration["Lanflix:MediaPaths:Series"] ?? string.Empty,
-                PosterCache = _configuration["Lanflix:MediaPaths:PosterCache"] ?? string.Empty,
-                BackdropCache = _configuration["Lanflix:MediaPaths:BackdropCache"] ?? string.Empty
+                Movies = GetSetting("Lanflix:MediaPaths:Movies"),
+                Series = GetSetting("Lanflix:MediaPaths:Series"),
+                PosterCache = GetSetting("Lanflix:MediaPaths:PosterCache"),
+                BackdropCache = GetSetting("Lanflix:MediaPaths:BackdropCache")
             },
             Transcoding = new TranscodingSettings
             {
-                EnableHardwareAcceleration = _configuration.GetValue<bool>("Lanflix:Transcoding:EnableHardwareAcceleration", true),
-                PreferredHwAccel = _configuration["Lanflix:Transcoding:PreferredHwAccel"] ?? "auto",
-                MaxConcurrentTranscodes = _configuration.GetValue<int>("Lanflix:Transcoding:MaxConcurrentTranscodes", 2),
-                TempPath = _configuration["Lanflix:Transcoding:TempPath"] ?? string.Empty,
-                DefaultBitrate = _configuration.GetValue<int>("Lanflix:Transcoding:DefaultBitrate", 8000000),
-                HlsSegmentDuration = _configuration.GetValue<int>("Lanflix:Transcoding:HlsSegmentDuration", 6)
+                EnableHardwareAcceleration = GetBoolSetting("Lanflix:Transcoding:EnableHardwareAcceleration", true),
+                PreferredHwAccel = GetSetting("Lanflix:Transcoding:PreferredHwAccel", "auto"),
+                MaxConcurrentTranscodes = GetIntSetting("Lanflix:Transcoding:MaxConcurrentTranscodes", 2),
+                TempPath = GetSetting("Lanflix:Transcoding:TempPath"),
+                DefaultBitrate = GetIntSetting("Lanflix:Transcoding:DefaultBitrate", 8000000),
+                HlsSegmentDuration = GetIntSetting("Lanflix:Transcoding:HlsSegmentDuration", 6)
             },
             Streaming = new StreamingSettings
             {
-                EnableDirectPlay = _configuration.GetValue<bool>("Lanflix:Streaming:EnableDirectPlay", true),
-                EnableDirectStream = _configuration.GetValue<bool>("Lanflix:Streaming:EnableDirectStream", true),
-                ChunkSize = _configuration.GetValue<int>("Lanflix:Streaming:ChunkSize", 81920)
+                EnableDirectPlay = GetBoolSetting("Lanflix:Streaming:EnableDirectPlay", true),
+                EnableDirectStream = GetBoolSetting("Lanflix:Streaming:EnableDirectStream", true),
+                ChunkSize = GetIntSetting("Lanflix:Streaming:ChunkSize", 81920)
             },
             Cache = new CacheSettings
             {
                 Redis = new RedisCacheSettings
                 {
-                    Enabled = _configuration.GetValue<bool>("Lanflix:Cache:Redis:Enabled", false),
-                    ConnectionString = _configuration["Lanflix:Cache:Redis:ConnectionString"] ?? string.Empty,
-                    InstanceName = _configuration["Lanflix:Cache:Redis:InstanceName"] ?? "lanflix:"
+                    Enabled = GetBoolSetting("Lanflix:Cache:Redis:Enabled", false),
+                    ConnectionString = GetSetting("Lanflix:Cache:Redis:ConnectionString"),
+                    InstanceName = GetSetting("Lanflix:Cache:Redis:InstanceName", "lanflix:")
                 },
                 Memory = new MemoryCacheSettings
                 {
-                    SizeLimit = _configuration.GetValue<int>("Lanflix:Cache:Memory:SizeLimit", 512)
+                    SizeLimit = GetIntSetting("Lanflix:Cache:Memory:SizeLimit", 512)
                 }
             },
             ExternalApis = new ExternalApisSettings
             {
                 Tmdb = new TmdbSettings
                 {
-                    ApiKey = _configuration["Lanflix:ExternalApis:Tmdb:ApiKey"] ?? string.Empty,
-                    BaseUrl = _configuration["Lanflix:ExternalApis:Tmdb:BaseUrl"] ?? "https://api.themoviedb.org/3/"
+                    ApiKey = GetSetting("Lanflix:ExternalApis:Tmdb:ApiKey"),
+                    BaseUrl = GetSetting("Lanflix:ExternalApis:Tmdb:BaseUrl", "https://api.themoviedb.org/3/")
                 }
             }
         };
 
-        return Task.FromResult(settings);
+        return settings;
     }
 
     public async Task UpdateSettingsAsync(ServerSettingsDto settings, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Updating server settings");
+        _logger.LogInformation("Updating server settings to database");
 
         try
         {
-            // Read existing appsettings.json
-            string json;
-            if (File.Exists(_settingsFilePath))
-            {
-                json = await File.ReadAllTextAsync(_settingsFilePath, cancellationToken);
-            }
-            else
-            {
-                json = "{}";
-            }
+            var now = DateTime.UtcNow;
 
-            // Parse JSON
-            var jsonDocument = JsonDocument.Parse(json);
-            var root = jsonDocument.RootElement;
-
-            // Create a mutable dictionary
-            var configDict = JsonSerializer.Deserialize<Dictionary<string, object>>(json) 
-                ?? new Dictionary<string, object>();
-
-            // Update Lanflix section
-            var lanflixSection = new Dictionary<string, object>
+            // Helper to upsert a setting
+            async Task UpsertSetting(string key, string value)
             {
-                ["MediaPaths"] = new Dictionary<string, object>
+                var existing = await _context.ServerSettings
+                    .FirstOrDefaultAsync(s => s.Key == key, cancellationToken);
+
+                if (existing != null)
                 {
-                    ["Movies"] = settings.MediaPaths.Movies,
-                    ["Series"] = settings.MediaPaths.Series,
-                    ["PosterCache"] = settings.MediaPaths.PosterCache,
-                    ["BackdropCache"] = settings.MediaPaths.BackdropCache
-                },
-                ["Transcoding"] = new Dictionary<string, object>
-                {
-                    ["EnableHardwareAcceleration"] = settings.Transcoding.EnableHardwareAcceleration,
-                    ["PreferredHwAccel"] = settings.Transcoding.PreferredHwAccel,
-                    ["MaxConcurrentTranscodes"] = settings.Transcoding.MaxConcurrentTranscodes,
-                    ["TempPath"] = settings.Transcoding.TempPath,
-                    ["DefaultBitrate"] = settings.Transcoding.DefaultBitrate,
-                    ["HlsSegmentDuration"] = settings.Transcoding.HlsSegmentDuration
-                },
-                ["Streaming"] = new Dictionary<string, object>
-                {
-                    ["EnableDirectPlay"] = settings.Streaming.EnableDirectPlay,
-                    ["EnableDirectStream"] = settings.Streaming.EnableDirectStream,
-                    ["ChunkSize"] = settings.Streaming.ChunkSize
-                },
-                ["Cache"] = new Dictionary<string, object>
-                {
-                    ["Redis"] = new Dictionary<string, object>
-                    {
-                        ["Enabled"] = settings.Cache.Redis.Enabled,
-                        ["ConnectionString"] = settings.Cache.Redis.ConnectionString,
-                        ["InstanceName"] = settings.Cache.Redis.InstanceName
-                    },
-                    ["Memory"] = new Dictionary<string, object>
-                    {
-                        ["SizeLimit"] = settings.Cache.Memory.SizeLimit
-                    }
-                },
-                ["ExternalApis"] = new Dictionary<string, object>
-                {
-                    ["Tmdb"] = new Dictionary<string, object>
-                    {
-                        ["ApiKey"] = settings.ExternalApis.Tmdb.ApiKey,
-                        ["BaseUrl"] = settings.ExternalApis.Tmdb.BaseUrl
-                    }
+                    existing.Value = value;
+                    existing.UpdatedAt = now;
                 }
-            };
-
-            // Preserve AppUpdates section if it exists
-            if (root.TryGetProperty("Lanflix", out var existingLanflix) &&
-                existingLanflix.TryGetProperty("AppUpdates", out var appUpdates))
-            {
-                lanflixSection["AppUpdates"] = JsonSerializer.Deserialize<Dictionary<string, object>>(appUpdates.GetRawText())
-                    ?? new Dictionary<string, object>();
+                else
+                {
+                    _context.ServerSettings.Add(new Domain.Entities.ServerSetting
+                    {
+                        Key = key,
+                        Value = value,
+                        UpdatedAt = now
+                    });
+                }
             }
 
-            configDict["Lanflix"] = lanflixSection;
+            // Save all settings to database
+            await UpsertSetting("Lanflix:MediaPaths:Movies", settings.MediaPaths.Movies);
+            await UpsertSetting("Lanflix:MediaPaths:Series", settings.MediaPaths.Series);
+            await UpsertSetting("Lanflix:MediaPaths:PosterCache", settings.MediaPaths.PosterCache);
+            await UpsertSetting("Lanflix:MediaPaths:BackdropCache", settings.MediaPaths.BackdropCache);
 
-            // Write back to file
-            var options = new JsonSerializerOptions
-            {
-                WriteIndented = true
-            };
+            await UpsertSetting("Lanflix:Transcoding:EnableHardwareAcceleration", settings.Transcoding.EnableHardwareAcceleration.ToString());
+            await UpsertSetting("Lanflix:Transcoding:PreferredHwAccel", settings.Transcoding.PreferredHwAccel);
+            await UpsertSetting("Lanflix:Transcoding:MaxConcurrentTranscodes", settings.Transcoding.MaxConcurrentTranscodes.ToString());
+            await UpsertSetting("Lanflix:Transcoding:TempPath", settings.Transcoding.TempPath);
+            await UpsertSetting("Lanflix:Transcoding:DefaultBitrate", settings.Transcoding.DefaultBitrate.ToString());
+            await UpsertSetting("Lanflix:Transcoding:HlsSegmentDuration", settings.Transcoding.HlsSegmentDuration.ToString());
 
-            json = JsonSerializer.Serialize(configDict, options);
-            await File.WriteAllTextAsync(_settingsFilePath, json, cancellationToken);
+            await UpsertSetting("Lanflix:Streaming:EnableDirectPlay", settings.Streaming.EnableDirectPlay.ToString());
+            await UpsertSetting("Lanflix:Streaming:EnableDirectStream", settings.Streaming.EnableDirectStream.ToString());
+            await UpsertSetting("Lanflix:Streaming:ChunkSize", settings.Streaming.ChunkSize.ToString());
 
-            _logger.LogInformation("Server settings updated successfully");
+            await UpsertSetting("Lanflix:Cache:Redis:Enabled", settings.Cache.Redis.Enabled.ToString());
+            await UpsertSetting("Lanflix:Cache:Redis:ConnectionString", settings.Cache.Redis.ConnectionString);
+            await UpsertSetting("Lanflix:Cache:Redis:InstanceName", settings.Cache.Redis.InstanceName);
+            await UpsertSetting("Lanflix:Cache:Memory:SizeLimit", settings.Cache.Memory.SizeLimit.ToString());
+
+            await UpsertSetting("Lanflix:ExternalApis:Tmdb:ApiKey", settings.ExternalApis.Tmdb.ApiKey);
+            await UpsertSetting("Lanflix:ExternalApis:Tmdb:BaseUrl", settings.ExternalApis.Tmdb.BaseUrl);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Server settings saved to database successfully");
         }
         catch (Exception ex)
         {

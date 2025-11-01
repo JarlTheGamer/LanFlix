@@ -135,6 +135,9 @@ public static class DependencyInjection
         
         // FFmpeg Process Pool
         var maxConcurrentTranscodes = configuration.GetValue<int>("Lanflix:Transcoding:MaxConcurrentTranscodes", 5);
+        // Ensure at least 1 concurrent transcode
+        if (maxConcurrentTranscodes < 1) maxConcurrentTranscodes = 2;
+        
         services.AddSingleton(sp => 
             new FFmpegProcessPool(
                 sp.GetRequiredService<ILogger<FFmpegProcessPool>>(),
