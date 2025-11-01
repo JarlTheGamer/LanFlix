@@ -1,0 +1,96 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+*.log
+*.db
+*.db-shm
+*.db-wal
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio
+.vs/
+.vscode/
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Frontend build
+lanflix-server/app/WebApi/wwwroot/assets/
+lanflix-server/app/WebApi/wwwroot/pages/
+lanflix-server/app/WebApi/wwwroot/index.html
+!lanflix-server/app/WebApi/wwwroot/README.md
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Publish
+publish/
+*.pubxml
+
+# Temp
+temp/
+tmp/
+*.tmp
+
+# Media (don't commit test media)
+Media/
+*.mp4
+*.mkv
+*.avi
+*.mov
+
+# APK releases
+releases/
+*.apk
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+lanflix.db*
+
+# Transcoding temp
+Transcoding/
