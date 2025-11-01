@@ -34,25 +34,63 @@ if errorlevel 1 (
 echo ✓ Server built
 echo.
 
-REM Step 2: Create distribution folder
-echo [2/4] Creating distribution package...
+REM Step 2: Package server as executable
+echo [2/4] Packaging server as executable...
+cd server\backend
+
+REM Check if pkg is installed
+where pkg >nul 2>nul
+if errorlevel 1 (
+    echo Installing pkg...
+    call npm install -g pkg
+    if errorlevel 1 (
+        echo ERROR: Failed to install pkg
+        cd ..\..
+        pause
+        exit /b 1
+    )
+)
+
+REM Build executable
+echo Building lanflix-server.exe...
+call pkg . --targets node18-win-x64 --output ..\..\build-tools\server\build\lanflix-server.exe
+if errorlevel 1 (
+    echo ERROR: Failed to build executable
+    cd ..\..
+    pause
+    exit /b 1
+)
+
+cd ..\..
+echo ✓ Executable created
+echo.
+
+REM Step 2.5: Create distribution folder
+echo [2.5/4] Creating distribution package...
 set DIST_DIR=build-tools\server\build\lanflix-server
 if exist "%DIST_DIR%" rmdir /s /q "%DIST_DIR%"
 mkdir "%DIST_DIR%"
 
-REM Copy backend files
-echo Copying backend files...
-xcopy /E /I /Y "server\backend\dist" "%DIST_DIR%\dist\"
-xcopy /E /I /Y "server\backend\public" "%DIST_DIR%\public\"
-xcopy /E /I /Y "server\backend\node_modules" "%DIST_DIR%\node_modules\"
-copy /Y "server\backend\package.json" "%DIST_DIR%\"
-copy /Y "server\backend\.env.example" "%DIST_DIR%\.env"
+REM Copy executable
+echo Copying executable...
+copy /Y "build-tools\server\build\lanflix-server.exe" "%DIST_DIR%\"
+
+REM Copy public files (frontend assets)
+if exist "server\backend\public" (
+    echo Copying public files...
+    xcopy /E /I /Y "server\backend\public" "%DIST_DIR%\public\"
+)
+
+REM Copy config template
+if exist "server\backend\.env.example" (
+    copy /Y "server\backend\.env.example" "%DIST_DIR%\.env"
+)
 
 REM Copy runtime scripts
 echo Copying runtime scripts...
-copy /Y "build-tools\server\runtime\start-server.bat" "%DIST_DIR%\"
-copy /Y "build-tools\server\runtime\install-service.bat" "%DIST_DIR%\"
-copy /Y "build-tools\server\runtime\README.txt" "%DIST_DIR%\"
+if exist "build-tools\server\runtime\start-server.bat" copy /Y "build-tools\server\runtime\start-server.bat" "%DIST_DIR%\"
+if exist "build-tools\server\runtime\install-service.bat" copy /Y "build-tools\server\runtime\install-service.bat" "%DIST_DIR%\"
+if exist "build-tools\server\runtime\README.txt" copy /Y "build-tools\server\runtime\README.txt" "%DIST_DIR%\"
 
 echo ✓ Distribution package created
 echo.
@@ -100,11 +138,15 @@ echo   Build Complete!
 echo ========================================
 echo.
 echo Output files:
+echo   - Standalone EXE: build-tools\server\build\lanflix-server.exe
 echo   - Portable ZIP: %ZIP_FILE%
 if exist "build-tools\server\build\lanflix-installer.exe" (
     echo   - Installer: build-tools\server\build\lanflix-installer.exe
 )
 echo.
 echo Distribution folder: %DIST_DIR%
+echo.
+echo The lanflix-server.exe is a standalone executable that includes
+echo Node.js runtime and all dependencies. No Node.js installation required!
 echo.
 pause

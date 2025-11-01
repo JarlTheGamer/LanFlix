@@ -16,9 +16,10 @@ The Lanflix server is a self-contained application that serves both the web UI a
 
 ## Manual Installation
 
-1. Extract `lanflix-server.zip` to desired location
-2. Run `install-service.bat` (optional, for Windows service)
-3. Run `lanflix-server.exe` to start
+1. Extract `lanflix-server-portable.zip` to desired location
+2. Run `start-server.bat` to start the server
+3. Or run `lanflix-server.exe` directly
+4. Optionally run `install-service.bat` to install as Windows service
 
 ## Configuration
 
