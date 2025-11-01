@@ -1,40 +1,56 @@
 using FluentAssertions;
 using Lanflix.Application.Common.Exceptions;
-using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Features.Streaming.Commands.StartStream;
 using Lanflix.Domain.Entities;
 using Lanflix.Domain.Enums;
 using Lanflix.Domain.ValueObjects;
+using Lanflix.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using NSubstitute;
 
 namespace Lanflix.Application.Tests.Features.Streaming.Commands;
 
-public class StartStreamCommandHandlerTests
+public class StartStreamCommandHandlerTests : IDisposable
 {
-    private readonly IApplicationDbContext _context;
+    private readonly ApplicationDbContext _context;
     private readonly StartStreamCommandHandler _handler;
 
     public StartStreamCommandHandlerTests()
     {
-        _context = Substitute.For<IApplicationDbContext>();
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        _context = new ApplicationDbContext(options);
         _handler = new StartStreamCommandHandler(_context);
+        
+        // Seed test data
+        SeedTestData();
+    }
+
+    public void Dispose()
+    {
+        _context.Database.EnsureDeleted();
+        _context.Dispose();
+    }
+
+    private void SeedTestData()
+    {
+        var content = CreateTestContent();
+        var profile = CreateTestProfile();
+        
+        _context.Contents.Add(content);
+        _context.Profiles.Add(profile);
+        _context.SaveChanges();
     }
 
     [Fact]
     public async Task Handle_WithValidRequest_CreatesStreamSession()
     {
         // Arrange
-        var content = CreateTestContent();
-        var profile = CreateTestProfile();
-
-        SetupContentDbSet(new List<Content> { content });
-        SetupProfileDbSet(new List<Profile> { profile });
-
         var command = new StartStreamCommand
         {
-            ContentId = content.Id,
-            ProfileId = profile.Id
+            ContentId = 1,
+            ProfileId = 1
         };
 
         // Act
@@ -42,23 +58,23 @@ public class StartStreamCommandHandlerTests
 
         // Assert
         result.Should().NotBeNull();
-        result.ContentId.Should().Be(content.Id);
-        result.ProfileId.Should().Be(profile.Id);
+        result.ContentId.Should().Be(1);
+        result.ProfileId.Should().Be(1);
         result.Mode.Should().Be(StreamingMode.DirectPlay);
         result.IsActive.Should().BeTrue();
         result.StreamUrl.Should().Contain("/api/stream/");
         
-        _context.StreamSessions.Received(1).Add(Arg.Any<StreamSession>());
-        await _context.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        // Verify session was saved to database
+        var session = await _context.StreamSessions.FirstOrDefaultAsync();
+        session.Should().NotBeNull();
+        session!.ContentId.Should().Be(1);
+        session.ProfileId.Should().Be(1);
     }
 
     [Fact]
     public async Task Handle_WithInvalidContentId_ThrowsNotFoundException()
     {
         // Arrange
-        SetupContentDbSet(new List<Content>());
-        SetupProfileDbSet(new List<Profile> { CreateTestProfile() });
-
         var command = new StartStreamCommand
         {
             ContentId = 999,
@@ -77,9 +93,6 @@ public class StartStreamCommandHandlerTests
     public async Task Handle_WithInvalidProfileId_ThrowsNotFoundException()
     {
         // Arrange
-        SetupContentDbSet(new List<Content> { CreateTestContent() });
-        SetupProfileDbSet(new List<Profile>());
-
         var command = new StartStreamCommand
         {
             ContentId = 1,
@@ -98,16 +111,10 @@ public class StartStreamCommandHandlerTests
     public async Task Handle_GeneratesUniqueSessionId()
     {
         // Arrange
-        var content = CreateTestContent();
-        var profile = CreateTestProfile();
-
-        SetupContentDbSet(new List<Content> { content });
-        SetupProfileDbSet(new List<Profile> { profile });
-
         var command = new StartStreamCommand
         {
-            ContentId = content.Id,
-            ProfileId = profile.Id
+            ContentId = 1,
+            ProfileId = 1
         };
 
         // Act
@@ -124,16 +131,10 @@ public class StartStreamCommandHandlerTests
     public async Task Handle_SetsStartedAtToCurrentTime()
     {
         // Arrange
-        var content = CreateTestContent();
-        var profile = CreateTestProfile();
-
-        SetupContentDbSet(new List<Content> { content });
-        SetupProfileDbSet(new List<Profile> { profile });
-
         var command = new StartStreamCommand
         {
-            ContentId = content.Id,
-            ProfileId = profile.Id
+            ContentId = 1,
+            ProfileId = 1
         };
 
         var beforeTime = DateTime.UtcNow;
@@ -203,28 +204,4 @@ public class StartStreamCommandHandlerTests
         };
     }
 
-    private void SetupContentDbSet(List<Content> contents)
-    {
-        var mockSet = CreateMockDbSet(contents);
-        _context.Contents.Returns(mockSet);
-    }
-
-    private void SetupProfileDbSet(List<Profile> profiles)
-    {
-        var mockSet = CreateMockDbSet(profiles);
-        _context.Profiles.Returns(mockSet);
-    }
-
-    private DbSet<T> CreateMockDbSet<T>(List<T> data) where T : class
-    {
-        var queryable = data.AsQueryable();
-        var mockSet = Substitute.For<DbSet<T>, IQueryable<T>>();
-        
-        ((IQueryable<T>)mockSet).Provider.Returns(queryable.Provider);
-        ((IQueryable<T>)mockSet).Expression.Returns(queryable.Expression);
-        ((IQueryable<T>)mockSet).ElementType.Returns(queryable.ElementType);
-        ((IQueryable<T>)mockSet).GetEnumerator().Returns(queryable.GetEnumerator());
-        
-        return mockSet;
-    }
 }

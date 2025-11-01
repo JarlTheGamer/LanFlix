@@ -13,7 +13,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // Use test configuration - set empty connection strings to prevent SQLite registration
+        // Use test configuration
         builder.ConfigureAppConfiguration((context, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
@@ -24,14 +24,14 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             });
         });
 
+        // Replace the database registration AFTER the application services are configured
         builder.ConfigureServices(services =>
         {
-            // Remove all EF Core related service descriptors
+            // Remove all existing DbContext registrations
             var descriptorsToRemove = services
                 .Where(d => d.ServiceType == typeof(DbContextOptions) ||
                            d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>) ||
-                           d.ServiceType == typeof(ApplicationDbContext) ||
-                           d.ServiceType == typeof(IApplicationDbContext))
+                           d.ServiceType == typeof(ApplicationDbContext))
                 .ToList();
 
             foreach (var descriptor in descriptorsToRemove)
@@ -45,9 +45,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 options.UseInMemoryDatabase("TestDatabase");
             });
 
-            // Re-register IApplicationDbContext
-            services.AddScoped<IApplicationDbContext>(provider => 
-                provider.GetRequiredService<ApplicationDbContext>());
+            // Replace IApplicationDbContext registration
+            services.Replace(ServiceDescriptor.Scoped<IApplicationDbContext>(provider => 
+                provider.GetRequiredService<ApplicationDbContext>()));
         });
 
         builder.ConfigureServices(services =>
@@ -61,6 +61,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             var db = scopedServices.GetRequiredService<ApplicationDbContext>();
 
             // Ensure the database is created
+            db.Database.EnsureDeleted();
             db.Database.EnsureCreated();
 
             // Seed test data
@@ -72,10 +73,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
     private static void SeedTestData(ApplicationDbContext context)
     {
-        // Clear existing data
-        context.Contents.RemoveRange(context.Contents);
-        context.Profiles.RemoveRange(context.Profiles);
-        context.SaveChanges();
+        // Database is already clean from EnsureDeleted/EnsureCreated
 
         // Seed profiles
         var profile1 = new Domain.Entities.Profile

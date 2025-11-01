@@ -1,32 +1,48 @@
 using FluentAssertions;
-using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Features.Library.Queries.GetLibraryItems;
 using Lanflix.Domain.Entities;
 using Lanflix.Domain.Enums;
 using Lanflix.Domain.ValueObjects;
+using Lanflix.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using NSubstitute;
 
 namespace Lanflix.Application.Tests.Features.Library.Queries;
 
-public class GetLibraryItemsQueryHandlerTests
+public class GetLibraryItemsQueryHandlerTests : IDisposable
 {
-    private readonly IApplicationDbContext _context;
+    private readonly ApplicationDbContext _context;
     private readonly GetLibraryItemsQueryHandler _handler;
 
     public GetLibraryItemsQueryHandlerTests()
     {
-        _context = Substitute.For<IApplicationDbContext>();
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        _context = new ApplicationDbContext(options);
         _handler = new GetLibraryItemsQueryHandler(_context);
+        
+        // Seed test data
+        SeedTestData();
+    }
+
+    public void Dispose()
+    {
+        _context.Database.EnsureDeleted();
+        _context.Dispose();
+    }
+
+    private void SeedTestData()
+    {
+        var contents = CreateTestContents();
+        _context.Contents.AddRange(contents);
+        _context.SaveChanges();
     }
 
     [Fact]
     public async Task Handle_WithNoFilters_ReturnsAllContent()
     {
         // Arrange
-        var contents = CreateTestContents();
-        SetupDbSet(contents);
-
         var query = new GetLibraryItemsQuery
         {
             PageNumber = 1,
@@ -46,9 +62,6 @@ public class GetLibraryItemsQueryHandlerTests
     public async Task Handle_WithTypeFilter_ReturnsOnlyMatchingType()
     {
         // Arrange
-        var contents = CreateTestContents();
-        SetupDbSet(contents);
-
         var query = new GetLibraryItemsQuery
         {
             Type = ContentType.Movie,
@@ -61,15 +74,13 @@ public class GetLibraryItemsQueryHandlerTests
 
         // Assert
         result.Items.Should().OnlyContain(c => c.Type == ContentType.Movie);
+        result.Items.Should().HaveCount(2);
     }
 
     [Fact]
     public async Task Handle_WithSearchTerm_ReturnsMatchingContent()
     {
         // Arrange
-        var contents = CreateTestContents();
-        SetupDbSet(contents);
-
         var query = new GetLibraryItemsQuery
         {
             SearchTerm = "Inception",
@@ -82,15 +93,13 @@ public class GetLibraryItemsQueryHandlerTests
 
         // Assert
         result.Items.Should().Contain(c => c.Title.Contains("Inception"));
+        result.Items.Should().HaveCount(1);
     }
 
     [Fact]
     public async Task Handle_WithGenreFilter_ReturnsMatchingContent()
     {
         // Arrange
-        var contents = CreateTestContents();
-        SetupDbSet(contents);
-
         var query = new GetLibraryItemsQuery
         {
             Genre = "Action",
@@ -103,15 +112,13 @@ public class GetLibraryItemsQueryHandlerTests
 
         // Assert
         result.Items.Should().OnlyContain(c => c.Genres != null && c.Genres.Contains("Action"));
+        result.Items.Should().HaveCount(1);
     }
 
     [Fact]
     public async Task Handle_WithPagination_ReturnsCorrectPage()
     {
         // Arrange
-        var contents = CreateTestContents();
-        SetupDbSet(contents);
-
         var query = new GetLibraryItemsQuery
         {
             PageNumber = 2,
@@ -125,15 +132,13 @@ public class GetLibraryItemsQueryHandlerTests
         result.PageNumber.Should().Be(2);
         result.PageSize.Should().Be(1);
         result.Items.Should().HaveCount(1);
+        result.TotalCount.Should().Be(3);
     }
 
     [Fact]
     public async Task Handle_WithSortByTitle_ReturnsSortedContent()
     {
         // Arrange
-        var contents = CreateTestContents();
-        SetupDbSet(contents);
-
         var query = new GetLibraryItemsQuery
         {
             SortBy = "title",
@@ -147,15 +152,13 @@ public class GetLibraryItemsQueryHandlerTests
 
         // Assert
         result.Items.Should().BeInAscendingOrder(c => c.Title);
+        result.Items.Should().HaveCount(3);
     }
 
     [Fact]
     public async Task Handle_WithSortByReleaseDate_ReturnsSortedContent()
     {
         // Arrange
-        var contents = CreateTestContents();
-        SetupDbSet(contents);
-
         var query = new GetLibraryItemsQuery
         {
             SortBy = "releasedate",
@@ -169,6 +172,7 @@ public class GetLibraryItemsQueryHandlerTests
 
         // Assert
         result.Items.Should().BeInDescendingOrder(c => c.ReleaseDate);
+        result.Items.Should().HaveCount(3);
     }
 
     // Helper methods
@@ -254,22 +258,4 @@ public class GetLibraryItemsQueryHandlerTests
         };
     }
 
-    private void SetupDbSet(List<Content> contents)
-    {
-        var mockSet = CreateMockDbSet(contents);
-        _context.Contents.Returns(mockSet);
-    }
-
-    private DbSet<T> CreateMockDbSet<T>(List<T> data) where T : class
-    {
-        var queryable = data.AsQueryable();
-        var mockSet = Substitute.For<DbSet<T>, IQueryable<T>>();
-        
-        ((IQueryable<T>)mockSet).Provider.Returns(queryable.Provider);
-        ((IQueryable<T>)mockSet).Expression.Returns(queryable.Expression);
-        ((IQueryable<T>)mockSet).ElementType.Returns(queryable.ElementType);
-        ((IQueryable<T>)mockSet).GetEnumerator().Returns(queryable.GetEnumerator());
-        
-        return mockSet;
-    }
 }

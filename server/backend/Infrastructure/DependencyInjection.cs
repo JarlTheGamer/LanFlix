@@ -20,23 +20,31 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         // Database Configuration
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
-        var postgresConnection = configuration.GetConnectionString("PostgresConnection");
-        
-        services.AddDbContext<ApplicationDbContext>(options =>
+        // Only register DbContext if it hasn't been registered already (e.g., in tests)
+        if (!services.Any(d => d.ServiceType == typeof(ApplicationDbContext)))
         {
-            if (!string.IsNullOrEmpty(postgresConnection))
+            var connectionString = configuration.GetConnectionString("DefaultConnection");
+            var postgresConnection = configuration.GetConnectionString("PostgresConnection");
+            
+            services.AddDbContext<ApplicationDbContext>(options =>
             {
-                options.UseNpgsql(postgresConnection);
-            }
-            else
-            {
-                options.UseSqlite(connectionString ?? "Data Source=lanflix.db");
-            }
-        });
+                if (!string.IsNullOrEmpty(postgresConnection))
+                {
+                    options.UseNpgsql(postgresConnection);
+                }
+                else
+                {
+                    options.UseSqlite(connectionString ?? "Data Source=lanflix.db");
+                }
+            });
+        }
 
         // Register repositories and services
-        services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+        // Only register IApplicationDbContext if it hasn't been registered already (e.g., in tests)
+        if (!services.Any(d => d.ServiceType == typeof(IApplicationDbContext)))
+        {
+            services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+        }
         
         // Register repositories
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
