@@ -1,11 +1,18 @@
 @echo off
-REM Quick build script for Lanflix Android APK
+REM ============================================
+REM Lanflix Android APK Builder
+REM ============================================
+
+setlocal
 
 echo.
 echo ========================================
 echo   Building Lanflix Android APK
 echo ========================================
 echo.
+
+REM Change to android directory
+cd /d "%~dp0"
 
 REM Check if gradlew exists
 if not exist "gradlew.bat" (
@@ -15,26 +22,24 @@ if not exist "gradlew.bat" (
     exit /b 1
 )
 
-REM Set JAVA_HOME if needed
-if not defined JAVA_HOME (
-    echo Setting JAVA_HOME...
-    set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.9.10-hotspot"
-    if not exist "%JAVA_HOME%" (
-        set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot"
-    )
+REM Set JAVA_HOME to Java 21
+set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot"
+
+if not exist "%JAVA_HOME%" (
+    echo ERROR: Java 21 not found at: %JAVA_HOME%
+    echo.
+    echo Please install Java 21 from: https://adoptium.net/
+    pause
+    exit /b 1
 )
 
 echo Using Java: %JAVA_HOME%
-echo.
-
-REM Clean build
-echo Cleaning previous build...
-call gradlew clean
+java -version
 echo.
 
 REM Build debug APK
 echo Building debug APK...
-call gradlew assembleDebug
+call gradlew.bat assembleDebug
 
 if errorlevel 1 (
     echo.
@@ -56,4 +61,5 @@ echo.
 echo To install on connected device:
 echo   gradlew installDebug
 echo.
-pause
+
+endlocal

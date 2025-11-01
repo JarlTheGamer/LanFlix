@@ -74,7 +74,7 @@ if "!VERSION_INPUT!"=="" (
 REM Step 1: Bump version
 echo.
 echo [1/7] Bumping version to !VERSION_INPUT!...
-node scripts\bump-version.js !VERSION_INPUT!
+node build-tools\scripts\bump-version.js !VERSION_INPUT!
 if errorlevel 1 (
     echo ERROR: Failed to bump version
     pause
@@ -102,9 +102,16 @@ REM Step 3: Build Android APK
 echo [3/7] Building Android APK...
 
 REM Set JAVA_HOME to Java 21 for Gradle compatibility
-set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot"
+if exist "C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot" (
+    set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot"
+) else if exist "C:\Program Files\Java\jdk-21" (
+    set "JAVA_HOME=C:\Program Files\Java\jdk-21"
+) else (
+    echo WARNING: Java 21 not found at expected location
+    echo Using system Java - build may fail if Java version is too new
+)
 set "PATH=%JAVA_HOME%\bin;%PATH%"
-echo Using Java 21 for Gradle build...
+echo Using Java: %JAVA_HOME%
 
 cd build-tools\android
 if exist "gradlew.bat" (

@@ -4,14 +4,13 @@
   "description": "Self-hosted streaming media server",
   "scripts": {
     "build:server": "node build-tools/scripts/build-server.js",
-    "build:android": "cd build-tools/android && gradlew assembleDebug",
+    "build:android": "build-tools\\android\\build-apk.bat",
+    "build:installer": "build-tools\\server\\build-installer.bat",
     "build:all": "npm run build:server && npm run build:android",
     "dev:backend": "cd server/backend && npm run dev",
     "dev:frontend": "cd server/frontend && npm run dev",
-    "release": "scripts\\release.bat",
-    "release:force": "scripts\\release-force.bat",
-    "release:interactive": "scripts\\release-interactive.bat",
-    "version:bump": "node scripts/bump-version.js"
+    "release": "build-tools\\scripts\\release.bat",
+    "version:bump": "node build-tools/scripts/bump-version.js"
   },
   "repository": {
     "type": "git",

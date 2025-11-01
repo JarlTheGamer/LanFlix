@@ -5,10 +5,13 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.lanflix.app.api.ApiClient
 import com.lanflix.app.databinding.ActivitySettingsBinding
 import com.lanflix.app.utils.PreferenceManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
 class SettingsActivity : AppCompatActivity() {
     
@@ -68,21 +71,25 @@ class SettingsActivity : AppCompatActivity() {
         
         lifecycleScope.launch {
             try {
-                ApiClient.initialize(this@SettingsActivity, serverUrl)
-                val response = ApiClient.getApi().healthCheck()
+                val result = withContext(Dispatchers.IO) {
+                    val url = URL("$serverUrl/health")
+                    val connection = url.openConnection() as HttpURLConnection
+                    connection.requestMethod = "GET"
+                    connection.connectTimeout = 5000
+                    connection.readTimeout = 5000
+                    connection.responseCode == 200
+                }
                 
-                if (response.isSuccessful) {
-                    response.body()?.let { health ->
-                        Toast.makeText(
-                            this@SettingsActivity,
-                            "Connected to ${health.name} v${health.version}",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
+                if (result) {
+                    Toast.makeText(
+                        this@SettingsActivity,
+                        "Connected successfully!",
+                        Toast.LENGTH_LONG
+                    ).show()
                 } else {
                     Toast.makeText(
                         this@SettingsActivity,
-                        "Connection failed: ${response.code()}",
+                        "Connection failed",
                         Toast.LENGTH_SHORT
                     ).show()
                 }

@@ -74,6 +74,13 @@ npm run build:server
 npm run build:android
 ```
 
+### Build Server Installer
+```bash
+npm run build:installer
+```
+
+Creates a portable ZIP with the server ready to distribute.
+
 ## Running the Production Server
 
 After building:
@@ -98,21 +105,22 @@ The Android app needs to know where your server is:
 
 ## Creating a Windows Installer
 
-### Manual Package
-1. Run `npm run build:server`
-2. Copy these to a distribution folder:
-   - `backend/dist/`
-   - `backend/public/`
-   - `backend/node_modules/`
-   - `backend/package.json`
-   - `build-tools/server/start-server.bat`
-3. Zip the folder
+### Automated Build
+```bash
+npm run build:installer
+```
 
-### Future: Automated Installer
-- Use Electron Builder or similar
-- Create `.exe` installer
-- Install as Windows service
-- Add to Start Menu
+This creates:
+- `dist/lanflix-server-portable.zip` - Ready to distribute
+- `dist/lanflix-server/` - Extracted distribution folder
+
+The package includes:
+- Compiled backend
+- Built frontend
+- `start-server.bat` - Start script
+- `install-service.bat` - Windows service installer
+- `README.txt` - User instructions
+- `.env` - Configuration file
 
 ## Deployment Options
 

@@ -63,14 +63,14 @@ build-tools/android/
 - **UpdateChecker**: Checks GitHub for new APK releases
 - **PreferenceManager**: Stores server URL
 
-## API Integration
+## How It Works
 
-The app connects to the Lanflix server API:
+The app is a simple WebView wrapper:
 
-- `GET /api/content/search?q={query}` - Search content
-- `GET /api/content/discover` - Get trending/popular content
-- `GET /api/content/{id}?type={movie|series}` - Get content details
-- `GET /health` - Server health check
+1. **First Launch**: Shows settings screen to configure server URL
+2. **After Configuration**: Loads the server's web UI in a WebView
+3. **All Features**: Provided by the server's frontend (search, browse, play, etc.)
+4. **Updates**: Checks GitHub releases for new APK versions
 
 ## Troubleshooting
 
@@ -87,10 +87,9 @@ The app connects to the Lanflix server API:
 2. Clean build: `gradlew clean`
 3. Sync Gradle files in Android Studio
 
-## Future Enhancements
+## Why WebView?
 
-- Video playback with ExoPlayer
-- Download for offline viewing
-- Watchlist and watch history
-- Profile management
-- Push notifications
+- **Simplicity**: One codebase for web and mobile
+- **Consistency**: Same UI/UX across all platforms
+- **Easy Updates**: Server updates automatically update the app UI
+- **Less Maintenance**: No need to sync features between native and web
