@@ -21,11 +21,16 @@ public static class DependencyInjection
     {
         // Database Configuration
         // Only register DbContext if it hasn't been registered already (e.g., in tests)
-        if (!services.Any(d => d.ServiceType == typeof(ApplicationDbContext)))
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        var postgresConnection = configuration.GetConnectionString("PostgresConnection");
+        
+        // Skip database registration if both connection strings are null/empty (test scenario)
+        // OR if DbContext has already been registered (test scenario)
+        var shouldRegisterDb = (!string.IsNullOrEmpty(connectionString) || !string.IsNullOrEmpty(postgresConnection))
+                            && !services.Any(d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
+        
+        if (shouldRegisterDb)
         {
-            var connectionString = configuration.GetConnectionString("DefaultConnection");
-            var postgresConnection = configuration.GetConnectionString("PostgresConnection");
-            
             services.AddDbContext<ApplicationDbContext>(options =>
             {
                 if (!string.IsNullOrEmpty(postgresConnection))
@@ -34,7 +39,7 @@ public static class DependencyInjection
                 }
                 else
                 {
-                    options.UseSqlite(connectionString ?? "Data Source=lanflix.db");
+                    options.UseSqlite(connectionString);
                 }
             });
         }

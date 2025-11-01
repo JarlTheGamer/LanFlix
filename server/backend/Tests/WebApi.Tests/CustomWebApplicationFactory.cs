@@ -13,13 +13,15 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // Use test configuration
+        builder.UseEnvironment("Testing");
+
+        // Use test configuration - set connection strings to null to prevent SQLite registration
         builder.ConfigureAppConfiguration((context, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = "",
-                ["ConnectionStrings:PostgresConnection"] = "",
+                ["ConnectionStrings:DefaultConnection"] = null,
+                ["ConnectionStrings:PostgresConnection"] = null,
                 ["Lanflix:Cache:Redis:Enabled"] = "false"
             });
         });
@@ -27,11 +29,12 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         // Replace the database registration AFTER the application services are configured
         builder.ConfigureServices(services =>
         {
-            // Remove all existing DbContext registrations
+            // Remove all existing DbContext-related registrations
             var descriptorsToRemove = services
                 .Where(d => d.ServiceType == typeof(DbContextOptions) ||
                            d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>) ||
-                           d.ServiceType == typeof(ApplicationDbContext))
+                           d.ServiceType == typeof(ApplicationDbContext) ||
+                           d.ServiceType == typeof(IApplicationDbContext))
                 .ToList();
 
             foreach (var descriptor in descriptorsToRemove)
@@ -45,9 +48,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 options.UseInMemoryDatabase("TestDatabase");
             });
 
-            // Replace IApplicationDbContext registration
-            services.Replace(ServiceDescriptor.Scoped<IApplicationDbContext>(provider => 
-                provider.GetRequiredService<ApplicationDbContext>()));
+            // Register IApplicationDbContext
+            services.AddScoped<IApplicationDbContext>(provider => 
+                provider.GetRequiredService<ApplicationDbContext>());
         });
 
         builder.ConfigureServices(services =>
@@ -67,8 +70,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             // Seed test data
             SeedTestData(db);
         });
-
-        builder.UseEnvironment("Testing");
     }
 
     private static void SeedTestData(ApplicationDbContext context)
