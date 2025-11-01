@@ -110,18 +110,9 @@ async function scanLibrary() {
   scanStatus.style.color = '#666';
 
   try {
-    const response = await fetch('/api/jobs/library-scan/trigger', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
+    const response = await apiClient.request('/jobs/library-scan/trigger', {
+      method: 'POST'
     });
-
-    if (!response.ok) {
-      throw new Error('Failed to trigger library scan');
-    }
-
-    const result = await response.json();
 
     scanStatus.textContent = '✅ Library scan completed! Refresh the page to see new content.';
     scanStatus.style.color = '#4caf50';
@@ -339,20 +330,14 @@ window.showTranscodeModal = async function (contentId, type, title) {
   }
 
   try {
-    const response = await fetch('/api/transcode/offline', {
+    const result = await apiClient.request('/transcode/offline', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contentId,
         type
       })
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to start transcoding');
-    }
-
-    const result = await response.json();
     alert(`✅ Transcoding started for "${title}"!\n\nRunning in background with maximum quality settings.\nOriginal will be backed up with .original extension.`);
   } catch (error) {
     console.error('Failed to start transcoding:', error);
@@ -407,9 +392,8 @@ window.saveMediaEdit = async function (contentId, type) {
   const overview = document.getElementById('edit-overview').value;
 
   try {
-    await fetch(`/api/library/${contentId}`, {
+    await apiClient.request(`/library/${contentId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, year, overview })
     });
 
