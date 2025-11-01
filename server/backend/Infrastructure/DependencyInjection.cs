@@ -1,3 +1,6 @@
+using Lanflix.Application.Common.Interfaces;
+using Lanflix.Infrastructure.Persistence;
+using Lanflix.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,11 +15,29 @@ public static class DependencyInjection
     {
         // Database Configuration
         var connectionString = configuration.GetConnectionString("DefaultConnection");
+        var postgresConnection = configuration.GetConnectionString("PostgresConnection");
+        
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlite(connectionString));
+        {
+            if (!string.IsNullOrEmpty(postgresConnection))
+            {
+                options.UseNpgsql(postgresConnection);
+            }
+            else
+            {
+                options.UseSqlite(connectionString ?? "Data Source=lanflix.db");
+            }
+        });
 
         // Register repositories and services
-        // services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+        services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+        
+        // Register repositories
+        services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+        services.AddScoped<IContentRepository, ContentRepository>();
+        
+        // Register query result cache
+        services.AddSingleton<QueryResultCache>();
 
         // Caching
         services.AddMemoryCache();

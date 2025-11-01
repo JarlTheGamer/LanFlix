@@ -12,53 +12,88 @@
   - Set up NuGet packages (EF Core, MediatR, FluentValidation, FFmpeg.NET, etc.)
   - _Requirements: All requirements depend on proper project structure_
 
-- [ ] 2. Implement Domain layer entities and value objects
-  - [ ] 2.1 Create base entity classes and common interfaces
+- [x] 2. Implement Domain layer entities and value objects
+
+
+
+
+
+  - [x] 2.1 Create base entity classes and common interfaces
+
+
     - Write BaseEntity abstract class with Id, CreatedAt, UpdatedAt properties
     - Create IAuditableEntity and ISoftDelete interfaces
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 7.1, 7.2_
   
-  - [ ] 2.2 Implement Content entity and related types
+  - [x] 2.2 Implement Content entity and related types
+
+
     - Write Content entity with all properties (TmdbId, Title, FilePath, etc.)
     - Create ContentType enum (Movie, Series)
     - Implement Episode entity for series content
     - _Requirements: 1.1, 1.2, 4.1, 4.2_
   
-  - [ ] 2.3 Create MediaInfo value object hierarchy
+  - [x] 2.3 Create MediaInfo value object hierarchy
+
+
     - Write MediaInfo record with Video, Audio, Subtitles properties
     - Implement VideoStream record (codec, resolution, bitrate, HDR)
     - Implement AudioStream record (codec, channels, language)
     - Implement SubtitleStream record (format, language)
     - _Requirements: 3.1, 3.2, 4.2, 14.7_
   
-  - [ ] 2.4 Implement Profile and WatchHistory entities
+
+
+  - [x] 2.4 Implement Profile and WatchHistory entities
+
+
+
+
     - Write Profile entity with preferences
     - Create UserPreferences value object
     - Write WatchHistory entity with position tracking
     - Create Watchlist entity
+
+
     - _Requirements: 1.3, 1.4_
   
-  - [ ] 2.5 Create StreamSession entity
+  - [x] 2.5 Create StreamSession entity
+
+
+
+
+
     - Write StreamSession entity with session tracking
     - Create StreamingMode enum (DirectPlay, DirectStream, TranscodeVideo, FullTranscode)
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 8.1, 8.2_
 
-- [ ] 3. Implement Application layer with CQRS pattern
-  - [ ] 3.1 Set up MediatR and common interfaces
+- [x] 3. Implement Application layer with CQRS pattern
+
+
+
+
+
+  - [x] 3.1 Set up MediatR and common interfaces
+
+
     - Configure MediatR in DependencyInjection
     - Create IApplicationDbContext interface
     - Create ICacheService interface
     - Create common DTOs (ContentDto, ProfileDto, etc.)
     - _Requirements: All requirements use CQRS pattern_
   
-  - [ ] 3.2 Implement MediatR pipeline behaviors
+  - [x] 3.2 Implement MediatR pipeline behaviors
+
+
     - Write LoggingBehavior for request/response logging
     - Write ValidationBehavior using FluentValidation
     - Write PerformanceBehavior for slow query detection
     - Write CachingBehavior for query result caching
     - _Requirements: 5.4, 9.1, 9.2, 14.4_
   
-  - [ ] 3.3 Create Library feature commands and queries
+  - [x] 3.3 Create Library feature commands and queries
+
+
     - Write GetLibraryItemsQuery with handler (pagination, filtering, search)
     - Write GetContentDetailsQuery with handler
     - Write ScanLibraryCommand with handler
@@ -66,22 +101,33 @@
     - Write RemoveContentCommand with handler
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
   
-  - [ ] 3.4 Create Streaming feature commands and queries
+  - [x] 3.4 Create Streaming feature commands and queries
+
+
     - Write StartStreamCommand with handler
     - Write GetStreamInfoQuery with handler
     - Write UpdateProgressCommand with handler
     - Write StopStreamCommand with handler
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.6, 8.1, 8.2_
   
-  - [ ] 3.5 Create Profile feature commands and queries
+  - [x] 3.5 Create Profile feature commands and queries
+
+
     - Write GetProfilesQuery with handler
     - Write CreateProfileCommand with handler and validator
     - Write UpdateProfileCommand with handler
     - Write GetWatchHistoryQuery with handler
     - _Requirements: 1.3, 1.4_
 
-- [ ] 4. Implement Infrastructure layer - Database
-  - [ ] 4.1 Set up EF Core DbContext and configurations
+- [x] 4. Implement Infrastructure layer - Database
+
+
+
+
+
+  - [x] 4.1 Set up EF Core DbContext and configurations
+
+
     - Create ApplicationDbContext implementing IApplicationDbContext
     - Write ContentConfiguration with indexes and JSON columns
     - Write ProfileConfiguration
@@ -90,18 +136,24 @@
     - Configure soft delete query filters
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
   
-  - [ ] 4.2 Create database migrations
+  - [x] 4.2 Create database migrations
+
+
     - Generate initial migration for all entities
     - Test migration on SQLite
     - Test migration on PostgreSQL
     - _Requirements: 7.6, 7.7_
   
-  - [ ] 4.3 Implement repository pattern (if needed)
+  - [x] 4.3 Implement repository pattern (if needed)
+
+
     - Create generic repository for complex queries
     - Implement ContentRepository with Dapper for performance-critical queries
     - _Requirements: 7.3, 14.3_
   
-  - [ ] 4.4 Create compiled queries for performance
+  - [x] 4.4 Create compiled queries for performance
+
+
     - Write compiled queries for frequently accessed data
     - Implement query result caching
     - _Requirements: 5.4, 14.3_
