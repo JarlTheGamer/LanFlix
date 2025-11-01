@@ -3,7 +3,7 @@
  * Builds frontend and copies to backend for serving
  */
 
-const fs = require('fs-extra');
+const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
@@ -14,6 +14,33 @@ const FRONTEND_DIST = path.join(FRONTEND_DIR, 'dist');
 const BACKEND_PUBLIC = path.join(BACKEND_DIR, 'public');
 
 console.log('🚀 Building Lanflix Server...\n');
+
+// Helper function to recursively copy directory
+function copyDir(src, dest) {
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+  
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+// Helper function to recursively remove directory
+function removeDir(dir) {
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 // Step 1: Build frontend
 console.log('📦 Building frontend...');
@@ -32,12 +59,10 @@ try {
 console.log('📁 Copying frontend to backend...');
 try {
   // Remove old public folder
-  if (fs.existsSync(BACKEND_PUBLIC)) {
-    fs.removeSync(BACKEND_PUBLIC);
-  }
+  removeDir(BACKEND_PUBLIC);
 
   // Copy dist to public
-  fs.copySync(FRONTEND_DIST, BACKEND_PUBLIC);
+  copyDir(FRONTEND_DIST, BACKEND_PUBLIC);
   console.log('✅ Frontend copied to backend\n');
 } catch (error) {
   console.error('❌ Failed to copy frontend:', error.message);
