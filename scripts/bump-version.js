@@ -16,16 +16,17 @@ const path = require('path');
 
 // Files to update
 const FILES_TO_UPDATE = [
-  'frontend/package.json',
-  'backend/package.json',
-  'frontend/src/pages/index.html',
-  'frontend/src/pages/settings.html',
-  'frontend/src/modules/app-updater.js'
+  'server/frontend/package.json',
+  'server/backend/package.json',
+  'server/frontend/src/pages/index.html',
+  'server/frontend/src/pages/settings.html',
+  'server/frontend/src/modules/app-updater.js',
+  'android/app/build.gradle'
 ];
 
-// Get current version from frontend package.json
+// Get current version from backend package.json
 function getCurrentVersion() {
-  const packagePath = path.join(__dirname, '../frontend/package.json');
+  const packagePath = path.join(__dirname, '../server/backend/package.json');
   const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
   return packageJson.version || '1.0.0';
 }
@@ -95,12 +96,43 @@ function updateHtmlFile(filePath, newVersion) {
 // Update app-updater.js
 function updateAppUpdater(filePath, newVersion) {
   const fullPath = path.join(__dirname, '..', filePath);
+  if (!fs.existsSync(fullPath)) {
+    console.log(`⚠️  Skipped ${filePath} (not found)`);
+    return;
+  }
   let content = fs.readFileSync(fullPath, 'utf8');
   
   // Update currentVersion
   content = content.replace(
     /this\.currentVersion = '[^']*';/,
     `this.currentVersion = '${newVersion}';`
+  );
+  
+  fs.writeFileSync(fullPath, content, 'utf8');
+  console.log(`✅ Updated ${filePath}`);
+}
+
+// Update Android build.gradle
+function updateAndroidGradle(filePath, newVersion) {
+  const fullPath = path.join(__dirname, '..', 'build-tools', filePath);
+  if (!fs.existsSync(fullPath)) {
+    console.log(`⚠️  Skipped ${filePath} (not found)`);
+    return;
+  }
+  let content = fs.readFileSync(fullPath, 'utf8');
+  
+  // Parse version
+  const version = parseVersion(newVersion);
+  const versionCode = version.major * 10000 + version.minor * 100 + version.patch;
+  
+  // Update versionCode and versionName
+  content = content.replace(
+    /versionCode \d+/,
+    `versionCode ${versionCode}`
+  );
+  content = content.replace(
+    /versionName "[^"]*"/,
+    `versionName "${newVersion}"`
   );
   
   fs.writeFileSync(fullPath, content, 'utf8');
@@ -129,11 +161,21 @@ function main() {
 
   // Update all files
   try {
-    updatePackageJson('frontend/package.json', newVersion);
-    updatePackageJson('backend/package.json', newVersion);
-    updateHtmlFile('frontend/src/pages/index.html', newVersion);
-    updateHtmlFile('frontend/src/pages/settings.html', newVersion);
-    updateAppUpdater('frontend/src/modules/app-updater.js', newVersion);
+    updatePackageJson('server/frontend/package.json', newVersion);
+    updatePackageJson('server/backend/package.json', newVersion);
+    
+    // Optional files (may not exist yet)
+    if (fs.existsSync(path.join(__dirname, '../server/frontend/src/pages/index.html'))) {
+      updateHtmlFile('server/frontend/src/pages/index.html', newVersion);
+    }
+    if (fs.existsSync(path.join(__dirname, '../server/frontend/src/pages/settings.html'))) {
+      updateHtmlFile('server/frontend/src/pages/settings.html', newVersion);
+    }
+    if (fs.existsSync(path.join(__dirname, '../server/frontend/src/modules/app-updater.js'))) {
+      updateAppUpdater('server/frontend/src/modules/app-updater.js', newVersion);
+    }
+    
+    updateAndroidGradle('android/app/build.gradle', newVersion);
 
     console.log(`\n✨ Successfully bumped version to ${newVersion}!`);
     console.log('\nNext steps:');

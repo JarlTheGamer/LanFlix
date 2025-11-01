@@ -13,8 +13,14 @@ echo ========================================
 echo.
 
 REM Check if we're in the right directory
-if not exist "frontend\package.json" (
+if not exist "server\backend\package.json" (
     echo ERROR: Please run this script from the project root directory
+    pause
+    exit /b 1
+)
+
+if not exist "build-tools\android" (
+    echo ERROR: Android build tools not found
     pause
     exit /b 1
 )
@@ -76,82 +82,60 @@ if errorlevel 1 (
 )
 
 REM Get the actual version from package.json
-for /f "tokens=2 delims=:, " %%a in ('findstr /C:"\"version\"" frontend\package.json') do set VERSION=%%a
+for /f "tokens=2 delims=:, " %%a in ('findstr /C:"\"version\"" server\frontend\package.json') do set VERSION=%%a
 set VERSION=%VERSION:"=%
 echo ✓ Version bumped to %VERSION%
 echo.
 
-REM Step 2: Build web assets
-echo [2/7] Building web assets...
-cd frontend
-call npm run build
+REM Step 2: Build server (frontend + backend)
+echo [2/7] Building server...
+call npm run build:server
 if errorlevel 1 (
-    echo ERROR: Failed to build web assets
-    cd ..
+    echo ERROR: Failed to build server
     pause
     exit /b 1
 )
-echo ✓ Web assets built
-cd ..
+echo ✓ Server built
 echo.
 
-REM Step 3: Sync to Capacitor
-echo [3/7] Syncing to Capacitor...
-cd frontend
-call npx cap sync android
-if errorlevel 1 (
-    echo ERROR: Failed to sync to Capacitor
-    cd ..
-    pause
-    exit /b 1
-)
-echo ✓ Synced to Capacitor
-cd ..
-echo.
-
-REM Step 4: Build APK
-echo [4/7] Building debug APK (auto-signed)...
+REM Step 3: Build Android APK
+echo [3/7] Building Android APK...
 
 REM Set JAVA_HOME to Java 21 for Gradle compatibility
 set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot"
 set "PATH=%JAVA_HOME%\bin;%PATH%"
 echo Using Java 21 for Gradle build...
 
-cd frontend\build-tools\android\android
+cd build-tools\android
 if exist "gradlew.bat" (
     call gradlew.bat assembleDebug
 ) else (
-    echo ERROR: gradlew.bat not found. Run 'npm run android:init' first.
-    cd ..\..\..\..
+    echo ERROR: gradlew.bat not found
+    cd ..\..
     pause
     exit /b 1
 )
 
 if errorlevel 1 (
     echo ERROR: Gradle build failed
-    cd ..\..\..\..
+    cd ..\..
     pause
     exit /b 1
 )
 echo ✓ APK built successfully
-cd ..\..\..\..
+cd ..\..
 echo.
 
-REM Step 5: Copy APK to releases folder
-echo [5/7] Preparing release files...
+REM Step 4: Copy APK to releases folder
+echo [4/7] Preparing release files...
 if not exist "releases" mkdir releases
 
 REM Find the debug APK (auto-signed)
-set APK_SOURCE=
-if exist "frontend\build-tools\android\android\app\build\outputs\apk\debug\app-debug.apk" (
-    set APK_SOURCE=frontend\build-tools\android\android\app\build\outputs\apk\debug\app-debug.apk
-    echo Note: Using debug-signed APK. For production, set up release signing.
-)
-
-if "!APK_SOURCE!"=="" (
-    echo ERROR: APK not found at expected location
-    echo Searched in: frontend\build-tools\android\android\app\build\outputs\apk\debug\
-    dir /b frontend\build-tools\android\android\app\build\outputs\apk\debug\ 2>nul
+set APK_SOURCE=build-tools\android\app\build\outputs\apk\debug\app-debug.apk
+if not exist "!APK_SOURCE!" (
+    echo ERROR: APK not found at: !APK_SOURCE!
+    echo.
+    echo Make sure the Android build completed successfully.
     pause
     exit /b 1
 )
@@ -161,8 +145,8 @@ copy "!APK_SOURCE!" "!APK_DEST!"
 echo ✓ APK copied to: !APK_DEST!
 echo.
 
-REM Step 6: Git commit and tag
-echo [6/7] Committing to Git...
+REM Step 5: Git commit and tag
+echo [5/7] Committing to Git...
 git add .
 git commit -m "Release v!VERSION!"
 if errorlevel 1 (
@@ -217,8 +201,8 @@ if errorlevel 1 (
 echo ✓ Pushed to GitHub
 echo.
 
-REM Step 7: Create GitHub Release
-echo [7/7] Creating GitHub Release...
+REM Step 6: Create GitHub Release
+echo [6/7] Creating GitHub Release...
 
 if "!MANUAL_UPLOAD!"=="1" (
     echo.
