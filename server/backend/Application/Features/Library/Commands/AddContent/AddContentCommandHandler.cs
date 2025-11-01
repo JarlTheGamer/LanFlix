@@ -9,13 +9,16 @@ public class AddContentCommandHandler : IRequestHandler<AddContentCommand, int>
 {
     private readonly IApplicationDbContext _context;
     private readonly ICacheService _cacheService;
+    private readonly IProgressBroadcaster _progressBroadcaster;
 
     public AddContentCommandHandler(
         IApplicationDbContext context,
-        ICacheService cacheService)
+        ICacheService cacheService,
+        IProgressBroadcaster progressBroadcaster)
     {
         _context = context;
         _cacheService = cacheService;
+        _progressBroadcaster = progressBroadcaster;
     }
 
     public async Task<int> Handle(
@@ -73,6 +76,13 @@ public class AddContentCommandHandler : IRequestHandler<AddContentCommand, int>
 
         // Invalidate cache
         await _cacheService.RemoveByTagAsync("library", cancellationToken);
+
+        // Broadcast new content notification
+        await _progressBroadcaster.BroadcastNewContentAsync(
+            content.Id,
+            content.Title,
+            content.Type.ToString(),
+            cancellationToken);
 
         return content.Id;
     }

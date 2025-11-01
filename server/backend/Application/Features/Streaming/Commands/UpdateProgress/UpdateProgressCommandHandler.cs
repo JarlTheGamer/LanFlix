@@ -8,10 +8,14 @@ namespace Lanflix.Application.Features.Streaming.Commands.UpdateProgress;
 public class UpdateProgressCommandHandler : IRequestHandler<UpdateProgressCommand, Unit>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cacheService;
 
-    public UpdateProgressCommandHandler(IApplicationDbContext context)
+    public UpdateProgressCommandHandler(
+        IApplicationDbContext context,
+        ICacheService cacheService)
     {
         _context = context;
+        _cacheService = cacheService;
     }
 
     public async Task<Unit> Handle(
@@ -50,6 +54,9 @@ public class UpdateProgressCommandHandler : IRequestHandler<UpdateProgressComman
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Invalidate watch history cache for this profile
+        await _cacheService.RemoveAsync($"profile:{request.ProfileId}:history:50", cancellationToken);
 
         return Unit.Value;
     }

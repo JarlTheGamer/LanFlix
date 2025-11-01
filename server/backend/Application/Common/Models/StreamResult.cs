@@ -8,17 +8,17 @@ namespace Lanflix.Application.Common.Models;
 public class StreamResult
 {
     /// <summary>
-    /// Stream of media data
+    /// The data stream to send to the client
     /// </summary>
     public required Stream DataStream { get; init; }
 
     /// <summary>
-    /// Content type (MIME type)
+    /// Content type (MIME type) of the stream
     /// </summary>
     public required string ContentType { get; init; }
 
     /// <summary>
-    /// Total content length in bytes (null if unknown)
+    /// Content length in bytes (null if unknown/streaming)
     /// </summary>
     public long? ContentLength { get; init; }
 
@@ -28,27 +28,22 @@ public class StreamResult
     public required StreamingMode Mode { get; init; }
 
     /// <summary>
-    /// Indicates whether range requests are supported
+    /// Whether this stream supports HTTP range requests
     /// </summary>
     public bool SupportsRangeRequests { get; init; }
 
     /// <summary>
-    /// Start byte position (for range requests)
+    /// Start byte position for range requests
     /// </summary>
     public long? RangeStart { get; init; }
 
     /// <summary>
-    /// End byte position (for range requests)
+    /// End byte position for range requests
     /// </summary>
     public long? RangeEnd { get; init; }
 
     /// <summary>
-    /// FFmpeg process ID (if transcoding)
-    /// </summary>
-    public string? TranscodingProcessId { get; init; }
-
-    /// <summary>
-    /// Cleanup action to be called when streaming completes
+    /// Optional cleanup action to execute when streaming completes
     /// </summary>
     public Action? CleanupAction { get; init; }
 }

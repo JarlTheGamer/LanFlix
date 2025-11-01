@@ -10,10 +10,14 @@ namespace Lanflix.Application.Features.Profiles.Commands.UpdateProfile;
 public class UpdateProfileCommandHandler : IRequestHandler<UpdateProfileCommand, ProfileDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cacheService;
 
-    public UpdateProfileCommandHandler(IApplicationDbContext context)
+    public UpdateProfileCommandHandler(
+        IApplicationDbContext context,
+        ICacheService cacheService)
     {
         _context = context;
+        _cacheService = cacheService;
     }
 
     public async Task<ProfileDto> Handle(
@@ -38,6 +42,10 @@ public class UpdateProfileCommandHandler : IRequestHandler<UpdateProfileCommand,
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Invalidate profiles cache
+        await _cacheService.RemoveAsync("profiles:all", cancellationToken);
+        await _cacheService.RemoveAsync($"profile:{profile.Id}:prefs", cancellationToken);
 
         return new ProfileDto
         {

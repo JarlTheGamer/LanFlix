@@ -77,4 +77,14 @@ public class TranscodeRequest
     /// Output container format
     /// </summary>
     public string OutputFormat { get; init; } = "mpegts";
+
+    /// <summary>
+    /// Session ID for progress tracking
+    /// </summary>
+    public string? SessionId { get; init; }
+
+    /// <summary>
+    /// Total duration of the media in seconds (for progress calculation)
+    /// </summary>
+    public double TotalDuration { get; init; }
 }

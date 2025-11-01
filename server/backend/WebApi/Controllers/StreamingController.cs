@@ -1,0 +1,250 @@
+using Lanflix.Application.Common.DTOs;
+using Lanflix.Application.Common.Interfaces;
+using Lanflix.Application.Common.Models;
+using Lanflix.Application.Features.Streaming.Commands.StartStream;
+using Lanflix.Application.Features.Streaming.Commands.StopStream;
+using Lanflix.Application.Features.Streaming.Commands.UpdateProgress;
+using Lanflix.Application.Features.Streaming.Queries.GetStreamInfo;
+using Lanflix.Application.Features.Streaming.Services;
+using MediatR;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Lanflix.WebApi.Controllers;
+
+[ApiController]
+[Route("api/stream")]
+public class StreamingController : ControllerBase
+{
+    private readonly IMediator _mediator;
+    private readonly IApplicationDbContext _context;
+    private readonly StreamingStrategySelector _strategySelector;
+    private readonly ILogger<StreamingController> _logger;
+
+    public StreamingController(
+        IMediator mediator,
+        IApplicationDbContext context,
+        StreamingStrategySelector strategySelector,
+        ILogger<StreamingController> logger)
+    {
+        _mediator = mediator;
+        _context = context;
+        _strategySelector = strategySelector;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Start a new streaming session
+    /// </summary>
+    [HttpPost("{id:int}/start")]
+    [ProducesResponseType(typeof(StreamSessionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<StreamSessionDto>> StartStream(
+        int id,
+        [FromBody] StartStreamCommand command,
+        CancellationToken cancellationToken)
+    {
+        // Override ContentId from route
+        command.ContentId = id;
+
+        _logger.LogInformation(
+            "Starting stream for content {ContentId}, profile {ProfileId}",
+            command.ContentId, command.ProfileId);
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Stream media content with range support
+    /// </summary>
+    [HttpGet("{sessionId}/stream")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("streaming")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status206PartialContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status416RangeNotSatisfiable)]
+    public async Task<IActionResult> StreamContent(
+        string sessionId,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Streaming content for session {SessionId}", sessionId);
+
+        // Get session from database
+        var session = await _context.StreamSessions
+            .Include(s => s.Content)
+            .Include(s => s.Profile)
+            .FirstOrDefaultAsync(s => s.SessionId == sessionId, cancellationToken);
+
+        if (session == null || !session.IsActive)
+        {
+            _logger.LogWarning("Stream session {SessionId} not found or inactive", sessionId);
+            return NotFound(new { message = "Stream session not found or inactive" });
+        }
+
+        // Update last activity
+        session.LastActivityAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // Get content media info
+        var content = session.Content;
+        if (content.MediaInfo == null)
+        {
+            _logger.LogError("Content {ContentId} has no media info", content.Id);
+            return BadRequest(new { message = "Content media information not available" });
+        }
+
+        // Get client capabilities from session or use defaults
+        // In a real implementation, this would be stored with the session
+        var clientCapabilities = new Domain.ValueObjects.ClientCapabilities
+        {
+            SupportedVideoCodecs = new[] { "h264", "hevc", "vp9", "av1" },
+            SupportedAudioCodecs = new[] { "aac", "mp3", "ac3", "eac3", "opus" },
+            SupportedContainers = new[] { "mp4", "mkv", "webm" },
+            MaxBitrate = 20_000_000,
+            MaxResolution = Domain.ValueObjects.VideoResolution.UHD4K,
+            SupportsHDR = true
+        };
+
+        // Select streaming strategy
+        var strategy = _strategySelector.SelectOptimalStrategy(
+            content.MediaInfo,
+            clientCapabilities,
+            session.Profile.Preferences);
+
+        if (strategy == null)
+        {
+            _logger.LogError("No suitable streaming strategy found for session {SessionId}", sessionId);
+            return BadRequest(new { message = "No suitable streaming strategy available" });
+        }
+
+        _logger.LogInformation(
+            "Using {Strategy} strategy for session {SessionId}",
+            strategy.Mode, sessionId);
+
+        // Create stream request
+        var streamRequest = new StreamRequest
+        {
+            SessionId = sessionId,
+            FilePath = content.FilePath,
+            MediaInfo = content.MediaInfo,
+            ClientCapabilities = clientCapabilities,
+            UserPreferences = session.Profile.Preferences,
+            RangeHeader = Request.Headers["Range"].ToString()
+        };
+
+        // Execute streaming strategy
+        StreamResult streamResult;
+        try
+        {
+            streamResult = await strategy.ExecuteAsync(streamRequest, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error executing streaming strategy for session {SessionId}", sessionId);
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Error starting stream" });
+        }
+
+        // Register cleanup action
+        Response.RegisterForDispose(new DisposableAction(() =>
+        {
+            streamResult.CleanupAction?.Invoke();
+        }));
+
+        // Return appropriate response based on range request
+        if (streamResult.RangeStart.HasValue || streamResult.RangeEnd.HasValue)
+        {
+            var rangeStart = streamResult.RangeStart ?? 0;
+            var rangeEnd = streamResult.RangeEnd ?? (streamResult.ContentLength - 1) ?? 0;
+            var contentLength = streamResult.ContentLength ?? 0;
+
+            Response.Headers.Append("Accept-Ranges", "bytes");
+            Response.Headers.Append("Content-Range",
+                $"bytes {rangeStart}-{rangeEnd}/{contentLength}");
+            Response.StatusCode = StatusCodes.Status206PartialContent;
+
+            return new FileStreamResult(streamResult.DataStream, streamResult.ContentType)
+            {
+                EnableRangeProcessing = streamResult.SupportsRangeRequests
+            };
+        }
+
+        // Return full content
+        if (streamResult.SupportsRangeRequests)
+        {
+            Response.Headers.Append("Accept-Ranges", "bytes");
+        }
+
+        return new FileStreamResult(streamResult.DataStream, streamResult.ContentType)
+        {
+            EnableRangeProcessing = streamResult.SupportsRangeRequests
+        };
+    }
+
+    /// <summary>
+    /// Update playback progress for a streaming session
+    /// </summary>
+    [HttpPost("{sessionId}/progress")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateProgress(
+        string sessionId,
+        [FromBody] UpdateProgressCommand command,
+        CancellationToken cancellationToken)
+    {
+        // Override SessionId from route
+        command.SessionId = sessionId;
+
+        _logger.LogDebug(
+            "Updating progress for session {SessionId}: Position={Position}, Completed={Completed}",
+            sessionId, command.PositionTicks, command.IsCompleted);
+
+        await _mediator.Send(command, cancellationToken);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Stop a streaming session
+    /// </summary>
+    [HttpDelete("{sessionId}/stop")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> StopStream(
+        string sessionId,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Stopping stream session {SessionId}", sessionId);
+
+        var command = new StopStreamCommand { SessionId = sessionId };
+        await _mediator.Send(command, cancellationToken);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Helper class to execute cleanup actions on dispose
+    /// </summary>
+    private class DisposableAction : IDisposable
+    {
+        private readonly Action _action;
+        private bool _disposed;
+
+        public DisposableAction(Action action)
+        {
+            _action = action;
+        }
+
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                _action?.Invoke();
+                _disposed = true;
+            }
+        }
+    }
+}

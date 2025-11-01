@@ -9,10 +9,14 @@ namespace Lanflix.Application.Features.Profiles.Commands.CreateProfile;
 public class CreateProfileCommandHandler : IRequestHandler<CreateProfileCommand, ProfileDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICacheService _cacheService;
 
-    public CreateProfileCommandHandler(IApplicationDbContext context)
+    public CreateProfileCommandHandler(
+        IApplicationDbContext context,
+        ICacheService cacheService)
     {
         _context = context;
+        _cacheService = cacheService;
     }
 
     public async Task<ProfileDto> Handle(
@@ -30,6 +34,9 @@ public class CreateProfileCommandHandler : IRequestHandler<CreateProfileCommand,
 
         _context.Profiles.Add(profile);
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Invalidate profiles cache
+        await _cacheService.RemoveAsync("profiles:all", cancellationToken);
 
         return new ProfileDto
         {
