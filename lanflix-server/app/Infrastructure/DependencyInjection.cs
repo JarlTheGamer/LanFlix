@@ -1,7 +1,14 @@
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Infrastructure.Persistence;
+using Lanflix.Infrastructure.Services.AppUpdate;
+using Lanflix.Infrastructure.Services.Authentication;
+using Lanflix.Infrastructure.Services.Caching;
+using Lanflix.Infrastructure.Services.ExternalApis;
 using Lanflix.Infrastructure.Services.FFmpeg;
+using Lanflix.Infrastructure.Services.Library;
+using Lanflix.Infrastructure.Services.Metadata;
 using Lanflix.Infrastructure.Services.Settings;
+using Lanflix.Infrastructure.Services.Streaming;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,10 +25,40 @@ public static class DependencyInjection
         
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
 
-        // Register Settings Service
-        services.AddScoped<ISettingsService, SettingsService>();
+        // Register HttpClient for external API services
+        services.AddHttpClient();
+        
+        // Register named HttpClient for TMDB with base address
+        services.AddHttpClient<ITmdbClient, TmdbClient>((serviceProvider, client) =>
+        {
+            client.BaseAddress = new Uri("https://api.themoviedb.org/3/");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
 
-        // Register FFmpeg services
+        // Register Memory Cache
+        services.AddMemoryCache();
+
+        // Register ALL Infrastructure Services
+        services.AddScoped<ISettingsService, SettingsService>();
+        services.AddScoped<ICacheService, MemoryCacheService>();
+        services.AddScoped<ILibraryService, LibraryService>();
+        services.AddScoped<IMetadataService, MetadataService>();
+        services.AddScoped<ITranscodingSessionManager, TranscodingSessionManager>();
+        
+        // Authentication Services
+        services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<ILegacyTokenService, LegacyTokenService>();
+        
+        // External API Services (TmdbClient registered above with HttpClient)
+        services.AddScoped<IRadarrClient, RadarrClient>();
+        services.AddScoped<ISonarrClient, SonarrClient>();
+        services.AddScoped<IProwlarrClient, ProwlarrClient>();
+
+        // App Update Services
+        services.AddScoped<IServerUpdateService, ServerUpdateService>();
+        services.AddScoped<IAppUpdateService, AppUpdateService>();
+
+        // FFmpeg Services
         services.AddScoped<IMediaAnalyzer, MediaAnalyzer>();
         services.AddScoped<IHardwareAccelerationDetector, EnhancedHardwareAccelerationDetector>();
         services.AddScoped<ITranscodingPipeline, EnhancedTranscodingPipeline>();
