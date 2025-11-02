@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
+using Lanflix.Domain.Enums;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 
 namespace Lanflix.Infrastructure.Services.Metadata;
 
@@ -13,6 +15,7 @@ namespace Lanflix.Infrastructure.Services.Metadata;
 public class MetadataService : IMetadataService
 {
     private readonly ITmdbClient _tmdbClient;
+    private readonly IApplicationDbContext _dbContext;
     private readonly ILogger<MetadataService> _logger;
     private readonly HttpClient _httpClient;
     private const string ImageBaseUrl = "https://image.tmdb.org/t/p";
@@ -22,92 +25,93 @@ public class MetadataService : IMetadataService
 
     public MetadataService(
         ITmdbClient tmdbClient,
+        IApplicationDbContext dbContext,
         ILogger<MetadataService> logger,
         IHttpClientFactory httpClientFactory)
     {
         _tmdbClient = tmdbClient;
+        _dbContext = dbContext;
         _logger = logger;
         _httpClient = httpClientFactory.CreateClient();
     }
 
     /// <summary>
-    /// Save metadata (poster, backdrop, metadata.json) to media folder
-    /// Matches the old backend's saveMetadataToMediaFolder function
+    /// Save metadata to media folder as JSON file
+    /// Matches the old backend's saveMetadataToMediaFolder function exactly
     /// </summary>
     public async Task SaveMetadataToMediaFolderAsync(
-        int tmdbId,
-        string type,
+        int contentId,
         string mediaFolderPath,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            _logger.LogInformation("Saving metadata to media folder: {Path}", mediaFolderPath);
+            // Get content from database
+            var content = await _dbContext.Contents.FindAsync(new object[] { contentId }, cancellationToken);
+            if (content == null)
+            {
+                throw new InvalidOperationException($"Content not found: {contentId}");
+            }
 
-            // Ensure directory exists
-            Directory.CreateDirectory(mediaFolderPath);
-
-            // Fetch metadata from TMDB
+            // Fetch fresh metadata
             object metadata;
             string? posterPath = null;
             string? backdropPath = null;
 
-            if (type == "movie")
+            if (content.Type == ContentType.Movie)
             {
-                var movieDetails = await _tmdbClient.GetMovieDetailsAsync(tmdbId, cancellationToken);
-                posterPath = movieDetails.PosterPath;
-                backdropPath = movieDetails.BackdropPath;
+                var movieDetails = await _tmdbClient.GetMovieDetailsAsync(content.TmdbId, cancellationToken);
+                posterPath = movieDetails?.PosterPath;
+                backdropPath = movieDetails?.BackdropPath;
 
                 metadata = new
                 {
-                    tmdbId = movieDetails.Id,
-                    title = movieDetails.Title,
-                    originalTitle = movieDetails.OriginalTitle,
-                    overview = movieDetails.Overview,
-                    releaseDate = movieDetails.ReleaseDate,
-                    runtime = movieDetails.Runtime,
-                    voteAverage = movieDetails.VoteAverage,
-                    genres = movieDetails.Genres.Select(g => g.Name).ToList(),
-                    posterPath = movieDetails.PosterPath,
-                    backdropPath = movieDetails.BackdropPath,
-                    tagline = movieDetails.Tagline,
-                    imdbId = movieDetails.ImdbId,
+                    tmdbId = movieDetails?.Id ?? 0,
+                    title = movieDetails?.Title ?? string.Empty,
+                    originalTitle = movieDetails?.OriginalTitle,
+                    overview = movieDetails?.Overview,
+                    releaseDate = movieDetails?.ReleaseDate,
+                    runtime = movieDetails?.Runtime ?? 0,
+                    voteAverage = movieDetails?.VoteAverage ?? 0,
+                    genres = movieDetails?.Genres?.Select(g => g.Name).ToArray() ?? Array.Empty<string>(),
+                    posterPath = movieDetails?.PosterPath,
+                    backdropPath = movieDetails?.BackdropPath,
                     fetchedAt = DateTime.UtcNow.ToString("o")
                 };
             }
             else // series
             {
-                var seriesDetails = await _tmdbClient.GetTvSeriesDetailsAsync(tmdbId, cancellationToken);
-                posterPath = seriesDetails.PosterPath;
-                backdropPath = seriesDetails.BackdropPath;
+                var seriesDetails = await _tmdbClient.GetTvSeriesDetailsAsync(content.TmdbId, cancellationToken);
+                posterPath = seriesDetails?.PosterPath;
+                backdropPath = seriesDetails?.BackdropPath;
 
                 metadata = new
                 {
-                    tmdbId = seriesDetails.Id,
-                    title = seriesDetails.Name,
-                    originalTitle = seriesDetails.OriginalName,
-                    overview = seriesDetails.Overview,
-                    firstAirDate = seriesDetails.FirstAirDate,
-                    lastAirDate = seriesDetails.LastAirDate,
-                    numberOfSeasons = seriesDetails.NumberOfSeasons,
-                    numberOfEpisodes = seriesDetails.NumberOfEpisodes,
-                    genres = seriesDetails.Genres.Select(g => g.Name).ToList(),
-                    voteAverage = seriesDetails.VoteAverage,
-                    posterPath = seriesDetails.PosterPath,
-                    backdropPath = seriesDetails.BackdropPath,
-                    seasons = seriesDetails.Seasons
+                    tmdbId = seriesDetails?.Id ?? 0,
+                    title = seriesDetails?.Name ?? string.Empty,
+                    originalTitle = seriesDetails?.OriginalName,
+                    overview = seriesDetails?.Overview,
+                    firstAirDate = seriesDetails?.FirstAirDate,
+                    lastAirDate = seriesDetails?.LastAirDate,
+                    numberOfSeasons = seriesDetails?.NumberOfSeasons ?? 0,
+                    numberOfEpisodes = seriesDetails?.NumberOfEpisodes ?? 0,
+                    genres = seriesDetails?.Genres?.Select(g => g.Name).ToArray() ?? Array.Empty<string>(),
+                    voteAverage = seriesDetails?.VoteAverage ?? 0,
+                    posterPath = seriesDetails?.PosterPath,
+                    backdropPath = seriesDetails?.BackdropPath,
+                    seasons = seriesDetails?.Seasons?
                         .Where(s => s.SeasonNumber > 0) // Exclude specials
                         .Select(s => new
                         {
                             seasonNumber = s.SeasonNumber,
                             episodeCount = s.EpisodeCount,
                             airDate = s.AirDate
-                        }).ToList(),
+                        }).ToArray() ?? Array.Empty<object>(),
                     fetchedAt = DateTime.UtcNow.ToString("o")
                 };
             }
 
-            // Save metadata.json
+            // Save to media folder
             var metadataPath = Path.Combine(mediaFolderPath, "metadata.json");
             var jsonOptions = new JsonSerializerOptions
             {
@@ -121,18 +125,30 @@ public class MetadataService : IMetadataService
             // Download and save poster if available
             if (!string.IsNullOrEmpty(posterPath))
             {
-                await DownloadPosterAsync(posterPath, mediaFolderPath, cancellationToken);
+                var posterUrl = $"{ImageBaseUrl}/{PosterSize}{posterPath}";
+                var posterFilePath = Path.Combine(mediaFolderPath, "poster.jpg");
+                var response = await _httpClient.GetAsync(posterUrl, cancellationToken);
+                response.EnsureSuccessStatusCode();
+                var imageBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                await File.WriteAllBytesAsync(posterFilePath, imageBytes, cancellationToken);
+                _logger.LogInformation("Saved poster to {Path}", posterFilePath);
             }
 
             // Download and save backdrop if available
             if (!string.IsNullOrEmpty(backdropPath))
             {
-                await DownloadBackdropAsync(backdropPath, mediaFolderPath, cancellationToken);
+                var backdropUrl = $"{ImageBaseUrl}/{BackdropSize}{backdropPath}";
+                var backdropFilePath = Path.Combine(mediaFolderPath, "backdrop.jpg");
+                var response = await _httpClient.GetAsync(backdropUrl, cancellationToken);
+                response.EnsureSuccessStatusCode();
+                var imageBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                await File.WriteAllBytesAsync(backdropFilePath, imageBytes, cancellationToken);
+                _logger.LogInformation("Saved backdrop to {Path}", backdropFilePath);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to save metadata to media folder: {Path}", mediaFolderPath);
+            _logger.LogError(ex, "Failed to save metadata to media folder for content {ContentId}: {Path}", contentId, mediaFolderPath);
             throw;
         }
     }
@@ -298,7 +314,7 @@ public class MetadataService : IMetadataService
             }
 
             var json = await File.ReadAllTextAsync(metadataPath, cancellationToken);
-            var metadata = JsonSerializer.Deserialize<object>(json);
+            var metadata = JsonSerializer.Deserialize<JsonElement>(json);
 
             _logger.LogInformation("Loaded metadata from {Path}", metadataPath);
             return metadata;

@@ -1,5 +1,6 @@
 using Lanflix.Application.Common.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Lanflix.WebApi.Controllers;
 
@@ -8,13 +9,19 @@ namespace Lanflix.WebApi.Controllers;
 public class JobsController : ControllerBase
 {
     private readonly ILibraryService _libraryService;
+    private readonly IApplicationDbContext _context;
+    private readonly IMediaAnalyzer _mediaAnalyzer;
     private readonly ILogger<JobsController> _logger;
 
     public JobsController(
         ILibraryService libraryService,
+        IApplicationDbContext context,
+        IMediaAnalyzer mediaAnalyzer,
         ILogger<JobsController> logger)
     {
         _libraryService = libraryService;
+        _context = context;
+        _mediaAnalyzer = mediaAnalyzer;
         _logger = logger;
     }
 

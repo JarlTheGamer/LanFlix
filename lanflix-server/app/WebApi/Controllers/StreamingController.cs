@@ -216,6 +216,95 @@ public class StreamingController : ControllerBase
     }
 
     /// <summary>
+    /// Get stream info for content
+    /// </summary>
+    [HttpGet("{id:int}/info")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetStreamInfo(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Getting stream info for content {ContentId}", id);
+
+        // Get content
+        var content = await _context.Contents
+            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+        if (content == null)
+        {
+            _logger.LogWarning("Content {ContentId} not found", id);
+            return NotFound(new { message = "Content not found" });
+        }
+
+        // Return media info
+        var streamInfo = new
+        {
+            id = content.Id,
+            title = content.Title,
+            duration = content.MediaInfo?.Duration.TotalSeconds ?? 0,
+            fileSize = content.MediaInfo?.FileSize ?? 0,
+            container = content.MediaInfo?.Container ?? "unknown",
+            video = content.MediaInfo?.Video != null ? new
+            {
+                codec = content.MediaInfo.Video.Codec,
+                width = content.MediaInfo.Video.Width,
+                height = content.MediaInfo.Video.Height,
+                bitrate = content.MediaInfo.Video.Bitrate,
+                frameRate = content.MediaInfo.Video.FrameRate
+            } : null,
+            audio = content.MediaInfo?.Audio?.Select(a => new
+            {
+                codec = a.Codec,
+                language = a.Language,
+                channels = a.Channels,
+                bitrate = a.Bitrate,
+                sampleRate = a.SampleRate
+            }).ToArray() ?? Array.Empty<object>()
+        };
+
+        return Ok(streamInfo);
+    }
+
+    /// <summary>
+    /// Get available subtitles for content
+    /// </summary>
+    [HttpGet("{id:int}/subtitles")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSubtitles(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Getting subtitles for content {ContentId}", id);
+
+        // Get content
+        var content = await _context.Contents
+            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+        if (content == null)
+        {
+            _logger.LogWarning("Content {ContentId} not found", id);
+            return NotFound(new { message = "Content not found" });
+        }
+
+        // Return subtitle streams from media info
+        var subtitles = content.MediaInfo?.Subtitles?.Select(s => new
+        {
+            index = s.Index,
+            language = s.Language,
+            title = s.Title,
+            format = s.Format,
+            isDefault = s.IsDefault,
+            isForced = s.IsForced,
+            isEmbedded = s.IsEmbedded,
+            externalFilePath = s.ExternalFilePath
+        }).ToArray() ?? Array.Empty<object>();
+
+        return Ok(subtitles);
+    }
+
+    /// <summary>
     /// Start a new streaming session
     /// </summary>
     [HttpPost("{id:int}/start")]

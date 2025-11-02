@@ -61,7 +61,7 @@ public class AppUpdateService : IAppUpdateService
         return latestRelease;
     }
 
-    public async Task<string?> GetApkPathAsync(
+    public Task<string?> GetApkPathAsync(
         string version,
         string architecture,
         CancellationToken cancellationToken = default)
@@ -72,10 +72,10 @@ public class AppUpdateService : IAppUpdateService
         if (!File.Exists(filePath))
         {
             _logger.LogWarning("APK file not found: {FilePath}", filePath);
-            return null;
+            return Task.FromResult<string?>(null);
         }
 
-        return filePath;
+        return Task.FromResult<string?>(filePath);
     }
 
     public async Task<AppUpdateInfo> SaveReleaseAsync(

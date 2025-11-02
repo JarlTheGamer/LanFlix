@@ -227,6 +227,7 @@ public static class DependencyInjection
         // Streaming Services
         services.AddSingleton<TranscodingFileCleanupService>();
         services.AddScoped<ITranscodingSessionManager, TranscodingSessionManager>();
+        services.AddSingleton<Infrastructure.Telemetry.StreamingMetrics>();
         
         // Session cleanup background service
         services.AddHostedService<Infrastructure.Services.BackgroundJobs.SessionCleanupService>();

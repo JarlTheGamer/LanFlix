@@ -364,7 +364,7 @@ public class LibraryService : ILibraryService
             await _context.SaveChangesAsync(cancellationToken);
 
             // Save metadata to media folder (like old backend)
-            await _metadataService.SaveMetadataToMediaFolderAsync(tmdbId, "movie", movieFolder, cancellationToken);
+            await _metadataService.SaveMetadataToMediaFolderAsync(content.Id, movieFolder, cancellationToken);
 
             stats.Added++;
             _logger.LogInformation("Added movie to library: {Title} ({Year})", content.Title, content.ReleaseDate?.Year);
@@ -416,7 +416,7 @@ public class LibraryService : ILibraryService
             await _context.SaveChangesAsync(cancellationToken);
 
             // Save metadata to media folder (like old backend)
-            await _metadataService.SaveMetadataToMediaFolderAsync(tmdbId, "tv", seriesFolder, cancellationToken);
+            await _metadataService.SaveMetadataToMediaFolderAsync(content.Id, seriesFolder, cancellationToken);
 
             stats.Added++;
             _logger.LogInformation("Added series to library: {Title} ({Year})", content.Title, content.ReleaseDate?.Year);

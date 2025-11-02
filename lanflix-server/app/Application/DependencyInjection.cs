@@ -1,6 +1,8 @@
 using System.Reflection;
 using FluentValidation;
 using Lanflix.Application.Common.Behaviors;
+using Lanflix.Application.Features.Streaming.Services;
+using Lanflix.Application.Features.Streaming.Strategies;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -25,6 +27,15 @@ public static class DependencyInjection
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+
+        // Register Streaming Strategies (order by priority)
+        services.AddScoped<IStreamingStrategy, DirectPlayStrategy>();
+        services.AddScoped<IStreamingStrategy, DirectStreamStrategy>();
+        services.AddScoped<IStreamingStrategy, TranscodeVideoStrategy>();
+        services.AddScoped<IStreamingStrategy, FullTranscodeStrategy>();
+        
+        // Register Streaming Strategy Selector
+        services.AddScoped<StreamingStrategySelector>();
 
         return services;
     }

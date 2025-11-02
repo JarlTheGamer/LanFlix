@@ -5,11 +5,10 @@ namespace Lanflix.Application.Common.Interfaces;
 public interface IMetadataService
 {
     /// <summary>
-    /// Save metadata (poster, backdrop, metadata.json) to media folder
+    /// Save metadata to media folder as JSON file
     /// </summary>
     Task SaveMetadataToMediaFolderAsync(
-        int tmdbId,
-        string type,
+        int contentId,
         string mediaFolderPath,
         CancellationToken cancellationToken = default);
 
@@ -44,19 +43,5 @@ public interface IMetadataService
     /// </summary>
     Task<object?> LoadMetadataFromMediaFolderAsync(
         string mediaFolderPath,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Search for movie with different variations of the folder name
-    /// </summary>
-    Task<TmdbSearchItem?> SearchMovieWithVariationsAsync(
-        string folderName,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Search for TV series with different variations of the folder name
-    /// </summary>
-    Task<TmdbSearchItem?> SearchSeriesWithVariationsAsync(
-        string folderName,
         CancellationToken cancellationToken = default);
 }
