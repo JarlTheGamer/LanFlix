@@ -47,27 +47,24 @@ public static class EmbeddedResourceExtractor
     {
         const string wwwrootPrefix = "Lanflix.WebApi.wwwroot.";
         
-        foreach (var resourceName in resourceNames.Where(r => r.StartsWith(wwwrootPrefix)))
+        var wwwrootResources = resourceNames.Where(r => r.StartsWith(wwwrootPrefix)).ToList();
+        
+        if (wwwrootResources.Count == 0)
         {
+            Console.WriteLine("Warning: No wwwroot resources found in assembly");
+            return;
+        }
+        
+        foreach (var resourceName in wwwrootResources)
+        {
+            // Remove prefix to get relative path
             var relativePath = resourceName.Substring(wwwrootPrefix.Length);
-            var outputPath = Path.Combine("wwwroot", relativePath.Replace('.', Path.DirectorySeparatorChar));
             
-            // Handle file extensions properly
-            var lastDot = outputPath.LastIndexOf('.');
-            if (lastDot > 0)
-            {
-                var extension = outputPath.Substring(lastDot);
-                var pathWithoutExt = outputPath.Substring(0, lastDot);
-                
-                // Reconstruct proper path
-                var parts = pathWithoutExt.Split(Path.DirectorySeparatorChar);
-                if (parts.Length > 0)
-                {
-                    var fileName = parts[^1];
-                    var dirPath = string.Join(Path.DirectorySeparatorChar.ToString(), parts.Take(parts.Length - 1));
-                    outputPath = Path.Combine(dirPath, fileName + extension);
-                }
-            }
+            // Convert embedded resource name back to file path
+            // Resources are named like: wwwroot.assets.main-D83xSheS.js
+            // We need to convert to: wwwroot/assets/main-D83xSheS.js
+            var outputPath = ConvertResourceNameToPath(relativePath);
+            outputPath = Path.Combine("wwwroot", outputPath);
             
             if (File.Exists(outputPath))
                 continue;
@@ -83,5 +80,22 @@ public static class EmbeddedResourceExtractor
             using var fileStream = File.Create(outputPath);
             stream.CopyTo(fileStream);
         }
+    }
+    
+    private static string ConvertResourceNameToPath(string resourcePath)
+    {
+        // Find the last dot which is the file extension
+        var lastDotIndex = resourcePath.LastIndexOf('.');
+        if (lastDotIndex == -1)
+            return resourcePath.Replace('.', Path.DirectorySeparatorChar);
+            
+        // Split into path and extension
+        var pathPart = resourcePath.Substring(0, lastDotIndex);
+        var extension = resourcePath.Substring(lastDotIndex);
+        
+        // Replace dots with directory separators in the path part
+        var filePath = pathPart.Replace('.', Path.DirectorySeparatorChar) + extension;
+        
+        return filePath;
     }
 }

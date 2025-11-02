@@ -106,7 +106,6 @@ builder.Services.AddOpenTelemetry()
         .AddSource(LanflixActivitySource.Streaming.Name)
         .AddSource(LanflixActivitySource.Transcoding.Name)
         .AddSource(LanflixActivitySource.Library.Name)
-        .AddConsoleExporter() // For development
         // Add OTLP exporter for production (e.g., to Jaeger, Zipkin, or Application Insights)
         //.AddOtlpExporter(options =>
         //{
@@ -119,7 +118,6 @@ builder.Services.AddOpenTelemetry()
         .AddRuntimeInstrumentation()
         .AddMeter("Lanflix.Streaming")
         .AddMeter("Lanflix.Caching")
-        .AddConsoleExporter() // For development
         // Add OTLP exporter for production
         //.AddOtlpExporter(options =>
         //{
@@ -453,7 +451,7 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // API version detection removed - no longer needed
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection(); // Disabled - using HTTP only
 
 // Response compression (before static files and routing)
 app.UseResponseCompression();
@@ -478,28 +476,37 @@ if (!string.IsNullOrEmpty(moviesPath) || !string.IsNullOrEmpty(seriesPath))
             ? Path.GetDirectoryName(seriesPath) ?? seriesPath
             : null;
 
-    if (!string.IsNullOrEmpty(mediaRoot) && Directory.Exists(mediaRoot))
+    if (!string.IsNullOrEmpty(mediaRoot))
     {
-        app.UseStaticFiles(new StaticFileOptions
+        // Convert to absolute path if relative
+        if (!Path.IsPathRooted(mediaRoot))
         {
-            FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(mediaRoot),
-            RequestPath = "/media",
-            ServeUnknownFileTypes = true,
-            OnPrepareResponse = ctx =>
+            mediaRoot = Path.GetFullPath(mediaRoot);
+        }
+        
+        if (Directory.Exists(mediaRoot))
+        {
+            app.UseStaticFiles(new StaticFileOptions
             {
-                // Set appropriate content type for images
-                if (ctx.File.Name.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
-                    ctx.File.Name.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
+                FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(mediaRoot),
+                RequestPath = "/media",
+                ServeUnknownFileTypes = true,
+                OnPrepareResponse = ctx =>
                 {
-                    ctx.Context.Response.ContentType = "image/jpeg";
+                    // Set appropriate content type for images
+                    if (ctx.File.Name.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                        ctx.File.Name.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ctx.Context.Response.ContentType = "image/jpeg";
+                    }
+                    else if (ctx.File.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ctx.Context.Response.ContentType = "image/png";
+                    }
                 }
-                else if (ctx.File.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
-                {
-                    ctx.Context.Response.ContentType = "image/png";
-                }
-            }
-        });
-        Log.Information("Serving media files from: {Path}", mediaRoot);
+            });
+            Log.Information("Serving media files from: {Path}", mediaRoot);
+        }
     }
 }
 
