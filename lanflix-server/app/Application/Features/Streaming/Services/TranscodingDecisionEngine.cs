@@ -258,7 +258,9 @@ public class TranscodingDecisionEngine
             TargetAudioBitrate = DetermineTargetAudioBitrate(bestProfile.AudioCodecs, targetAudioCodec),
             TargetWidth = targetWidth,
             TargetHeight = targetHeight,
-            HwAccelMethod = hwAccel.PreferredMethod,
+            HwAccelMethod = settings.PreferredHwAccelMethod != HwAccelMethod.None 
+                ? settings.PreferredHwAccelMethod 
+                : hwAccel.PreferredMethod,
             RequiresToneMapping = requiresToneMapping,
             TranscodingComplexity = CalculateTranscodingComplexity(mediaInfo, targetWidth, targetHeight, requiresToneMapping)
         };

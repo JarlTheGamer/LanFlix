@@ -1,83 +1,58 @@
-using Lanflix.Domain.Entities;
+using Lanflix.Application.Common.Models;
 
 namespace Lanflix.Application.Common.Interfaces;
 
 /// <summary>
-/// Manages transcoding sessions including creation, tracking, and cleanup
+/// Manages transcoding sessions to prevent duplicate processes and handle concurrent requests
 /// </summary>
 public interface ITranscodingSessionManager
 {
     /// <summary>
-    /// Creates a new transcoding session with a unique ID
+    /// Gets or creates a transcoding session for the given request
     /// </summary>
-    /// <param name="session">The stream session to track</param>
-    /// <param name="processId">Optional FFmpeg process ID if transcoding is active</param>
+    /// <param name="sessionKey">Unique key identifying the session</param>
+    /// <param name="sessionFactory">Factory function to create new session if needed</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The created session ID</returns>
-    Task<string> CreateSessionAsync(
-        StreamSession session,
-        string? processId = null,
+    /// <returns>Stream result from existing or new session</returns>
+    Task<StreamResult> GetOrCreateSessionAsync(
+        string sessionKey,
+        Func<CancellationToken, Task<StreamResult>> sessionFactory,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets an active session by ID
+    /// Removes a session from the manager
     /// </summary>
-    /// <param name="sessionId">The session ID</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The stream session or null if not found</returns>
-    Task<StreamSession?> GetSessionAsync(
-        string sessionId,
-        CancellationToken cancellationToken = default);
+    /// <param name="sessionKey">Session key to remove</param>
+    void RemoveSession(string sessionKey);
 
     /// <summary>
-    /// Updates the last activity timestamp for a session
+    /// Gets active session count
     /// </summary>
-    /// <param name="sessionId">The session ID</param>
-    /// <param name="positionTicks">Optional current playback position</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    Task UpdateSessionActivityAsync(
-        string sessionId,
-        long? positionTicks = null,
-        CancellationToken cancellationToken = default);
+    int ActiveSessionCount { get; }
 
     /// <summary>
-    /// Ends a session and performs cleanup
-    /// </summary>
-    /// <param name="sessionId">The session ID</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    Task EndSessionAsync(
-        string sessionId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Gets all active sessions
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>List of active sessions</returns>
-    Task<IReadOnlyList<StreamSession>> GetActiveSessionsAsync(
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Detects and cleans up orphaned sessions (e.g., after server restart)
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Number of orphaned sessions cleaned up</returns>
-    Task<int> CleanupOrphanedSessionsAsync(
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Detects and cleans up abandoned sessions (no activity for specified duration)
-    /// </summary>
-    /// <param name="inactivityThreshold">Time span of inactivity before considering a session abandoned</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Number of abandoned sessions cleaned up</returns>
-    Task<int> CleanupAbandonedSessionsAsync(
-        TimeSpan inactivityThreshold,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Gets the count of currently active sessions
+    /// Gets active session count (method version for compatibility)
     /// </summary>
     /// <returns>Number of active sessions</returns>
     int GetActiveSessionCount();
+
+    /// <summary>
+    /// Cleans up expired or inactive sessions
+    /// </summary>
+    Task CleanupExpiredSessionsAsync();
+
+    /// <summary>
+    /// Cleans up orphaned sessions (from previous server runs)
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Number of sessions cleaned up</returns>
+    Task<int> CleanupOrphanedSessionsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cleans up abandoned sessions (inactive for specified duration)
+    /// </summary>
+    /// <param name="inactivityThreshold">Duration of inactivity before cleanup</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Number of sessions cleaned up</returns>
+    Task<int> CleanupAbandonedSessionsAsync(TimeSpan inactivityThreshold, CancellationToken cancellationToken = default);
 }

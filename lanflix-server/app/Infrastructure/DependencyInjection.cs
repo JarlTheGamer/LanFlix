@@ -1,4 +1,5 @@
 using Lanflix.Application.Common.Interfaces;
+using Lanflix.Domain.ValueObjects;
 using Lanflix.Infrastructure.Persistence;
 using Lanflix.Infrastructure.Services.AppUpdate;
 using Lanflix.Infrastructure.Services.Authentication;
@@ -43,7 +44,10 @@ public static class DependencyInjection
         services.AddScoped<ICacheService, MemoryCacheService>();
         services.AddScoped<ILibraryService, LibraryService>();
         services.AddScoped<IMetadataService, MetadataService>();
-        services.AddScoped<ITranscodingSessionManager, TranscodingSessionManager>();
+        services.AddSingleton<ITranscodingSessionManager, TranscodingSessionManager>();
+        
+        // Transcoding Settings
+        services.AddScoped<TranscodingSettingsProvider>();
         
         // Authentication Services
         services.AddScoped<ITokenService, TokenService>();

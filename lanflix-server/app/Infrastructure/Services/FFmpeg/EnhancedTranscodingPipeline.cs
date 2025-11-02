@@ -99,12 +99,21 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
                 {
                     try
                     {
+                        // Try graceful termination first
+                        if (!cancellationToken.IsCancellationRequested)
+                        {
+                            _logger.LogInformation("Transcoding completed, terminating FFmpeg process for session {SessionId}", request.SessionId);
+                        }
+                        else
+                        {
+                            _logger.LogInformation("Transcoding cancelled, terminating FFmpeg process for session {SessionId}", request.SessionId);
+                        }
+                        
                         process.Kill();
-                        _logger.LogWarning("Killed FFmpeg process for session {SessionId}", request.SessionId);
                     }
                     catch (Exception killEx)
                     {
-                        _logger.LogWarning(killEx, "Failed to kill FFmpeg process for session {SessionId}", request.SessionId);
+                        _logger.LogWarning(killEx, "Failed to terminate FFmpeg process for session {SessionId}", request.SessionId);
                     }
                 }
                 
@@ -169,22 +178,49 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
 
     private void AddHardwareAccelerationArgs(StringBuilder args, HwAccelMethod method)
     {
+        // Only add hardware acceleration if user has it enabled
+        if (!_settings.EnableHardwareAcceleration)
+        {
+            _logger.LogInformation("Hardware acceleration disabled in settings");
+            return;
+        }
+
+        if (method == HwAccelMethod.None)
+        {
+            _logger.LogInformation("No hardware acceleration method available");
+            return;
+        }
+
+        _logger.LogInformation("Adding hardware acceleration: {Method}", method);
+
         switch (method)
         {
             case HwAccelMethod.Nvenc:
-                args.Append("-hwaccel cuda -hwaccel_output_format cuda ");
+                args.Append("-hwaccel cuda ");
+                // Only use cuda output format if we're doing scaling or other GPU operations
+                args.Append("-hwaccel_output_format cuda ");
+                if (_settings.EnableLowPowerEncoding)
+                {
+                    args.Append("-gpu 0 ");
+                }
                 break;
             case HwAccelMethod.QuickSync:
-                args.Append("-hwaccel qsv -hwaccel_output_format qsv ");
+                args.Append("-hwaccel qsv ");
+                args.Append("-hwaccel_output_format qsv ");
                 break;
             case HwAccelMethod.Amf:
                 args.Append("-hwaccel d3d11va ");
                 break;
             case HwAccelMethod.Vaapi:
-                args.Append("-hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi ");
+                args.Append("-hwaccel vaapi ");
+                args.Append("-hwaccel_device /dev/dri/renderD128 ");
+                args.Append("-hwaccel_output_format vaapi ");
                 break;
             case HwAccelMethod.VideoToolbox:
                 args.Append("-hwaccel videotoolbox ");
+                break;
+            case HwAccelMethod.Rockchip:
+                args.Append("-hwaccel rkmpp ");
                 break;
         }
     }
@@ -197,8 +233,9 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             return;
         }
 
-        // Video codec
-        args.Append($"-c:v {request.TargetVideoCodec} ");
+        // Video codec - use hardware-accelerated version if available and enabled
+        var videoCodec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
+        args.Append($"-c:v {videoCodec} ");
 
         // Video bitrate
         if (request.TargetVideoBitrate.HasValue)
@@ -208,45 +245,93 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             args.Append($"-bufsize {request.TargetVideoBitrate.Value * 2:F0} ");
         }
 
+        // Build video filter chain
+        var videoFilters = new List<string>();
+
         // Resolution scaling
         if (request.TargetWidth.HasValue && request.TargetHeight.HasValue)
         {
             if (request.HwAccelMethod == HwAccelMethod.Vaapi)
             {
-                args.Append($"-vf \"scale_vaapi={request.TargetWidth.Value}:{request.TargetHeight.Value}\" ");
+                videoFilters.Add($"scale_vaapi={request.TargetWidth.Value}:{request.TargetHeight.Value}");
             }
             else if (request.HwAccelMethod == HwAccelMethod.Nvenc)
             {
-                args.Append($"-vf \"scale_cuda={request.TargetWidth.Value}:{request.TargetHeight.Value}\" ");
+                videoFilters.Add($"scale_cuda={request.TargetWidth.Value}:{request.TargetHeight.Value}");
             }
             else
             {
-                args.Append($"-vf \"scale={request.TargetWidth.Value}:{request.TargetHeight.Value}\" ");
+                videoFilters.Add($"scale={request.TargetWidth.Value}:{request.TargetHeight.Value}");
             }
-        }
-
-        // Encoding preset
-        AddEncodingPreset(args, request.TargetVideoCodec);
-
-        // Quality settings
-        if (_settings.TargetQuality.HasValue)
-        {
-            if (request.TargetVideoCodec.Contains("x264") || request.TargetVideoCodec.Contains("x265"))
-            {
-                args.Append($"-crf {_settings.TargetQuality.Value} ");
-            }
-        }
-
-        // B-frames
-        if (_settings.EnableBFrames && !request.TargetVideoCodec.Contains("nvenc"))
-        {
-            args.Append("-bf 3 ");
         }
 
         // HDR tone mapping
         if (request.SourceMedia.Video.IsHDR && _settings.EnableToneMapping)
         {
-            AddToneMappingArgs(args, request.HwAccelMethod);
+            var toneMappingFilters = GetToneMappingFilters(request.HwAccelMethod);
+            videoFilters.AddRange(toneMappingFilters);
+        }
+
+        // Apply video filters if any
+        if (videoFilters.Count > 0)
+        {
+            args.Append($"-vf \"{string.Join(",", videoFilters)}\" ");
+        }
+
+        // Encoding preset
+        if (!string.IsNullOrEmpty(videoCodec))
+        {
+            AddEncodingPreset(args, videoCodec);
+        }
+
+        // Quality settings
+        if (_settings.TargetQuality.HasValue)
+        {
+            var codec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
+            if (codec.Contains("x264") || codec.Contains("x265"))
+            {
+                args.Append($"-crf {_settings.TargetQuality.Value} ");
+            }
+            else if (codec.Contains("nvenc"))
+            {
+                // NVENC uses different quality scale (0-51, but different meaning)
+                var nvencCq = Math.Max(0, Math.Min(51, _settings.TargetQuality.Value));
+                args.Append($"-cq {nvencCq} ");
+            }
+            else if (codec.Contains("qsv"))
+            {
+                // QuickSync uses global_quality
+                var qsvQuality = Math.Max(1, Math.Min(51, _settings.TargetQuality.Value));
+                args.Append($"-global_quality {qsvQuality} ");
+            }
+            else if (codec.Contains("amf"))
+            {
+                // AMF uses qp_i, qp_p, qp_b
+                var amfQp = Math.Max(0, Math.Min(51, _settings.TargetQuality.Value));
+                args.Append($"-qp_i {amfQp} -qp_p {amfQp} -qp_b {amfQp} ");
+            }
+        }
+
+        // B-frames
+        if (_settings.EnableBFrames)
+        {
+            var codec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
+            if (codec.Contains("nvenc"))
+            {
+                args.Append("-bf 3 -b_ref_mode middle ");
+            }
+            else if (codec.Contains("qsv"))
+            {
+                args.Append("-bf 3 ");
+            }
+            else if (codec.Contains("amf"))
+            {
+                args.Append("-bf 3 ");
+            }
+            else if (!codec.Contains("vaapi")) // VAAPI doesn't always support B-frames well
+            {
+                args.Append("-bf 3 ");
+            }
         }
     }
 
@@ -309,29 +394,75 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             var nvencPreset = preset switch
             {
                 "ultrafast" => "p1",
-                "superfast" => "p2",
+                "superfast" => "p2", 
                 "veryfast" => "p3",
                 "faster" => "p4",
                 "fast" => "p5",
                 "medium" => "p6",
                 "slow" => "p7",
+                "slower" => "p7", // Map slower to p7 as well
+                "veryslow" => "p7", // Map veryslow to p7 as well
                 _ => "p6"
             };
             args.Append($"-preset {nvencPreset} ");
         }
+        else if (codec.Contains("qsv"))
+        {
+            // Intel QuickSync presets
+            var qsvPreset = preset switch
+            {
+                "ultrafast" => "veryfast",
+                "superfast" => "veryfast",
+                "veryfast" => "veryfast", 
+                "faster" => "faster",
+                "fast" => "fast",
+                "medium" => "medium",
+                "slow" => "slow",
+                "slower" => "slower",
+                "veryslow" => "veryslow",
+                _ => "medium"
+            };
+            args.Append($"-preset {qsvPreset} ");
+        }
+        else if (codec.Contains("amf"))
+        {
+            // AMD AMF presets
+            var amfPreset = preset switch
+            {
+                "ultrafast" => "speed",
+                "superfast" => "speed",
+                "veryfast" => "speed",
+                "faster" => "speed",
+                "fast" => "balanced",
+                "medium" => "balanced",
+                "slow" => "quality",
+                "slower" => "quality",
+                "veryslow" => "quality",
+                _ => "balanced"
+            };
+            args.Append($"-quality {amfPreset} ");
+        }
     }
 
-    private void AddToneMappingArgs(StringBuilder args, HwAccelMethod hwAccel)
+    private List<string> GetToneMappingFilters(HwAccelMethod hwAccel)
     {
         var algorithm = _settings.ToneMappingAlgorithm.ToString().ToLowerInvariant();
         
         if (hwAccel == HwAccelMethod.Vaapi)
         {
-            args.Append($"-vf \"tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709\" ");
+            return new List<string> { "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709" };
         }
         else
         {
-            args.Append($"-vf \"zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap={algorithm}:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p\" ");
+            return new List<string> 
+            { 
+                "zscale=t=linear:npl=100",
+                "format=gbrpf32le",
+                "zscale=p=bt709",
+                $"tonemap={algorithm}:desat=0",
+                "zscale=t=bt709:m=bt709:r=tv",
+                "format=yuv420p"
+            };
         }
     }
 
@@ -350,6 +481,52 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
     }
 
 
+
+    private string GetOptimalVideoCodec(string? targetCodec, HwAccelMethod hwAccelMethod)
+    {
+        if (string.IsNullOrEmpty(targetCodec) || targetCodec == "copy" || !_settings.EnableHardwareAcceleration)
+        {
+            return targetCodec ?? "libx264";
+        }
+
+        // Map software codecs to hardware-accelerated equivalents
+        return hwAccelMethod switch
+        {
+            HwAccelMethod.Nvenc => targetCodec.ToLowerInvariant() switch
+            {
+                "libx264" or "h264" => "h264_nvenc",
+                "libx265" or "hevc" => "hevc_nvenc",
+                "av1" => "av1_nvenc", // If supported by newer drivers
+                _ => targetCodec
+            },
+            HwAccelMethod.QuickSync => targetCodec.ToLowerInvariant() switch
+            {
+                "libx264" or "h264" => "h264_qsv",
+                "libx265" or "hevc" => "hevc_qsv",
+                "av1" => "av1_qsv", // If supported
+                _ => targetCodec
+            },
+            HwAccelMethod.Amf => targetCodec.ToLowerInvariant() switch
+            {
+                "libx264" or "h264" => "h264_amf",
+                "libx265" or "hevc" => "hevc_amf",
+                _ => targetCodec
+            },
+            HwAccelMethod.Vaapi => targetCodec.ToLowerInvariant() switch
+            {
+                "libx264" or "h264" => "h264_vaapi",
+                "libx265" or "hevc" => "hevc_vaapi",
+                _ => targetCodec
+            },
+            HwAccelMethod.VideoToolbox => targetCodec.ToLowerInvariant() switch
+            {
+                "libx264" or "h264" => "h264_videotoolbox",
+                "libx265" or "hevc" => "hevc_videotoolbox",
+                _ => targetCodec
+            },
+            _ => targetCodec
+        };
+    }
 
     private string FindFFmpegPath()
     {

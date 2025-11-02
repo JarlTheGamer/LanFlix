@@ -2,6 +2,7 @@ using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
 using Lanflix.Application.Features.Streaming.Services;
 using Lanflix.Domain.ValueObjects;
+using Lanflix.Infrastructure.Services.Settings;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,7 +15,8 @@ public class TranscodingController : ControllerBase
     private readonly EnhancedStreamingService _streamingService;
     private readonly IMediaAnalyzer _mediaAnalyzer;
     private readonly IHardwareAccelerationDetector _hwAccelDetector;
-    private readonly TranscodingSettings _settings;
+    private readonly ITranscodingSessionManager _sessionManager;
+    private readonly TranscodingSettingsProvider _settingsProvider;
     private readonly IApplicationDbContext _context;
     private readonly ILogger<TranscodingController> _logger;
 
@@ -22,14 +24,16 @@ public class TranscodingController : ControllerBase
         EnhancedStreamingService streamingService,
         IMediaAnalyzer mediaAnalyzer,
         IHardwareAccelerationDetector hwAccelDetector,
-        TranscodingSettings settings,
+        ITranscodingSessionManager sessionManager,
+        TranscodingSettingsProvider settingsProvider,
         IApplicationDbContext context,
         ILogger<TranscodingController> logger)
     {
         _streamingService = streamingService;
         _mediaAnalyzer = mediaAnalyzer;
         _hwAccelDetector = hwAccelDetector;
-        _settings = settings;
+        _sessionManager = sessionManager;
+        _settingsProvider = settingsProvider;
         _context = context;
         _logger = logger;
     }
@@ -38,6 +42,7 @@ public class TranscodingController : ControllerBase
     /// Streams media content with optimal transcoding (replaces old streaming endpoint)
     /// </summary>
     [HttpGet("stream/{contentId}")]
+    [HttpHead("stream/{contentId}")]
     public async Task<IActionResult> StreamContent(
         int contentId,
         [FromQuery] string clientType = "web",
@@ -75,30 +80,49 @@ public class TranscodingController : ControllerBase
 
             sessionId ??= Guid.NewGuid().ToString();
 
-            // Analyze media
-            var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
-
-            // Detect hardware acceleration
-            var hwAccel = await _hwAccelDetector.DetectAsync();
-
-            // Create client profiles
-            var clientProfiles = _streamingService.CreateDefaultProfiles(clientType);
-
-            // Create stream request
-            var request = new StreamRequest
+            // Handle HEAD requests - return headers without streaming
+            if (Request.Method == "HEAD")
             {
-                SessionId = sessionId,
-                FilePath = filePath,
-                MediaInfo = mediaInfo,
-                UserPreferences = null,
-                StartPosition = startTime,
-                AudioStreamIndex = null,
-                SubtitleStreamIndex = null,
-                RangeHeader = Request.Headers["Range"].FirstOrDefault()
-            };
+                Response.ContentType = "video/mp4";
+                Response.Headers.Add("Accept-Ranges", "bytes");
+                Response.Headers.Add("Cache-Control", "no-cache");
+                return Ok();
+            }
 
-            // Stream the content
-            var result = await _streamingService.StreamAsync(request, clientProfiles, hwAccel, _settings);
+            // Create session key based on content and parameters
+            var sessionKey = $"content_{contentId}_{clientType}_{profileId}_{startTime?.ToString("F3") ?? "0"}";
+
+            // Use session manager to get or create transcoding session
+            var result = await _sessionManager.GetOrCreateSessionAsync(sessionKey, async (cancellationToken) =>
+            {
+                // Get transcoding settings for this profile
+                var settings = await _settingsProvider.GetSettingsAsync(profileId);
+
+                // Analyze media
+                var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
+
+                // Detect hardware acceleration
+                var hwAccel = await _hwAccelDetector.DetectAsync();
+
+                // Create client profiles
+                var clientProfiles = _streamingService.CreateDefaultProfiles(clientType);
+
+                // Create stream request
+                var request = new StreamRequest
+                {
+                    SessionId = sessionId,
+                    FilePath = filePath,
+                    MediaInfo = mediaInfo,
+                    UserPreferences = null,
+                    StartPosition = startTime,
+                    AudioStreamIndex = null,
+                    SubtitleStreamIndex = null,
+                    RangeHeader = Request.Headers["Range"].FirstOrDefault()
+                };
+
+                // Stream the content
+                return await _streamingService.StreamAsync(request, clientProfiles, hwAccel, settings, cancellationToken);
+            }, HttpContext.RequestAborted);
 
             // Set response headers
             Response.ContentType = result.ContentType;
@@ -115,6 +139,14 @@ public class TranscodingController : ControllerBase
                 Response.Headers.Add("Content-Range", 
                     $"bytes {result.RangeStart.Value}-{result.RangeEnd ?? result.ContentLength - 1}/{result.ContentLength}");
             }
+
+            // Set up cleanup when client disconnects
+            HttpContext.RequestAborted.Register(() =>
+            {
+                _logger.LogInformation("Client disconnected for session: {SessionKey}", sessionKey);
+                // Don't immediately remove session - other clients might be using it
+                // Let the session manager handle cleanup based on timeout
+            });
 
             // Return the stream
             return new FileStreamResult(result.DataStream, result.ContentType)
@@ -151,8 +183,11 @@ public class TranscodingController : ControllerBase
             // Create client profiles
             var clientProfiles = _streamingService.CreateDefaultProfiles(request.ClientType ?? "web");
 
+            // Get default settings for transcoding decision
+            var settings = await _settingsProvider.GetSettingsAsync(1);
+
             // Get transcoding decision
-            var decision = _streamingService.GetTranscodingDecision(mediaInfo, clientProfiles, hwAccel, _settings);
+            var decision = _streamingService.GetTranscodingDecision(mediaInfo, clientProfiles, hwAccel, settings);
 
             return Ok(new
             {
@@ -270,8 +305,11 @@ public class TranscodingController : ControllerBase
                 RangeHeader = Request.Headers["Range"].FirstOrDefault()
             };
 
+            // Get default settings
+            var settings = await _settingsProvider.GetSettingsAsync(1);
+
             // Stream the content
-            var result = await _streamingService.StreamAsync(request, clientProfiles, hwAccel, _settings);
+            var result = await _streamingService.StreamAsync(request, clientProfiles, hwAccel, settings);
 
             // Set response headers
             Response.ContentType = result.ContentType;
