@@ -31,6 +31,7 @@ public static class DependencyInjection
         // Register Streaming Strategies (order by priority)
         services.AddScoped<IStreamingStrategy, DirectPlayStrategy>();
         services.AddScoped<IStreamingStrategy, DirectStreamStrategy>();
+        services.AddScoped<IStreamingStrategy, TranscodeAudioStrategy>();
         services.AddScoped<IStreamingStrategy, TranscodeVideoStrategy>();
         services.AddScoped<IStreamingStrategy, FullTranscodeStrategy>();
         

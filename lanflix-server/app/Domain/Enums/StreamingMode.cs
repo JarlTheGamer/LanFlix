@@ -16,12 +16,17 @@ public enum StreamingMode
     DirectStream = 1,
 
     /// <summary>
+    /// Transcode audio only - audio transcoded, video copied
+    /// </summary>
+    TranscodeAudio = 2,
+
+    /// <summary>
     /// Transcode video only - video transcoded, audio copied
     /// </summary>
-    TranscodeVideo = 2,
+    TranscodeVideo = 3,
 
     /// <summary>
     /// Full transcode - both video and audio transcoded
     /// </summary>
-    FullTranscode = 3
+    FullTranscode = 4
 }

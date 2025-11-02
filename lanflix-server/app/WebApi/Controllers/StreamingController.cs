@@ -53,7 +53,7 @@ public class StreamingController : ControllerBase
         [FromQuery] int profileId,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Direct streaming request for content {ContentId}, profile {ProfileId}", id, profileId);
+        _logger.LogInformation("Streaming request for content {ContentId}, profile {ProfileId}", id, profileId);
 
         // Get content
         var content = await _context.Contents
@@ -75,18 +75,6 @@ public class StreamingController : ControllerBase
             return NotFound(new { message = "Profile not found" });
         }
 
-        // For HEAD requests, just return headers
-        if (Request.Method == "HEAD")
-        {
-            if (content.MediaInfo?.Duration != null)
-            {
-                Response.Headers.Append("Content-Length", content.MediaInfo.FileSize.ToString());
-                Response.Headers.Append("Content-Type", "video/mp4");
-                Response.Headers.Append("Accept-Ranges", "bytes");
-            }
-            return Ok();
-        }
-
         // Check if file exists
         if (!System.IO.File.Exists(content.FilePath))
         {
@@ -94,7 +82,7 @@ public class StreamingController : ControllerBase
             return NotFound(new { message = "Content file not found" });
         }
 
-        // Use metadata.json file from media folder instead of database MediaInfo
+        // Load MediaInfo from metadata.json
         var mediaFolderPath = Path.GetDirectoryName(content.FilePath);
         if (string.IsNullOrEmpty(mediaFolderPath))
         {
@@ -109,36 +97,81 @@ public class StreamingController : ControllerBase
             return BadRequest(new { message = "Content metadata.json file not found" });
         }
 
-        _logger.LogInformation("Using metadata.json for content {ContentId} from {MetadataPath}", id, metadataPath);
-
-        // Direct file streaming - bypass MediaInfo requirement
-        _logger.LogInformation("Direct streaming content {ContentId} from file: {FilePath}", id, content.FilePath);
-
-        // Get file info for basic streaming
-        var fileInfo = new FileInfo(content.FilePath);
-        if (!fileInfo.Exists)
+        // Parse MediaInfo from metadata.json
+        MediaInfo mediaInfo;
+        try
         {
-            _logger.LogError("Content file does not exist: {FilePath}", content.FilePath);
-            return NotFound(new { message = "Content file not found" });
+            var metadataJson = await System.IO.File.ReadAllTextAsync(metadataPath, cancellationToken);
+            mediaInfo = System.Text.Json.JsonSerializer.Deserialize<MediaInfo>(metadataJson) 
+                ?? throw new InvalidOperationException("Failed to deserialize MediaInfo");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to parse metadata.json for content {ContentId}", id);
+            return BadRequest(new { message = "Invalid metadata.json file" });
         }
 
-        // Handle range requests for video streaming
-        var rangeHeader = Request.Headers["Range"].ToString();
-        if (!string.IsNullOrEmpty(rangeHeader))
+        // Get client capabilities
+        var clientCapabilities = GetClientCapabilities();
+
+        // Select optimal streaming strategy
+        var strategy = _strategySelector.SelectOptimalStrategy(mediaInfo, clientCapabilities);
+        
+        _logger.LogInformation("Selected streaming strategy: {Strategy} for content {ContentId}", 
+            strategy.Mode, id);
+
+        // Set playback mode headers for client
+        Response.Headers.Append("X-Playback-Mode", strategy.Mode.ToString());
+        Response.Headers.Append("X-Transcode-Mode", GetTranscodeMode(strategy.Mode));
+        Response.Headers.Append("X-Direct-Play", (strategy.Mode == Domain.Enums.StreamingMode.DirectPlay).ToString().ToLower());
+
+        // For HEAD requests, return headers only
+        if (Request.Method == "HEAD")
         {
-            return HandleRangeRequest(content.FilePath, rangeHeader, fileInfo.Length);
+            var fileInfo = new FileInfo(content.FilePath);
+            Response.Headers.Append("Content-Length", fileInfo.Length.ToString());
+            Response.Headers.Append("Content-Type", GetContentType(content.FilePath));
+            Response.Headers.Append("Accept-Ranges", strategy.Mode == Domain.Enums.StreamingMode.DirectPlay ? "bytes" : "none");
+            return Ok();
         }
 
-        // Return full file stream
-        var stream = new FileStream(content.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var contentType = GetContentType(content.FilePath);
-        
-        Response.Headers.Append("Accept-Ranges", "bytes");
-        Response.Headers.Append("Content-Length", fileInfo.Length.ToString());
-        
-        return new FileStreamResult(stream, contentType);
+        // Create stream request
+        var streamRequest = new StreamRequest
+        {
+            FilePath = content.FilePath,
+            MediaInfo = mediaInfo,
+            ClientCapabilities = clientCapabilities,
+            SessionId = Guid.NewGuid().ToString(),
+            StartPosition = 0.0, // Start from beginning
+            AudioStreamIndex = null,
+            SubtitleStreamIndex = null,
+            UserPreferences = null
+        };
 
+        // Execute the selected strategy
+        var streamResult = await strategy.ExecuteAsync(streamRequest, cancellationToken);
 
+        // Handle range requests only for DirectPlay
+        if (strategy.Mode == Domain.Enums.StreamingMode.DirectPlay)
+        {
+            var rangeHeader = Request.Headers["Range"].ToString();
+            if (!string.IsNullOrEmpty(rangeHeader))
+            {
+                streamResult.DataStream?.Dispose();
+                var fileInfo = new FileInfo(content.FilePath);
+                return HandleRangeRequest(content.FilePath, rangeHeader, fileInfo.Length);
+            }
+        }
+
+        // Set response headers
+        Response.Headers.Append("Accept-Ranges", streamResult.SupportsRangeRequests ? "bytes" : "none");
+        if (streamResult.ContentLength.HasValue)
+        {
+            Response.Headers.Append("Content-Length", streamResult.ContentLength.Value.ToString());
+        }
+
+        // Return the stream
+        return new FileStreamResult(streamResult.DataStream, streamResult.ContentType);
     }
 
     /// <summary>
@@ -480,6 +513,22 @@ public class StreamingController : ControllerBase
             ".m4v" => "video/mp4",
             ".flv" => "video/x-flv",
             _ => "video/mp4" // Default fallback
+        };
+    }
+
+    /// <summary>
+    /// Get transcode mode string for client headers
+    /// </summary>
+    private string GetTranscodeMode(Domain.Enums.StreamingMode mode)
+    {
+        return mode switch
+        {
+            Domain.Enums.StreamingMode.DirectPlay => "DirectPlay",
+            Domain.Enums.StreamingMode.DirectStream => "Remux",
+            Domain.Enums.StreamingMode.TranscodeAudio => "DirectStream", // Audio transcoding only
+            Domain.Enums.StreamingMode.TranscodeVideo => "Transcode", // Video transcoding
+            Domain.Enums.StreamingMode.FullTranscode => "Transcode",
+            _ => "Unknown"
         };
     }
 

@@ -27,7 +27,7 @@ public class FullTranscodeStrategy : BaseStreamingStrategy
 
     public override StreamingMode Mode => StreamingMode.FullTranscode;
 
-    public override int Priority => 4; // Lowest priority (fallback)
+    public override int Priority => 5; // Lowest priority (fallback)
 
     public override bool CanHandle(MediaInfo media, ClientCapabilities client)
     {

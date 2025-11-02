@@ -26,7 +26,7 @@ public class TranscodeVideoStrategy : BaseStreamingStrategy
 
     public override StreamingMode Mode => StreamingMode.TranscodeVideo;
 
-    public override int Priority => 3; // Third priority
+    public override int Priority => 4; // Fourth priority (after audio transcoding)
 
     public override bool CanHandle(MediaInfo media, ClientCapabilities client)
     {
