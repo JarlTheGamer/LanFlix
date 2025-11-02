@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
@@ -397,7 +398,10 @@ public class MediaAnalyzer : IMediaAnalyzer
 
     private class FFprobeResult
     {
+        [JsonPropertyName("streams")]
         public List<FFprobeStream>? Streams { get; set; }
+        
+        [JsonPropertyName("format")]
         public FFprobeFormat? Format { get; set; }
     }
 
