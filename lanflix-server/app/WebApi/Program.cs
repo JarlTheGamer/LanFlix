@@ -7,6 +7,7 @@ using Lanflix.Infrastructure.Services.Authentication;
 using Lanflix.Infrastructure.Telemetry;
 using Lanflix.WebApi.Authentication;
 using Lanflix.WebApi.Authorization;
+using Lanflix.WebApi.Helpers;
 using Lanflix.WebApi.Hubs;
 using Lanflix.WebApi.Middleware;
 using Lanflix.WebApi.Services;
@@ -19,6 +20,9 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
+
+// Extract embedded config files on first run (Minecraft-style)
+EmbeddedResourceExtractor.ExtractConfigFiles();
 
 var builder = WebApplication.CreateBuilder(args);
 

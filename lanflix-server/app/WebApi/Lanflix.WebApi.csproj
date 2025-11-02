@@ -15,6 +15,7 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
   </PropertyGroup>
 
 
@@ -52,5 +53,41 @@
     <ProjectReference Include="..\Application\Lanflix.Application.csproj" />
     <ProjectReference Include="..\Infrastructure\Lanflix.Infrastructure.csproj" />
   </ItemGroup>
+
+  <!-- Embed configuration files as resources and exclude from publish -->
+  <ItemGroup>
+    <EmbeddedResource Include="appsettings.json">
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="appsettings.Development.json">
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="appsettings.Production.json">
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="wwwroot\**\*">
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </EmbeddedResource>
+  </ItemGroup>
+  
+  <!-- Prevent appsettings from being copied as Content -->
+  <ItemGroup>
+    <Content Remove="appsettings.json" />
+    <Content Remove="appsettings.Development.json" />
+    <Content Remove="appsettings.Production.json" />
+    <Content Remove="wwwroot\**\*" />
+    <Content Remove="ClientApp\**\*" />
+  </ItemGroup>
+  
+  <!-- Remove unnecessary files from publish output -->
+  <Target Name="RemoveUnnecessaryPublishFiles" AfterTargets="Publish">
+    <ItemGroup>
+      <FilesToDelete Include="$(PublishDir)*.pdb" />
+      <FilesToDelete Include="$(PublishDir)web.config" />
+      <FilesToDelete Include="$(PublishDir)*.staticwebassets.*.json" />
+    </ItemGroup>
+    <Delete Files="@(FilesToDelete)" />
+    <RemoveDir Directories="$(PublishDir)ClientApp" Condition="Exists('$(PublishDir)ClientApp')" />
+  </Target>
 
 </Project>

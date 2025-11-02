@@ -37,7 +37,7 @@ echo [3/3] Publishing as single executable...
 set RUNTIME=win-x64
 set OUTPUT_PATH=build-tools\server\build\%RUNTIME%
 
-dotnet publish lanflix-server\app\WebApi\Lanflix.WebApi.csproj -c Release -r %RUNTIME% --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true /p:TrimMode=partial /p:IncludeNativeLibrariesForSelfExtract=true /p:IncludeAllContentForSelfExtract=true /p:EnableCompressionInSingleFile=true -o "%OUTPUT_PATH%"
+dotnet publish lanflix-server\app\WebApi\Lanflix.WebApi.csproj -c Release -r %RUNTIME% --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=false /p:IncludeNativeLibrariesForSelfExtract=true /p:IncludeAllContentForSelfExtract=true /p:EnableCompressionInSingleFile=true -o "%OUTPUT_PATH%"
 
 if errorlevel 1 (
     echo.
