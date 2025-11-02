@@ -532,7 +532,21 @@ app.MapHub<NotificationHub>("/hubs/notifications");
 
 // SPA fallback routing - serve index.html for all non-API routes
 // This allows frontend routing (React Router, Vue Router, etc.) to work
-app.MapFallbackToFile("index.html");
+// Exclude /api and /hubs routes from fallback
+app.MapFallback(context =>
+{
+    // Don't serve index.html for API or hub requests
+    if (context.Request.Path.StartsWithSegments("/api") || 
+        context.Request.Path.StartsWithSegments("/hubs"))
+    {
+        context.Response.StatusCode = 404;
+        return Task.CompletedTask;
+    }
+    
+    // Serve index.html for all other routes (SPA routing)
+    context.Response.ContentType = "text/html";
+    return context.Response.SendFileAsync(Path.Combine(app.Environment.WebRootPath, "index.html"));
+});
 
 // Map health check endpoints
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions

@@ -58,6 +58,36 @@ public class SonarrQueueItem
     public string Status { get; set; } = string.Empty;
     public string? TrackedDownloadStatus { get; set; }
     public string Protocol { get; set; } = string.Empty;
+    public SonarrQuality? Quality { get; set; }
+    public string? Indexer { get; set; }
+    public string? DownloadClient { get; set; }
+    public long DownloadRate { get; set; }
+    public string? Timeleft { get; set; }
+    public string? ErrorMessage { get; set; }
+    public SonarrSeriesInfo? Series { get; set; }
+    public SonarrEpisodeInfo? Episode { get; set; }
+}
+
+public class SonarrQuality
+{
+    public SonarrQualityDefinition? Quality { get; set; }
+}
+
+public class SonarrQualityDefinition
+{
+    public string Name { get; set; } = string.Empty;
+}
+
+public class SonarrSeriesInfo
+{
+    public string Title { get; set; } = string.Empty;
+}
+
+public class SonarrEpisodeInfo
+{
+    public int SeasonNumber { get; set; }
+    public int EpisodeNumber { get; set; }
+    public string Title { get; set; } = string.Empty;
 }
 
 public class SonarrRootFolder

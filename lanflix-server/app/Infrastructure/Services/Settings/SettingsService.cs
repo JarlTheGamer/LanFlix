@@ -180,17 +180,34 @@ public class SettingsService : ISettingsService
             await UpsertSetting("Lanflix:Cache:Redis:InstanceName", settings.Cache.Redis.InstanceName);
             await UpsertSetting("Lanflix:Cache:Memory:SizeLimit", settings.Cache.Memory.SizeLimit.ToString());
 
-            await UpsertSetting("Lanflix:ExternalApis:Tmdb:ApiKey", settings.ExternalApis.Tmdb.ApiKey);
+            // Only update API keys if they're not placeholders or empty (to prevent accidental overwrites)
+            if (!string.IsNullOrEmpty(settings.ExternalApis.Tmdb.ApiKey) && 
+                !settings.ExternalApis.Tmdb.ApiKey.StartsWith("${"))
+            {
+                await UpsertSetting("Lanflix:ExternalApis:Tmdb:ApiKey", settings.ExternalApis.Tmdb.ApiKey);
+            }
             await UpsertSetting("Lanflix:ExternalApis:Tmdb:BaseUrl", settings.ExternalApis.Tmdb.BaseUrl);
 
             await UpsertSetting("Lanflix:ExternalApis:Sonarr:Url", settings.ExternalApis.Sonarr.Url);
-            await UpsertSetting("Lanflix:ExternalApis:Sonarr:ApiKey", settings.ExternalApis.Sonarr.ApiKey);
+            if (!string.IsNullOrEmpty(settings.ExternalApis.Sonarr.ApiKey) && 
+                !settings.ExternalApis.Sonarr.ApiKey.StartsWith("${"))
+            {
+                await UpsertSetting("Lanflix:ExternalApis:Sonarr:ApiKey", settings.ExternalApis.Sonarr.ApiKey);
+            }
 
             await UpsertSetting("Lanflix:ExternalApis:Radarr:Url", settings.ExternalApis.Radarr.Url);
-            await UpsertSetting("Lanflix:ExternalApis:Radarr:ApiKey", settings.ExternalApis.Radarr.ApiKey);
+            if (!string.IsNullOrEmpty(settings.ExternalApis.Radarr.ApiKey) && 
+                !settings.ExternalApis.Radarr.ApiKey.StartsWith("${"))
+            {
+                await UpsertSetting("Lanflix:ExternalApis:Radarr:ApiKey", settings.ExternalApis.Radarr.ApiKey);
+            }
 
             await UpsertSetting("Lanflix:ExternalApis:Prowlarr:Url", settings.ExternalApis.Prowlarr.Url);
-            await UpsertSetting("Lanflix:ExternalApis:Prowlarr:ApiKey", settings.ExternalApis.Prowlarr.ApiKey);
+            if (!string.IsNullOrEmpty(settings.ExternalApis.Prowlarr.ApiKey) && 
+                !settings.ExternalApis.Prowlarr.ApiKey.StartsWith("${"))
+            {
+                await UpsertSetting("Lanflix:ExternalApis:Prowlarr:ApiKey", settings.ExternalApis.Prowlarr.ApiKey);
+            }
 
             await _context.SaveChangesAsync(cancellationToken);
 

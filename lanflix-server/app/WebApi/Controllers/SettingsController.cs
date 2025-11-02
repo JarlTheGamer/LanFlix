@@ -11,15 +11,21 @@ public class SettingsController : ControllerBase
 {
     private readonly ISettingsService _settingsService;
     private readonly IApplicationDbContext _context;
+    private readonly IRadarrClient _radarrClient;
+    private readonly ISonarrClient _sonarrClient;
     private readonly ILogger<SettingsController> _logger;
 
     public SettingsController(
         ISettingsService settingsService,
         IApplicationDbContext context,
+        IRadarrClient radarrClient,
+        ISonarrClient sonarrClient,
         ILogger<SettingsController> logger)
     {
         _settingsService = settingsService;
         _context = context;
+        _radarrClient = radarrClient;
+        _sonarrClient = sonarrClient;
         _logger = logger;
     }
 
@@ -244,6 +250,48 @@ public class SettingsController : ControllerBase
         {
             _logger.LogError(ex, "Error saving custom setting: {Key}", key);
             return BadRequest(new { message = "Error saving setting", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get available root folders from Radarr
+    /// </summary>
+    [HttpGet("radarr/root-folders")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetRadarrRootFolders(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Getting Radarr root folders");
+
+        try
+        {
+            var rootFolders = await _radarrClient.GetRootFoldersAsync(cancellationToken);
+            return Ok(rootFolders);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting Radarr root folders");
+            return BadRequest(new { message = "Error getting Radarr root folders", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get available root folders from Sonarr
+    /// </summary>
+    [HttpGet("sonarr/root-folders")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetSonarrRootFolders(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Getting Sonarr root folders");
+
+        try
+        {
+            var rootFolders = await _sonarrClient.GetRootFoldersAsync(cancellationToken);
+            return Ok(rootFolders);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting Sonarr root folders");
+            return BadRequest(new { message = "Error getting Sonarr root folders", error = ex.Message });
         }
     }
 }

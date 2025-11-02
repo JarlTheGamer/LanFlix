@@ -90,7 +90,25 @@ class ApiClient {
 
       // Handle non-OK responses
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        let errorData = {};
+        const contentType = response.headers.get('content-type');
+        
+        // Only try to parse JSON if the response is actually JSON
+        if (contentType && contentType.includes('application/json')) {
+          errorData = await response.json().catch(() => ({}));
+        } else {
+          // If we got HTML or other non-JSON response, it's likely a routing error
+          const text = await response.text().catch(() => '');
+          if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+            errorData = {
+              error: {
+                message: `API endpoint not found or returned HTML instead of JSON. Check server routing configuration.`,
+                code: 'ROUTING_ERROR'
+              }
+            };
+          }
+        }
+        
         const errorMessage = errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`;
         const error = new Error(errorMessage);
         error.statusCode = response.status;
@@ -199,9 +217,9 @@ class ApiClient {
    */
   async checkConnection() {
     try {
-      // Try a lightweight endpoint
-      const response = await fetch(`${this.baseURL}/settings`, {
-        method: 'HEAD',
+      // Try a lightweight endpoint - use GET instead of HEAD since SettingsController doesn't support HEAD
+      const response = await fetch(`${this.baseURL}/settings/debug/count`, {
+        method: 'GET',
         headers: this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {}
       });
 
@@ -366,30 +384,31 @@ class ApiClient {
   async queueDownload(id, profileId, type, title, year = null) {
     return this.request(`/content/${id}/queue`, {
       method: 'POST',
-      body: JSON.stringify({ profileId, type, title, year })
+      body: JSON.stringify({ 
+        ProfileId: profileId, 
+        Type: type, 
+        Title: title, 
+        Year: year 
+      })
     });
   }
 
   /**
    * POST /api/content/:id/queue/episode
-   * Add specific episode to download queue
+   * Add specific episode to download queue (currently uses main queue endpoint)
    */
   async queueEpisodeDownload(tmdbId, profileId, title, seasonNumber, episodeNumber, year = null) {
-    return this.request(`/content/${tmdbId}/queue/episode`, {
-      method: 'POST',
-      body: JSON.stringify({ profileId, title, seasonNumber, episodeNumber, year })
-    });
+    // For now, queue the entire series since individual episode queuing isn't implemented
+    return this.queueDownload(tmdbId, profileId, 'series', title, year);
   }
 
   /**
    * POST /api/content/:id/queue/season
-   * Add entire season to download queue
+   * Add entire season to download queue (currently uses main queue endpoint)
    */
   async queueSeasonDownload(tmdbId, profileId, title, seasonNumber, year = null) {
-    return this.request(`/content/${tmdbId}/queue/season`, {
-      method: 'POST',
-      body: JSON.stringify({ profileId, title, seasonNumber, year })
-    });
+    // For now, queue the entire series since individual season queuing isn't implemented
+    return this.queueDownload(tmdbId, profileId, 'series', title, year);
   }
 
   // ==================== LIBRARY ENDPOINTS ====================
@@ -655,6 +674,22 @@ class ApiClient {
     });
   }
 
+  /**
+   * GET /api/settings/radarr/root-folders
+   * Get available root folders from Radarr
+   */
+  async getRadarrRootFolders() {
+    return this.request('/settings/radarr/root-folders');
+  }
+
+  /**
+   * GET /api/settings/sonarr/root-folders
+   * Get available root folders from Sonarr
+   */
+  async getSonarrRootFolders() {
+    return this.request('/settings/sonarr/root-folders');
+  }
+
   // ==================== NOTIFICATION ENDPOINTS ====================
 
   /**
@@ -685,6 +720,47 @@ class ApiClient {
    */
   async getNotifications(profileId) {
     return this.request(`/notifications/${profileId}`);
+  }
+
+  // ==================== DOWNLOAD QUEUE ENDPOINTS ====================
+
+  /**
+   * GET /api/downloads/queue
+   * Get current download queue from Radarr and Sonarr
+   */
+  async getDownloadQueue() {
+    return this.request('/downloads/queue');
+  }
+
+  /**
+   * DELETE /api/downloads/queue/:id
+   * Cancel/remove download from queue
+   */
+  async cancelDownload(downloadId, service) {
+    return this.request(`/downloads/queue/${downloadId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ service })
+    });
+  }
+
+  // ==================== JOBS ENDPOINTS ====================
+
+  /**
+   * GET /api/jobs/status
+   * Get background job status
+   */
+  async getJobsStatus() {
+    return this.request('/jobs/status');
+  }
+
+  /**
+   * POST /api/jobs/:jobName/trigger
+   * Trigger a background job
+   */
+  async triggerJob(jobName) {
+    return this.request(`/jobs/${jobName}/trigger`, {
+      method: 'POST'
+    });
   }
 }
 

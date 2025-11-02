@@ -15,14 +15,14 @@ class NotificationsManager {
     this.loadNotifications();
     this.loadJobs();
     
-    // Auto-refresh every 5 seconds for downloads and jobs
+    // Auto-refresh every 10 seconds for downloads and jobs (less frequent to avoid spam)
     this.refreshInterval = setInterval(() => {
       if (this.currentTab === 'downloads') {
         this.loadDownloads();
       } else if (this.currentTab === 'jobs') {
         this.loadJobs();
       }
-    }, 5000);
+    }, 10000);
   }
 
   setupTabs() {
@@ -88,9 +88,8 @@ class NotificationsManager {
 
   async loadDownloads() {
     try {
-      // This would connect to a real downloads API
-      // For now, showing placeholder
-      this.downloads = [];
+      const response = await apiClient.getDownloadQueue();
+      this.downloads = response.downloads || [];
       this.renderDownloads();
     } catch (error) {
       console.error('Failed to load downloads:', error);
@@ -100,8 +99,7 @@ class NotificationsManager {
 
   async loadJobs() {
     try {
-      const response = await apiClient.get('/jobs/status');
-      
+      const response = await apiClient.getJobsStatus();
       this.jobs = response.jobs || [];
       this.renderJobs();
     } catch (error) {
@@ -156,20 +154,38 @@ class NotificationsManager {
     }
 
     container.innerHTML = this.downloads.map(download => `
-      <div class="download-item" data-id="${download.id}">
+      <div class="download-item ${download.status}" data-id="${download.id}">
         <div class="download-header">
-          <div class="download-title">${download.title}</div>
-          <div class="download-status">${download.status}</div>
+          <div class="download-title">
+            <span class="service-badge ${download.service}">${download.service.toUpperCase()}</span>
+            ${download.title}
+          </div>
+          <span class="status-badge ${download.status}">${this.formatStatus(download.status)}</span>
         </div>
         <div class="download-info">
-          ${download.progress}% complete • ${download.speed || 'Calculating...'} • ETA: ${download.eta || 'Unknown'}
+          <div class="download-details">
+            <span class="quality">${download.quality}</span>
+            <span class="size">${download.downloaded} / ${download.size}</span>
+            ${download.speed ? `<span class="speed">${download.speed}</span>` : ''}
+            ${download.eta ? `<span class="eta">ETA: ${download.eta}</span>` : ''}
+          </div>
+          ${download.indexer ? `<div class="indexer">via ${download.indexer}</div>` : ''}
         </div>
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: ${download.progress}%"></div>
-        </div>
-        ${download.status === 'downloading' ? `
+        ${download.status === 'downloading' || download.status === 'queued' ? `
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${Math.max(download.progress, 2)}%"></div>
+            <span class="progress-text">${download.progress}%</span>
+          </div>
+        ` : ''}
+        ${download.errorMessage ? `
+          <div class="error-message">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            ${download.errorMessage}
+          </div>
+        ` : ''}
+        ${download.status === 'downloading' || download.status === 'queued' ? `
           <div class="download-actions">
-            <button class="btn-action btn-cancel" onclick="notificationsManager.cancelDownload(${download.id})">
+            <button class="btn-action btn-cancel" onclick="notificationsManager.cancelDownload('${download.id}')">
               Cancel
             </button>
           </div>
@@ -249,8 +265,9 @@ class NotificationsManager {
 
   async cancelDownload(downloadId) {
     try {
-      // This would connect to a real downloads API
-      console.log('Cancelling download:', downloadId);
+      const service = downloadId.startsWith('radarr_') ? 'radarr' : 'sonarr';
+      await apiClient.cancelDownload(downloadId, service);
+      alert('Download cancellation requested');
       await this.loadDownloads();
     } catch (error) {
       console.error('Failed to cancel download:', error);
@@ -260,7 +277,7 @@ class NotificationsManager {
 
   async triggerJob(jobName) {
     try {
-      await apiClient.post(`/jobs/${jobName}/trigger`);
+      await apiClient.triggerJob(jobName);
       alert(`Job "${this.formatJobName(jobName)}" triggered successfully`);
       await this.loadJobs();
     } catch (error) {
@@ -310,6 +327,19 @@ class NotificationsManager {
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  }
+
+  formatStatus(status) {
+    const statusMap = {
+      'downloading': 'Downloading',
+      'queued': 'Queued',
+      'paused': 'Paused',
+      'completed': 'Completed',
+      'failed': 'Failed',
+      'warning': 'Warning',
+      'unknown': 'Unknown'
+    };
+    return statusMap[status] || status;
   }
 
   formatTime(timestamp) {

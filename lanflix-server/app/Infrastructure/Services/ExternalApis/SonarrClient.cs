@@ -31,12 +31,12 @@ public class SonarrClient : ISonarrClient
         };
     }
 
-    private async Task<string> GetApiKeyAsync(CancellationToken cancellationToken = default)
+    private async Task<(string Url, string ApiKey)> GetConfigAsync(CancellationToken cancellationToken = default)
     {
         using var scope = _serviceProvider.CreateScope();
         var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
         var settings = await settingsService.GetSettingsAsync(cancellationToken);
-        return settings.ExternalApis.Sonarr.ApiKey;
+        return (settings.ExternalApis.Sonarr.Url, settings.ExternalApis.Sonarr.ApiKey);
     }
 
     private async Task<HttpRequestMessage> CreateRequestAsync(
@@ -44,8 +44,19 @@ public class SonarrClient : ISonarrClient
         string requestUri,
         CancellationToken cancellationToken = default)
     {
-        var request = new HttpRequestMessage(method, requestUri);
-        var apiKey = await GetApiKeyAsync(cancellationToken);
+        var (url, apiKey) = await GetConfigAsync(cancellationToken);
+        
+        if (string.IsNullOrEmpty(url))
+        {
+            throw new InvalidOperationException("Sonarr URL is not configured. Please configure Sonarr in the admin settings.");
+        }
+
+        // Ensure URL doesn't end with slash and requestUri starts with slash
+        var baseUrl = url.TrimEnd('/');
+        var path = requestUri.StartsWith('/') ? requestUri : '/' + requestUri;
+        var fullUrl = baseUrl + path;
+        
+        var request = new HttpRequestMessage(method, fullUrl);
         
         if (!string.IsNullOrEmpty(apiKey))
         {

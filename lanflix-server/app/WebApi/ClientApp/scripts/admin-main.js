@@ -49,12 +49,72 @@ async function loadSettings() {
     document.getElementById('download-images').checked = true;
     document.getElementById('metadata-language').value = 'en';
 
+    // Load root folders after settings are loaded
+    await loadRootFolders();
+
     console.log('Settings loaded successfully');
   } catch (error) {
     console.error('Failed to load settings:', error);
     showStatus('Failed to load current settings', 'error');
   }
 }
+
+// Load root folders from Radarr and Sonarr
+async function loadRootFolders() {
+  // Load Radarr root folders
+  try {
+    const radarrFolders = await apiClient.getRadarrRootFolders();
+    const moviesSelect = document.getElementById('movies-path-select');
+    moviesSelect.innerHTML = '<option value="">Select from Radarr folders...</option>';
+    
+    radarrFolders.forEach(folder => {
+      const option = document.createElement('option');
+      option.value = folder.path;
+      option.textContent = `${folder.path} (${folder.freeSpace || 'Unknown'} free)`;
+      moviesSelect.appendChild(option);
+    });
+  } catch (error) {
+    console.error('Failed to load Radarr root folders:', error);
+    const moviesSelect = document.getElementById('movies-path-select');
+    moviesSelect.innerHTML = '<option value="">Failed to load Radarr folders</option>';
+  }
+
+  // Load Sonarr root folders
+  try {
+    const sonarrFolders = await apiClient.getSonarrRootFolders();
+    const seriesSelect = document.getElementById('series-path-select');
+    seriesSelect.innerHTML = '<option value="">Select from Sonarr folders...</option>';
+    
+    sonarrFolders.forEach(folder => {
+      const option = document.createElement('option');
+      option.value = folder.path;
+      option.textContent = `${folder.path} (${folder.freeSpace || 'Unknown'} free)`;
+      seriesSelect.appendChild(option);
+    });
+  } catch (error) {
+    console.error('Failed to load Sonarr root folders:', error);
+    const seriesSelect = document.getElementById('series-path-select');
+    seriesSelect.innerHTML = '<option value="">Failed to load Sonarr folders</option>';
+  }
+}
+
+// Update movies path when dropdown selection changes
+window.updateMoviesPath = function() {
+  const select = document.getElementById('movies-path-select');
+  const input = document.getElementById('movies-path');
+  if (select.value) {
+    input.value = select.value;
+  }
+};
+
+// Update series path when dropdown selection changes
+window.updateSeriesPath = function() {
+  const select = document.getElementById('series-path-select');
+  const input = document.getElementById('series-path');
+  if (select.value) {
+    input.value = select.value;
+  }
+};
 
 // Save settings
 async function saveSettings() {
@@ -182,13 +242,26 @@ async function scanLibrary() {
       method: 'POST'
     });
 
-    scanStatus.textContent = '✅ Library scan completed! Refresh the page to see new content.';
+    if (response.result) {
+      const { added, updated, removed, errors } = response.result;
+      let statusText = `✅ Library scan completed! Added: ${added}, Updated: ${updated}, Removed: ${removed}`;
+      
+      if (errors && errors.length > 0) {
+        statusText += ` (${errors.length} errors - check console)`;
+        console.warn('Library scan errors:', errors);
+      }
+      
+      scanStatus.textContent = statusText;
+    } else {
+      scanStatus.textContent = '✅ Library scan completed! Check the logs for details.';
+    }
+    
     scanStatus.style.color = '#4caf50';
     scanBtn.textContent = '🔍 Scan Library Now';
     scanBtn.disabled = false;
   } catch (error) {
     console.error('Failed to scan library:', error);
-    scanStatus.textContent = '❌ Failed to scan library: ' + error.message;
+    scanStatus.textContent = '❌ Failed to scan library: ' + (error.message || 'Unknown error');
     scanStatus.style.color = '#f44336';
     scanBtn.textContent = '🔍 Scan Library Now';
     scanBtn.disabled = false;

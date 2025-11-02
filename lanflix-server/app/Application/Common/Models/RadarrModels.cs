@@ -52,6 +52,22 @@ public class RadarrQueueItem
     public string Status { get; set; } = string.Empty;
     public string? TrackedDownloadStatus { get; set; }
     public string Protocol { get; set; } = string.Empty;
+    public RadarrQuality? Quality { get; set; }
+    public string? Indexer { get; set; }
+    public string? DownloadClient { get; set; }
+    public long DownloadRate { get; set; }
+    public string? Timeleft { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
+public class RadarrQuality
+{
+    public RadarrQualityDefinition? Quality { get; set; }
+}
+
+public class RadarrQualityDefinition
+{
+    public string Name { get; set; } = string.Empty;
 }
 
 public class RadarrRootFolder

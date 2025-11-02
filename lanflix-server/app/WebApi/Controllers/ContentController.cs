@@ -9,19 +9,19 @@ namespace Lanflix.WebApi.Controllers;
 public class ContentController : ControllerBase
 {
     private readonly ITmdbClient _tmdbClient;
-    private readonly IRadarrClient? _radarrClient;
-    private readonly ISonarrClient? _sonarrClient;
-    private readonly IProwlarrClient? _prowlarrClient;
+    private readonly IRadarrClient _radarrClient;
+    private readonly ISonarrClient _sonarrClient;
+    private readonly IProwlarrClient _prowlarrClient;
     private readonly ISettingsService _settingsService;
     private readonly ILogger<ContentController> _logger;
 
     public ContentController(
         ITmdbClient tmdbClient,
         ISettingsService settingsService,
-        ILogger<ContentController> logger,
-        IRadarrClient? radarrClient = null,
-        ISonarrClient? sonarrClient = null,
-        IProwlarrClient? prowlarrClient = null)
+        IRadarrClient radarrClient,
+        ISonarrClient sonarrClient,
+        IProwlarrClient prowlarrClient,
+        ILogger<ContentController> logger)
     {
         _tmdbClient = tmdbClient;
         _settingsService = settingsService;
@@ -313,28 +313,28 @@ public class ContentController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Queueing download: Id={Id}, Type={Type}, Title={Title}", id, request.Type, request.Title);
-
-            // Check if download managers are configured
-            if (_radarrClient == null && request.Type == "movie")
+            if (request == null)
             {
-                _logger.LogWarning("Radarr is not configured - download cannot be queued");
-                return Ok(new { 
-                    message = "Download queued (Radarr not configured - please configure in settings)",
-                    warning = "Radarr is not configured. Please configure Radarr in the admin settings to enable automatic downloads."
-                });
+                _logger.LogError("Queue request body is null");
+                return BadRequest(new { error = "Request body is required" });
             }
 
-            if (_sonarrClient == null && request.Type == "series")
+            if (string.IsNullOrEmpty(request.Type))
             {
-                _logger.LogWarning("Sonarr is not configured - download cannot be queued");
-                return Ok(new { 
-                    message = "Download queued (Sonarr not configured - please configure in settings)",
-                    warning = "Sonarr is not configured. Please configure Sonarr in the admin settings to enable automatic downloads."
-                });
+                _logger.LogError("Queue request Type is missing");
+                return BadRequest(new { error = "Type is required (movie or series)" });
             }
 
-            if (request.Type == "movie" && _radarrClient != null)
+            if (string.IsNullOrEmpty(request.Title))
+            {
+                _logger.LogError("Queue request Title is missing");
+                return BadRequest(new { error = "Title is required" });
+            }
+
+            _logger.LogInformation("Queueing download: Id={Id}, Type={Type}, Title={Title}, ProfileId={ProfileId}", 
+                id, request.Type, request.Title, request.ProfileId);
+
+            if (request.Type == "movie")
             {
                 // Get settings to use configured media paths
                 var settings = await _settingsService.GetSettingsAsync(cancellationToken);
@@ -361,10 +361,19 @@ public class ContentController : ControllerBase
                     
                     if (matchingFolder == null)
                     {
-                        _logger.LogWarning("Configured movie path '{Path}' not found in Radarr root folders. You need to add this path as a root folder in Radarr.", rootFolderPath);
+                        _logger.LogWarning("Configured movie path '{Path}' not found in Radarr root folders. Available folders: {Folders}", 
+                            rootFolderPath, string.Join(", ", rootFolders.Select(f => f.Path)));
+                        
                         return BadRequest(new { 
-                            error = $"The configured movie path '{rootFolderPath}' is not set up as a root folder in Radarr. Please add it in Radarr's settings under Media Management > Root Folders.",
-                            hint = "Go to Radarr > Settings > Media Management > Root Folders and add: " + rootFolderPath
+                            error = new {
+                                message = $"The configured movie path '{rootFolderPath}' is not set up as a root folder in Radarr.",
+                                code = "PATH_NOT_IN_RADARR",
+                                details = new {
+                                    configuredPath = rootFolderPath,
+                                    availablePaths = rootFolders.Select(f => f.Path).ToArray(),
+                                    solution = "Either add this path as a root folder in Radarr, or change the Movies path in Lanflix settings to one of the available paths."
+                                }
+                            }
                         });
                     }
                 }
@@ -377,8 +386,14 @@ public class ContentController : ControllerBase
                 else
                 {
                     return BadRequest(new { 
-                        error = "No root folders configured in Radarr and no movie path set in Lanflix settings. Please configure a movie path in Lanflix settings or add a root folder in Radarr.",
-                        hint = "Set the Movies path in Lanflix settings to match where you want Radarr to download movies."
+                        error = new {
+                            message = "No root folders available for movie downloads.",
+                            code = "NO_ROOT_FOLDERS",
+                            details = new {
+                                radarrConfigured = !string.IsNullOrEmpty(settings.ExternalApis.Radarr.Url),
+                                solution = "Configure root folders in Radarr under Settings > Media Management > Root Folders."
+                            }
+                        }
                     });
                 }
 
@@ -403,7 +418,7 @@ public class ContentController : ControllerBase
 
                 return Ok(new { message = "Movie queued for download", movieId = movie.Id });
             }
-            else if (request.Type == "series" && _sonarrClient != null)
+            else if (request.Type == "series")
             {
                 // Get settings to use configured media paths
                 var settings = await _settingsService.GetSettingsAsync(cancellationToken);
@@ -505,9 +520,9 @@ public class ContentController : ControllerBase
             var result = request.Service.ToLower() switch
             {
                 "tmdb" => await _tmdbClient.SearchMoviesAsync("test", cancellationToken) != null,
-                "radarr" => _radarrClient != null && await _radarrClient.TestConnectionAsync(cancellationToken),
-                "sonarr" => _sonarrClient != null && await _sonarrClient.TestConnectionAsync(cancellationToken),
-                "prowlarr" => _prowlarrClient != null && await _prowlarrClient.TestConnectionAsync(cancellationToken),
+                "radarr" => await _radarrClient.TestConnectionAsync(cancellationToken),
+                "sonarr" => await _sonarrClient.TestConnectionAsync(cancellationToken),
+                "prowlarr" => await _prowlarrClient.TestConnectionAsync(cancellationToken),
                 _ => false
             };
 

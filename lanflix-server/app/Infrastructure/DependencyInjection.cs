@@ -133,68 +133,56 @@ public static class DependencyInjection
         })
         .SetHandlerLifetime(TimeSpan.FromMinutes(30)); // Handler lifetime for connection pool rotation
 
-        // Radarr HTTP Client
-        var radarrUrl = configuration["Lanflix:ExternalApis:Radarr:Url"];
-        if (!string.IsNullOrEmpty(radarrUrl))
+        // Radarr HTTP Client - Always register, URL will be fetched from database at runtime
+        services.AddHttpClient<IRadarrClient, Infrastructure.Services.ExternalApis.RadarrClient>((sp, client) =>
         {
-            services.AddHttpClient<IRadarrClient, Infrastructure.Services.ExternalApis.RadarrClient>(client =>
-            {
-                client.BaseAddress = new Uri(radarrUrl);
-                client.Timeout = TimeSpan.FromSeconds(30);
-                client.DefaultRequestHeaders.Add("Accept", "application/json");
-            })
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-            {
-                PooledConnectionLifetime = TimeSpan.FromMinutes(15),
-                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
-                MaxConnectionsPerServer = 5,
-                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
-                ConnectTimeout = TimeSpan.FromSeconds(10)
-            })
-            .SetHandlerLifetime(TimeSpan.FromMinutes(30));
-        }
+            // BaseAddress will be set dynamically in the client based on database settings
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+            MaxConnectionsPerServer = 5,
+            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
+            ConnectTimeout = TimeSpan.FromSeconds(10)
+        })
+        .SetHandlerLifetime(TimeSpan.FromMinutes(30));
 
-        // Sonarr HTTP Client
-        var sonarrUrl = configuration["Lanflix:ExternalApis:Sonarr:Url"];
-        if (!string.IsNullOrEmpty(sonarrUrl))
+        // Sonarr HTTP Client - Always register, URL will be fetched from database at runtime
+        services.AddHttpClient<ISonarrClient, Infrastructure.Services.ExternalApis.SonarrClient>((sp, client) =>
         {
-            services.AddHttpClient<ISonarrClient, Infrastructure.Services.ExternalApis.SonarrClient>(client =>
-            {
-                client.BaseAddress = new Uri(sonarrUrl);
-                client.Timeout = TimeSpan.FromSeconds(30);
-                client.DefaultRequestHeaders.Add("Accept", "application/json");
-            })
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-            {
-                PooledConnectionLifetime = TimeSpan.FromMinutes(15),
-                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
-                MaxConnectionsPerServer = 5,
-                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
-                ConnectTimeout = TimeSpan.FromSeconds(10)
-            })
-            .SetHandlerLifetime(TimeSpan.FromMinutes(30));
-        }
+            // BaseAddress will be set dynamically in the client based on database settings
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+            MaxConnectionsPerServer = 5,
+            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
+            ConnectTimeout = TimeSpan.FromSeconds(10)
+        })
+        .SetHandlerLifetime(TimeSpan.FromMinutes(30));
 
-        // Prowlarr HTTP Client
-        var prowlarrUrl = configuration["Lanflix:ExternalApis:Prowlarr:Url"];
-        if (!string.IsNullOrEmpty(prowlarrUrl))
+        // Prowlarr HTTP Client - Always register, URL will be fetched from database at runtime
+        services.AddHttpClient<IProwlarrClient, Infrastructure.Services.ExternalApis.ProwlarrClient>((sp, client) =>
         {
-            services.AddHttpClient<IProwlarrClient, Infrastructure.Services.ExternalApis.ProwlarrClient>(client =>
-            {
-                client.BaseAddress = new Uri(prowlarrUrl);
-                client.Timeout = TimeSpan.FromSeconds(30);
-                client.DefaultRequestHeaders.Add("Accept", "application/json");
-            })
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-            {
-                PooledConnectionLifetime = TimeSpan.FromMinutes(15),
-                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
-                MaxConnectionsPerServer = 5,
-                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
-                ConnectTimeout = TimeSpan.FromSeconds(10)
-            })
-            .SetHandlerLifetime(TimeSpan.FromMinutes(30));
-        }
+            // BaseAddress will be set dynamically in the client based on database settings
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+            MaxConnectionsPerServer = 5,
+            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
+            ConnectTimeout = TimeSpan.FromSeconds(10)
+        })
+        .SetHandlerLifetime(TimeSpan.FromMinutes(30));
 
         // Authentication Services
         services.AddScoped<ITokenService, TokenService>();
@@ -210,6 +198,9 @@ public static class DependencyInjection
 
         // Metadata Service (Scoped for downloading and saving metadata to media folders)
         services.AddScoped<IMetadataService, Infrastructure.Services.Metadata.MetadataService>();
+
+        // Library Service (Scoped for scanning media folders)
+        services.AddScoped<ILibraryService, Infrastructure.Services.Library.LibraryService>();
 
         // FFmpeg Services
         services.AddSingleton<IMediaAnalyzer, MediaAnalyzer>();

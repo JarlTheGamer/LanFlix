@@ -72,13 +72,25 @@
                 <div class="admin-card">
                     <div class="admin-field">
                         <label>Movies Folder</label>
-                        <p class="field-desc">Where downloaded movies will be stored</p>
-                        <input type="text" id="movies-path" placeholder="/path/to/movies" />
+                        <p class="field-desc">Select from Radarr root folders or enter custom path</p>
+                        <div class="path-selector">
+                            <select id="movies-path-select" onchange="updateMoviesPath()">
+                                <option value="">Loading Radarr folders...</option>
+                            </select>
+                            <span class="path-separator">or</span>
+                            <input type="text" id="movies-path" placeholder="/path/to/movies" />
+                        </div>
                     </div>
                     <div class="admin-field">
                         <label>Series Folder</label>
-                        <p class="field-desc">Where downloaded TV series will be stored</p>
-                        <input type="text" id="series-path" placeholder="/path/to/series" />
+                        <p class="field-desc">Select from Sonarr root folders or enter custom path</p>
+                        <div class="path-selector">
+                            <select id="series-path-select" onchange="updateSeriesPath()">
+                                <option value="">Loading Sonarr folders...</option>
+                            </select>
+                            <span class="path-separator">or</span>
+                            <input type="text" id="series-path" placeholder="/path/to/series" />
+                        </div>
                     </div>
                 </div>
             </section>

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Lanflix.Infrastructure.Services.ExternalApis;
@@ -11,35 +12,66 @@ public class ProwlarrClient : IProwlarrClient
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<ProwlarrClient> _logger;
-    private readonly string _apiKey;
+    private readonly IServiceProvider _serviceProvider;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public ProwlarrClient(
         HttpClient httpClient,
-        IConfiguration configuration,
+        IServiceProvider serviceProvider,
         ILogger<ProwlarrClient> logger)
     {
         _httpClient = httpClient;
+        _serviceProvider = serviceProvider;
         _logger = logger;
-        _apiKey = configuration["Lanflix:ExternalApis:Prowlarr:ApiKey"] ?? string.Empty;
 
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
+    }
 
-        if (!string.IsNullOrEmpty(_apiKey))
+    private async Task<(string Url, string ApiKey)> GetConfigAsync(CancellationToken cancellationToken = default)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
+        var settings = await settingsService.GetSettingsAsync(cancellationToken);
+        return (settings.ExternalApis.Prowlarr.Url, settings.ExternalApis.Prowlarr.ApiKey);
+    }
+
+    private async Task<HttpRequestMessage> CreateRequestAsync(
+        HttpMethod method,
+        string requestUri,
+        CancellationToken cancellationToken = default)
+    {
+        var (url, apiKey) = await GetConfigAsync(cancellationToken);
+        
+        if (string.IsNullOrEmpty(url))
         {
-            _httpClient.DefaultRequestHeaders.Add("X-Api-Key", _apiKey);
+            throw new InvalidOperationException("Prowlarr URL is not configured. Please configure Prowlarr in the admin settings.");
         }
+
+        // Ensure URL doesn't end with slash and requestUri starts with slash
+        var baseUrl = url.TrimEnd('/');
+        var path = requestUri.StartsWith('/') ? requestUri : '/' + requestUri;
+        var fullUrl = baseUrl + path;
+        
+        var request = new HttpRequestMessage(method, fullUrl);
+        
+        if (!string.IsNullOrEmpty(apiKey))
+        {
+            request.Headers.Add("X-Api-Key", apiKey);
+        }
+        
+        return request;
     }
 
     public async Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            var response = await _httpClient.GetAsync("/api/v1/system/status", cancellationToken);
+            var request = await CreateRequestAsync(HttpMethod.Get, "/api/v1/system/status", cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -72,10 +104,11 @@ public class ProwlarrClient : IProwlarrClient
                 }
             }
 
-            var results = await _httpClient.GetFromJsonAsync<List<ProwlarrSearchResult>>(
-                url,
-                _jsonOptions,
-                cancellationToken);
+            var request = await CreateRequestAsync(HttpMethod.Get, url, cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var results = await response.Content.ReadFromJsonAsync<List<ProwlarrSearchResult>>(_jsonOptions, cancellationToken);
 
             _logger.LogInformation("Prowlarr search completed: {Query}, Results: {Count}", query, results?.Count ?? 0);
 
@@ -92,10 +125,11 @@ public class ProwlarrClient : IProwlarrClient
     {
         try
         {
-            var indexers = await _httpClient.GetFromJsonAsync<List<ProwlarrIndexer>>(
-                "/api/v1/indexer",
-                _jsonOptions,
-                cancellationToken);
+            var request = await CreateRequestAsync(HttpMethod.Get, "/api/v1/indexer", cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var indexers = await response.Content.ReadFromJsonAsync<List<ProwlarrIndexer>>(_jsonOptions, cancellationToken);
 
             return indexers ?? new List<ProwlarrIndexer>();
         }
@@ -110,10 +144,11 @@ public class ProwlarrClient : IProwlarrClient
     {
         try
         {
-            var health = await _httpClient.GetFromJsonAsync<List<ProwlarrHealthCheck>>(
-                "/api/v1/health",
-                _jsonOptions,
-                cancellationToken);
+            var request = await CreateRequestAsync(HttpMethod.Get, "/api/v1/health", cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var health = await response.Content.ReadFromJsonAsync<List<ProwlarrHealthCheck>>(_jsonOptions, cancellationToken);
 
             return health ?? new List<ProwlarrHealthCheck>();
         }

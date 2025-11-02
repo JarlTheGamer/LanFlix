@@ -374,3 +374,148 @@
     width: 100%;
   }
 }
+/* Enhanced download styles */
+.service-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-right: 8px;
+}
+
+.service-badge.radarr {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.service-badge.sonarr {
+  background: rgba(33, 150, 243, 0.2);
+  color: #2196f3;
+}
+
+.download-details {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.download-details span {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.quality {
+  background: rgba(156, 39, 176, 0.2);
+  color: #9c27b0;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.size {
+  font-weight: 600;
+}
+
+.speed {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.eta {
+  color: #ff9800;
+}
+
+.indexer {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.progress-bar {
+  position: relative;
+  margin: 12px 0;
+}
+
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(244, 67, 54, 0.1);
+  border: 1px solid rgba(244, 67, 54, 0.2);
+  border-radius: 8px;
+  color: #f44336;
+  font-size: 0.9rem;
+  margin-top: 12px;
+}
+
+.error-message svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.download-item.failed {
+  border-color: rgba(244, 67, 54, 0.3);
+}
+
+.download-item.completed {
+  border-color: rgba(76, 175, 80, 0.3);
+}
+
+.download-item.downloading .progress-fill {
+  background: linear-gradient(90deg, #4caf50, #8bc34a);
+}
+
+.download-item.paused .progress-fill {
+  background: linear-gradient(90deg, #ff9800, #ffc107);
+}
+
+.download-item.failed .progress-fill {
+  background: linear-gradient(90deg, #f44336, #e57373);
+}
+
+.status-badge.downloading {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.status-badge.queued {
+  background: rgba(33, 150, 243, 0.2);
+  color: #2196f3;
+}
+
+.status-badge.paused {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+}
+
+.status-badge.completed {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.status-badge.failed {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.status-badge.warning {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}

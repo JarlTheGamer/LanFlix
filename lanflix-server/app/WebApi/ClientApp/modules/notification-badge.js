@@ -22,7 +22,7 @@ class NotificationBadge {
   async updateBadge() {
     try {
       const profileId = this.getCurrentProfileId();
-      const response = await apiClient.get(`/api/notifications/${profileId}`);
+      const response = await apiClient.get(`/notifications/${profileId}`);
       
       const unreadCount = (response.notifications || []).filter(n => !n.userResponse).length;
       
