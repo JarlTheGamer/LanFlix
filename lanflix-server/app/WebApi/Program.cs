@@ -362,17 +362,24 @@ if (redisEnabled)
     var redisConnectionString = builder.Configuration["Lanflix:Cache:Redis:ConnectionString"];
     if (!string.IsNullOrEmpty(redisConnectionString))
     {
-        signalRBuilder.AddStackExchangeRedis(redisConnectionString, options =>
+        try
         {
-            options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("lanflix:signalr:");
-            options.Configuration.AbortOnConnectFail = false;
-            options.Configuration.ConnectTimeout = 5000;
-            options.Configuration.SyncTimeout = 5000;
-            options.Configuration.KeepAlive = 60;
-            options.Configuration.ConnectRetry = 3;
-        });
-        
-        Log.Information("SignalR configured with Redis backplane: {ConnectionString}", redisConnectionString);
+            signalRBuilder.AddStackExchangeRedis(redisConnectionString, options =>
+            {
+                options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("lanflix:signalr:");
+                options.Configuration.AbortOnConnectFail = false;
+                options.Configuration.ConnectTimeout = 5000;
+                options.Configuration.SyncTimeout = 5000;
+                options.Configuration.KeepAlive = 60;
+                options.Configuration.ConnectRetry = 3;
+            });
+            
+            Log.Information("SignalR configured with Redis backplane: {ConnectionString}", redisConnectionString);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to configure Redis backplane for SignalR. Falling back to single-server mode.");
+        }
     }
 }
 else

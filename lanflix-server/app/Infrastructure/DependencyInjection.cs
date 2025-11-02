@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
+using System;
 
 namespace Lanflix.Infrastructure;
 
@@ -65,24 +66,38 @@ public static class DependencyInjection
         var redisConnection = configuration["Lanflix:Cache:Redis:ConnectionString"];
         var redisEnabled = configuration.GetValue<bool>("Lanflix:Cache:Redis:Enabled", false);
         
-        if (redisEnabled && !string.IsNullOrEmpty(redisConnection))
+        if (redisEnabled && !string.IsNullOrWhiteSpace(redisConnection))
         {
-            // Register Redis connection multiplexer
-            services.AddSingleton<IConnectionMultiplexer>(sp =>
-                ConnectionMultiplexer.Connect(redisConnection));
-            
-            // Register distributed cache
-            services.AddStackExchangeRedisCache(options =>
+            try
             {
-                options.Configuration = redisConnection;
-                options.InstanceName = configuration["Lanflix:Cache:Redis:InstanceName"] ?? "lanflix:";
-            });
-            
-            // Register Redis cache service
-            services.AddSingleton<RedisCacheService>();
-            
-            // Register Hybrid cache as the primary cache service
-            services.AddSingleton<ICacheService, HybridCacheService>();
+                // Register Redis connection multiplexer
+                services.AddSingleton<IConnectionMultiplexer>(sp =>
+                {
+                    var options = ConfigurationOptions.Parse(redisConnection);
+                    options.AbortOnConnectFail = false; // Don't throw on connection failure
+                    options.ConnectTimeout = 5000;
+                    options.SyncTimeout = 5000;
+                    return ConnectionMultiplexer.Connect(options);
+                });
+                
+                // Register distributed cache
+                services.AddStackExchangeRedisCache(options =>
+                {
+                    options.Configuration = redisConnection;
+                    options.InstanceName = configuration["Lanflix:Cache:Redis:InstanceName"] ?? "lanflix:";
+                });
+                
+                // Register Redis cache service
+                services.AddSingleton<RedisCacheService>();
+                
+                // Register Hybrid cache as the primary cache service
+                services.AddSingleton<ICacheService, HybridCacheService>();
+            }
+            catch (Exception)
+            {
+                // Fall back to memory cache if Redis connection fails
+                services.AddSingleton<ICacheService, MemoryCacheService>();
+            }
         }
         else
         {
