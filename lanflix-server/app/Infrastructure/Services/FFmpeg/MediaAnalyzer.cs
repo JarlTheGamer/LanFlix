@@ -403,38 +403,76 @@ public class MediaAnalyzer : IMediaAnalyzer
 
     private class FFprobeStream
     {
+        [JsonPropertyName("index")]
         public int? Index { get; set; }
+        
+        [JsonPropertyName("codec_name")]
         public string? CodecName { get; set; }
+        
+        [JsonPropertyName("codec_type")]
         public string? CodecType { get; set; }
+        
+        [JsonPropertyName("width")]
         public int? Width { get; set; }
+        
+        [JsonPropertyName("height")]
         public int? Height { get; set; }
+        
+        [JsonPropertyName("pix_fmt")]
         public string? PixFmt { get; set; }
+        
+        [JsonPropertyName("color_space")]
         public string? ColorSpace { get; set; }
+        
+        [JsonPropertyName("color_transfer")]
         public string? ColorTransfer { get; set; }
+        
+        [JsonPropertyName("r_frame_rate")]
         public string? RFrameRate { get; set; }
+        
+        [JsonPropertyName("bit_rate")]
         public string? BitRate { get; set; }
+        
+        [JsonPropertyName("channels")]
         public int? Channels { get; set; }
+        
+        [JsonPropertyName("sample_rate")]
         public string? SampleRate { get; set; }
+        
+        [JsonPropertyName("disposition")]
         public FFprobeDisposition? Disposition { get; set; }
+        
+        [JsonPropertyName("tags")]
         public FFprobeTags? Tags { get; set; }
     }
 
     private class FFprobeFormat
     {
+        [JsonPropertyName("format_name")]
         public string? FormatName { get; set; }
+        
+        [JsonPropertyName("duration")]
         public string? Duration { get; set; }
+        
+        [JsonPropertyName("bit_rate")]
         public string? BitRate { get; set; }
     }
 
     private class FFprobeDisposition
     {
+        [JsonPropertyName("default")]
         public int? Default { get; set; }
+        
+        [JsonPropertyName("forced")]
         public int? Forced { get; set; }
     }
 
     private class FFprobeTags
     {
+        [JsonPropertyName("language")]
         public string? Language { get; set; }
+        
+        [JsonPropertyName("title")]
         public string? Title { get; set; }
     }
 

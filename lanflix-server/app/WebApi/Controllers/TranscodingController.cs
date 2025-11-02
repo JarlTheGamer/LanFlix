@@ -3,6 +3,7 @@ using Lanflix.Application.Common.Models;
 using Lanflix.Application.Features.Streaming.Services;
 using Lanflix.Domain.ValueObjects;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Lanflix.WebApi.Controllers;
 
@@ -14,6 +15,7 @@ public class TranscodingController : ControllerBase
     private readonly IMediaAnalyzer _mediaAnalyzer;
     private readonly IHardwareAccelerationDetector _hwAccelDetector;
     private readonly TranscodingSettings _settings;
+    private readonly IApplicationDbContext _context;
     private readonly ILogger<TranscodingController> _logger;
 
     public TranscodingController(
@@ -21,12 +23,14 @@ public class TranscodingController : ControllerBase
         IMediaAnalyzer mediaAnalyzer,
         IHardwareAccelerationDetector hwAccelDetector,
         TranscodingSettings settings,
+        IApplicationDbContext context,
         ILogger<TranscodingController> logger)
     {
         _streamingService = streamingService;
         _mediaAnalyzer = mediaAnalyzer;
         _hwAccelDetector = hwAccelDetector;
         _settings = settings;
+        _context = context;
         _logger = logger;
     }
 
@@ -46,10 +50,17 @@ public class TranscodingController : ControllerBase
             _logger.LogInformation("Stream request for content ID: {ContentId}, profileId: {ProfileId}, clientType: {ClientType}", 
                 contentId, profileId, clientType);
 
-            // TODO: Get file path from content database using contentId
-            // For now, assume we have a way to get the file path
-            var filePath = GetFilePathFromContentId(contentId);
+            // Get content from database
+            var content = await _context.Contents
+                .FirstOrDefaultAsync(c => c.Id == contentId);
             
+            if (content == null)
+            {
+                _logger.LogWarning("Content not found in database: {ContentId}", contentId);
+                return NotFound("Content not found");
+            }
+
+            var filePath = content.FilePath;
             if (string.IsNullOrEmpty(filePath))
             {
                 _logger.LogWarning("No file path found for content ID: {ContentId}", contentId);
@@ -216,30 +227,7 @@ public class TranscodingController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Temporary method to get file path from content ID
-    /// TODO: Replace with actual database lookup
-    /// </summary>
-    private string GetFilePathFromContentId(int contentId)
-    {
-        // This is a placeholder - in a real implementation, you'd query the database
-        // For testing, you can hardcode some paths or implement a simple lookup
-        var filePath = contentId switch
-        {
-            1 => @"C:\Videos\sample1.mp4",
-            2 => @"C:\Videos\sample2.mkv",
-            _ => string.Empty
-        };
 
-        _logger.LogInformation("Looking up content ID {ContentId}, resolved to path: {FilePath}", contentId, filePath);
-        
-        if (!string.IsNullOrEmpty(filePath) && !System.IO.File.Exists(filePath))
-        {
-            _logger.LogWarning("File does not exist at path: {FilePath}", filePath);
-        }
-
-        return filePath;
-    }
 
     /// <summary>
     /// Test endpoint to stream a file directly (for development)
