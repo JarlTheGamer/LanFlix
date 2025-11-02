@@ -33,6 +33,7 @@ dotnet test app/Tests/Application.Tests
 dotnet test app/Tests/WebApi.Tests
 ```
 
+
 ## Frontend Development
 
 The frontend is integrated into the backend and served from `wwwroot/`.
