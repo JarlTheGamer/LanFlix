@@ -30,7 +30,9 @@ Write-Host ""
 
 # Step 3: Publish as single executable
 Write-Host "📦 Publishing as single executable..." -ForegroundColor Yellow
-$runtime = "win-x64"  # Change to linux-x64 or osx-x64 as needed
+$runtime = "win-x64"
+$outputPath = "build-tools/server/build/$runtime"
+
 dotnet publish lanflix-server/app/WebApi/Lanflix.WebApi.csproj `
     -c Release `
     -r $runtime `
@@ -41,7 +43,8 @@ dotnet publish lanflix-server/app/WebApi/Lanflix.WebApi.csproj `
     /p:IncludeNativeLibrariesForSelfExtract=true `
     /p:IncludeAllContentForSelfExtract=true `
     /p:EnableCompressionInSingleFile=true `
-    -o "build-tools/server/build/$runtime"
+    -o $outputPath `
+    2>&1 | Select-Object -Last 50
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ Publish failed!" -ForegroundColor Red
@@ -51,8 +54,8 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host ""
 Write-Host "✅ Build complete!" -ForegroundColor Green
 Write-Host ""
-Write-Host "📁 Output location: build-tools/server/build/$runtime/" -ForegroundColor Cyan
-Write-Host "🚀 Run: build-tools/server/build/$runtime/Lanflix.WebApi.exe" -ForegroundColor Cyan
+Write-Host "📁 Output location: $outputPath/" -ForegroundColor Cyan
+Write-Host "🚀 Run: $outputPath/Lanflix.WebApi.exe" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "💡 The executable includes:" -ForegroundColor Yellow
 Write-Host "   - Backend API (.NET 9)" -ForegroundColor White

@@ -11,20 +11,13 @@
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
-    <PublishTrimmed>true</PublishTrimmed>
-    <TrimMode>partial</TrimMode>
+    <PublishTrimmed>false</PublishTrimmed>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 
-  <!-- Trimming Configuration - Preserve assemblies that use reflection -->
-  <ItemGroup>
-    <TrimmerRootAssembly Include="Lanflix.WebApi" />
-    <TrimmerRootAssembly Include="Lanflix.Application" />
-    <TrimmerRootAssembly Include="Lanflix.Infrastructure" />
-    <TrimmerRootAssembly Include="Lanflix.Domain" />
-  </ItemGroup>
+
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.10" />
