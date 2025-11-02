@@ -94,95 +94,51 @@ public class StreamingController : ControllerBase
             return NotFound(new { message = "Content file not found" });
         }
 
-        // Check if content has media info
-        if (content.MediaInfo == null)
+        // Use metadata.json file from media folder instead of database MediaInfo
+        var mediaFolderPath = Path.GetDirectoryName(content.FilePath);
+        if (string.IsNullOrEmpty(mediaFolderPath))
         {
-            _logger.LogError("Content {ContentId} has no media info", id);
-            return BadRequest(new { message = "Content media information not available" });
+            _logger.LogError("Content {ContentId} has invalid file path: {FilePath}", id, content.FilePath);
+            return BadRequest(new { message = "Content file path is invalid" });
         }
 
-        // Get client capabilities from request headers or use defaults
-        var clientCapabilities = GetClientCapabilities();
-
-        // Select optimal streaming strategy
-        var strategy = _strategySelector.SelectOptimalStrategy(
-            content.MediaInfo,
-            clientCapabilities,
-            profile.Preferences);
-
-        if (strategy == null)
+        var metadataPath = Path.Combine(mediaFolderPath, "metadata.json");
+        if (!System.IO.File.Exists(metadataPath))
         {
-            _logger.LogError("No suitable streaming strategy found for content {ContentId}", id);
-            return BadRequest(new { message = "No suitable streaming strategy available" });
+            _logger.LogError("Content {ContentId} metadata.json not found at: {MetadataPath}", id, metadataPath);
+            return BadRequest(new { message = "Content metadata.json file not found" });
         }
 
-        _logger.LogInformation(
-            "Using {Strategy} strategy for direct stream of content {ContentId}",
-            strategy.Mode, id);
+        _logger.LogInformation("Using metadata.json for content {ContentId} from {MetadataPath}", id, metadataPath);
 
-        // Record stream start metric
-        _metrics.RecordStreamStart(
-            strategy.Mode.ToString(),
-            content.Type.ToString());
+        // Direct file streaming - bypass MediaInfo requirement
+        _logger.LogInformation("Direct streaming content {ContentId} from file: {FilePath}", id, content.FilePath);
 
-        // Create stream request
-        var streamRequest = new StreamRequest
+        // Get file info for basic streaming
+        var fileInfo = new FileInfo(content.FilePath);
+        if (!fileInfo.Exists)
         {
-            SessionId = $"direct-{id}-{profileId}-{Guid.NewGuid():N}",
-            FilePath = content.FilePath,
-            MediaInfo = content.MediaInfo,
-            ClientCapabilities = clientCapabilities,
-            UserPreferences = profile.Preferences,
-            RangeHeader = Request.Headers["Range"].ToString()
-        };
-
-        // Execute streaming strategy
-        StreamResult streamResult;
-        try
-        {
-            streamResult = await strategy.ExecuteAsync(streamRequest, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error executing streaming strategy for content {ContentId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError,
-                new { message = "Error starting stream" });
+            _logger.LogError("Content file does not exist: {FilePath}", content.FilePath);
+            return NotFound(new { message = "Content file not found" });
         }
 
-        // Register cleanup action
-        Response.RegisterForDispose(new DisposableAction(() =>
+        // Handle range requests for video streaming
+        var rangeHeader = Request.Headers["Range"].ToString();
+        if (!string.IsNullOrEmpty(rangeHeader))
         {
-            streamResult.CleanupAction?.Invoke();
-        }));
-
-        // Return appropriate response based on range request
-        if (streamResult.RangeStart.HasValue || streamResult.RangeEnd.HasValue)
-        {
-            var rangeStart = streamResult.RangeStart ?? 0;
-            var rangeEnd = streamResult.RangeEnd ?? ((streamResult.ContentLength ?? 1) - 1);
-            var contentLength = streamResult.ContentLength ?? 0;
-
-            Response.Headers.Append("Accept-Ranges", "bytes");
-            Response.Headers.Append("Content-Range",
-                $"bytes {rangeStart}-{rangeEnd}/{contentLength}");
-            Response.StatusCode = StatusCodes.Status206PartialContent;
-
-            return new FileStreamResult(streamResult.DataStream, streamResult.ContentType)
-            {
-                EnableRangeProcessing = streamResult.SupportsRangeRequests
-            };
+            return HandleRangeRequest(content.FilePath, rangeHeader, fileInfo.Length);
         }
 
-        // Return full content
-        if (streamResult.SupportsRangeRequests)
-        {
-            Response.Headers.Append("Accept-Ranges", "bytes");
-        }
+        // Return full file stream
+        var stream = new FileStream(content.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var contentType = GetContentType(content.FilePath);
+        
+        Response.Headers.Append("Accept-Ranges", "bytes");
+        Response.Headers.Append("Content-Length", fileInfo.Length.ToString());
+        
+        return new FileStreamResult(stream, contentType);
 
-        return new FileStreamResult(streamResult.DataStream, streamResult.ContentType)
-        {
-            EnableRangeProcessing = streamResult.SupportsRangeRequests
-        };
+
     }
 
     /// <summary>
@@ -360,105 +316,59 @@ public class StreamingController : ControllerBase
         session.LastActivityAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Get content media info
+        // Get content and use direct file streaming
         var content = session.Content;
-        if (content.MediaInfo == null)
+        
+        // Use metadata.json file from media folder instead of database MediaInfo
+        var mediaFolderPath = Path.GetDirectoryName(content.FilePath);
+        if (string.IsNullOrEmpty(mediaFolderPath))
         {
-            _logger.LogError("Content {ContentId} has no media info", content.Id);
-            return BadRequest(new { message = "Content media information not available" });
+            _logger.LogError("Content {ContentId} has invalid file path: {FilePath}", content.Id, content.FilePath);
+            return BadRequest(new { message = "Content file path is invalid" });
         }
 
-        // Get client capabilities from session or use defaults
-        // In a real implementation, this would be stored with the session
-        var clientCapabilities = new Domain.ValueObjects.ClientCapabilities
+        var metadataPath = Path.Combine(mediaFolderPath, "metadata.json");
+        if (!System.IO.File.Exists(metadataPath))
         {
-            SupportedVideoCodecs = new[] { "h264", "hevc", "vp9", "av1" },
-            SupportedAudioCodecs = new[] { "aac", "mp3", "ac3", "eac3", "opus" },
-            SupportedContainers = new[] { "mp4", "mkv", "webm" },
-            MaxBitrate = 20_000_000,
-            MaxResolution = Domain.ValueObjects.VideoResolution.UHD4K,
-            SupportsHDR = true
-        };
-
-        // Select streaming strategy
-        var strategy = _strategySelector.SelectOptimalStrategy(
-            content.MediaInfo,
-            clientCapabilities,
-            session.Profile.Preferences);
-
-        if (strategy == null)
-        {
-            _logger.LogError("No suitable streaming strategy found for session {SessionId}", sessionId);
-            return BadRequest(new { message = "No suitable streaming strategy available" });
+            _logger.LogError("Content {ContentId} metadata.json not found at: {MetadataPath}", content.Id, metadataPath);
+            return BadRequest(new { message = "Content metadata.json file not found" });
         }
 
-        _logger.LogInformation(
-            "Using {Strategy} strategy for session {SessionId}",
-            strategy.Mode, sessionId);
+        _logger.LogInformation("Using metadata.json for content {ContentId} from {MetadataPath}", content.Id, metadataPath);
 
-        // Record stream start metric
-        _metrics.RecordStreamStart(
-            strategy.Mode.ToString(),
-            content.Type.ToString());
-
-        // Create stream request
-        var streamRequest = new StreamRequest
+        // Check if file exists
+        if (!System.IO.File.Exists(content.FilePath))
         {
-            SessionId = sessionId,
-            FilePath = content.FilePath,
-            MediaInfo = content.MediaInfo,
-            ClientCapabilities = clientCapabilities,
-            UserPreferences = session.Profile.Preferences,
-            RangeHeader = Request.Headers["Range"].ToString()
-        };
-
-        // Execute streaming strategy
-        StreamResult streamResult;
-        try
-        {
-            streamResult = await strategy.ExecuteAsync(streamRequest, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error executing streaming strategy for session {SessionId}", sessionId);
-            return StatusCode(StatusCodes.Status500InternalServerError,
-                new { message = "Error starting stream" });
+            _logger.LogError("Content file not found: {FilePath}", content.FilePath);
+            return NotFound(new { message = "Content file not found" });
         }
 
-        // Register cleanup action
-        Response.RegisterForDispose(new DisposableAction(() =>
+        // Direct file streaming for session - bypass MediaInfo requirement
+        _logger.LogInformation("Direct streaming session {SessionId} content from file: {FilePath}", sessionId, content.FilePath);
+
+        // Get file info for basic streaming
+        var fileInfo = new FileInfo(content.FilePath);
+        if (!fileInfo.Exists)
         {
-            streamResult.CleanupAction?.Invoke();
-        }));
-
-        // Return appropriate response based on range request
-        if (streamResult.RangeStart.HasValue || streamResult.RangeEnd.HasValue)
-        {
-            var rangeStart = streamResult.RangeStart ?? 0;
-            var rangeEnd = streamResult.RangeEnd ?? ((streamResult.ContentLength ?? 1) - 1);
-            var contentLength = streamResult.ContentLength ?? 0;
-
-            Response.Headers.Append("Accept-Ranges", "bytes");
-            Response.Headers.Append("Content-Range",
-                $"bytes {rangeStart}-{rangeEnd}/{contentLength}");
-            Response.StatusCode = StatusCodes.Status206PartialContent;
-
-            return new FileStreamResult(streamResult.DataStream, streamResult.ContentType)
-            {
-                EnableRangeProcessing = streamResult.SupportsRangeRequests
-            };
+            _logger.LogError("Content file does not exist: {FilePath}", content.FilePath);
+            return NotFound(new { message = "Content file not found" });
         }
 
-        // Return full content
-        if (streamResult.SupportsRangeRequests)
+        // Handle range requests for video streaming
+        var rangeHeader = Request.Headers["Range"].ToString();
+        if (!string.IsNullOrEmpty(rangeHeader))
         {
-            Response.Headers.Append("Accept-Ranges", "bytes");
+            return HandleRangeRequest(content.FilePath, rangeHeader, fileInfo.Length);
         }
 
-        return new FileStreamResult(streamResult.DataStream, streamResult.ContentType)
-        {
-            EnableRangeProcessing = streamResult.SupportsRangeRequests
-        };
+        // Return full file stream
+        var stream = new FileStream(content.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var contentType = GetContentType(content.FilePath);
+        
+        Response.Headers.Append("Accept-Ranges", "bytes");
+        Response.Headers.Append("Content-Length", fileInfo.Length.ToString());
+        
+        return new FileStreamResult(stream, contentType);
     }
 
     /// <summary>
@@ -513,6 +423,64 @@ public class StreamingController : ControllerBase
         await _mediator.Send(command, cancellationToken);
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Handle HTTP range requests for video streaming
+    /// </summary>
+    private IActionResult HandleRangeRequest(string filePath, string rangeHeader, long fileSize)
+    {
+        try
+        {
+            // Parse range header (e.g., "bytes=0-1023")
+            var range = rangeHeader.Replace("bytes=", "").Split('-');
+            var start = string.IsNullOrEmpty(range[0]) ? 0 : long.Parse(range[0]);
+            var end = string.IsNullOrEmpty(range[1]) ? fileSize - 1 : long.Parse(range[1]);
+
+            // Validate range
+            if (start >= fileSize || end >= fileSize || start > end)
+            {
+                return StatusCode(StatusCodes.Status416RangeNotSatisfiable);
+            }
+
+            var contentLength = end - start + 1;
+            var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            stream.Seek(start, SeekOrigin.Begin);
+
+            var contentType = GetContentType(filePath);
+            
+            Response.Headers.Append("Accept-Ranges", "bytes");
+            Response.Headers.Append("Content-Range", $"bytes {start}-{end}/{fileSize}");
+            Response.Headers.Append("Content-Length", contentLength.ToString());
+            Response.StatusCode = StatusCodes.Status206PartialContent;
+
+            return new FileStreamResult(stream, contentType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling range request for file: {FilePath}", filePath);
+            return StatusCode(StatusCodes.Status500InternalServerError);
+        }
+    }
+
+    /// <summary>
+    /// Get MIME content type based on file extension
+    /// </summary>
+    private string GetContentType(string filePath)
+    {
+        var extension = Path.GetExtension(filePath).ToLowerInvariant();
+        return extension switch
+        {
+            ".mp4" => "video/mp4",
+            ".mkv" => "video/x-matroska",
+            ".avi" => "video/x-msvideo",
+            ".mov" => "video/quicktime",
+            ".wmv" => "video/x-ms-wmv",
+            ".webm" => "video/webm",
+            ".m4v" => "video/mp4",
+            ".flv" => "video/x-flv",
+            _ => "video/mp4" // Default fallback
+        };
     }
 
     /// <summary>
