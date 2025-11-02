@@ -1020,8 +1020,8 @@ export class ContentDisplay {
    */
   async handleInfoAction(contentId, contentType) {
     // Determine if this is discovery content or library content
-    const card = document.querySelector(`[data-content-id="${contentId}"]`);
-    const isDiscovery = card?.dataset.isDiscovery === 'true';
+    // Check if we're on the discover page - hero content there is always discovery
+    const isDiscovery = this.currentCategory === 'discover';
 
     await this.contentModal.show(contentId, contentType, isDiscovery);
   }
