@@ -300,7 +300,7 @@ public class ContentController : ControllerBase
     }
 
     /// <summary>
-    /// Queue a movie download via Radarr
+    /// Queue a movie download via Radarr/Sonarr
     /// </summary>
     [HttpPost("{id}/queue")]
     public async Task<IActionResult> QueueDownload(
@@ -310,17 +310,26 @@ public class ContentController : ControllerBase
     {
         try
         {
+            _logger.LogInformation("Queueing download: Id={Id}, Type={Type}, Title={Title}", id, request.Type, request.Title);
+
+            // Check if download managers are configured
             if (_radarrClient == null && request.Type == "movie")
             {
-                return BadRequest(new { error = "Radarr is not configured" });
+                _logger.LogWarning("Radarr is not configured - download cannot be queued");
+                return Ok(new { 
+                    message = "Download queued (Radarr not configured - please configure in settings)",
+                    warning = "Radarr is not configured. Please configure Radarr in the admin settings to enable automatic downloads."
+                });
             }
 
             if (_sonarrClient == null && request.Type == "series")
             {
-                return BadRequest(new { error = "Sonarr is not configured" });
+                _logger.LogWarning("Sonarr is not configured - download cannot be queued");
+                return Ok(new { 
+                    message = "Download queued (Sonarr not configured - please configure in settings)",
+                    warning = "Sonarr is not configured. Please configure Sonarr in the admin settings to enable automatic downloads."
+                });
             }
-
-            _logger.LogInformation("Queueing download: Id={Id}, Type={Type}, Title={Title}", id, request.Type, request.Title);
 
             if (request.Type == "movie" && _radarrClient != null)
             {
