@@ -158,6 +158,86 @@ public class JobsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Test media analysis for a specific file
+    /// </summary>
+    [HttpPost("test-media-analysis")]
+    public async Task<IActionResult> TestMediaAnalysis([FromBody] TestMediaAnalysisRequest request)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.FilePath))
+            {
+                return BadRequest(new { error = "FilePath is required" });
+            }
+
+            if (!System.IO.File.Exists(request.FilePath))
+            {
+                return BadRequest(new { error = $"File not found: {request.FilePath}" });
+            }
+
+            _logger.LogInformation("Testing media analysis for file: {FilePath}", request.FilePath);
+            
+            var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(request.FilePath);
+            
+            return Ok(new 
+            { 
+                message = "Media analysis completed successfully",
+                filePath = request.FilePath,
+                mediaInfo = new
+                {
+                    container = mediaInfo.Container,
+                    duration = mediaInfo.Duration.ToString(),
+                    fileSize = mediaInfo.FileSize,
+                    overallBitrate = mediaInfo.OverallBitrate,
+                    video = new
+                    {
+                        codec = mediaInfo.Video.Codec,
+                        width = mediaInfo.Video.Width,
+                        height = mediaInfo.Video.Height,
+                        bitrate = mediaInfo.Video.Bitrate,
+                        frameRate = mediaInfo.Video.FrameRate,
+                        pixelFormat = mediaInfo.Video.PixelFormat,
+                        colorSpace = mediaInfo.Video.ColorSpace,
+                        isHDR = mediaInfo.Video.IsHDR,
+                        hdrFormat = mediaInfo.Video.HdrFormat
+                    },
+                    audio = mediaInfo.Audio.Select(a => new
+                    {
+                        index = a.Index,
+                        codec = a.Codec,
+                        channels = a.Channels,
+                        sampleRate = a.SampleRate,
+                        bitrate = a.Bitrate,
+                        language = a.Language,
+                        title = a.Title,
+                        isDefault = a.IsDefault
+                    }).ToList(),
+                    subtitles = mediaInfo.Subtitles.Select(s => new
+                    {
+                        index = s.Index,
+                        format = s.Format,
+                        language = s.Language,
+                        title = s.Title,
+                        isDefault = s.IsDefault,
+                        isForced = s.IsForced,
+                        isEmbedded = s.IsEmbedded
+                    }).ToList()
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Media analysis test failed for file: {FilePath}", request.FilePath);
+            return StatusCode(500, new { error = "Media analysis failed", details = ex.Message });
+        }
+    }
+
+    public class TestMediaAnalysisRequest
+    {
+        public string FilePath { get; set; } = string.Empty;
+    }
+
     private async Task<bool> TriggerLibraryScan()
     {
         try

@@ -226,7 +226,7 @@ public class LibraryController : ControllerBase
     }
 
     /// <summary>
-    /// Get specific library item details
+    /// Get specific library item details with metadata
     /// </summary>
     [HttpGet("{id}")]
     public async Task<IActionResult> GetLibraryItem(
@@ -246,20 +246,38 @@ public class LibraryController : ControllerBase
                 return NotFound(new { error = "Content not found" });
             }
 
+            // Load additional metadata from metadata.json if available
+            var enhancedMetadata = await LoadMetadataFromFile(content.FilePath);
+
             var result = new
             {
                 id = content.Id,
                 tmdbId = content.TmdbId,
                 title = content.Title,
                 overview = content.Overview,
-                year = content.ReleaseDate?.Year,
+                
+                // Use metadata.json data if available, fallback to database
+                releaseDate = enhancedMetadata?.ReleaseDate ?? content.ReleaseDate?.ToString("yyyy-MM-dd"),
+                year = enhancedMetadata?.Year ?? content.ReleaseDate?.Year,
+                voteAverage = enhancedMetadata?.VoteAverage ?? content.Rating,
+                runtime = enhancedMetadata?.Runtime,
+                
                 posterUrl = !string.IsNullOrEmpty(content.PosterPath) ? $"https://image.tmdb.org/t/p/w500{content.PosterPath}" : null,
                 backdropUrl = !string.IsNullOrEmpty(content.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{content.BackdropPath}" : null,
-                rating = content.Rating,
-                genres = content.Genres ?? new string[0],
+                rating = enhancedMetadata?.VoteAverage ?? content.Rating,
+                genres = enhancedMetadata?.Genres ?? content.Genres ?? new string[0],
                 filePath = content.FilePath,
                 addedAt = content.AddedAt,
-                type = content.Type == ContentType.Movie ? "movie" : "series"
+                type = content.Type == ContentType.Movie ? "movie" : "series",
+                
+                // Additional metadata fields
+                tagline = enhancedMetadata?.Tagline,
+                status = enhancedMetadata?.Status,
+                originalLanguage = enhancedMetadata?.OriginalLanguage,
+                productionCompanies = enhancedMetadata?.ProductionCompanies,
+                
+                // For series, include episode information if available
+                episodes = content.Type == ContentType.Series ? await GetSeriesEpisodes(content.Id, cancellationToken) : null
             };
 
             return Ok(result);
@@ -268,6 +286,60 @@ public class LibraryController : ControllerBase
         {
             _logger.LogError(ex, "Failed to get library item: {Id}", id);
             return StatusCode(500, new { error = "Failed to get library item", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Load enhanced metadata from metadata.json file
+    /// </summary>
+    private async Task<EnhancedMetadata?> LoadMetadataFromFile(string filePath)
+    {
+        try
+        {
+            var mediaFolderPath = Path.GetDirectoryName(filePath);
+            if (string.IsNullOrEmpty(mediaFolderPath))
+            {
+                return null;
+            }
+
+            var metadataPath = Path.Combine(mediaFolderPath, "metadata.json");
+            if (!System.IO.File.Exists(metadataPath))
+            {
+                _logger.LogDebug("No metadata.json found at: {MetadataPath}", metadataPath);
+                return null;
+            }
+
+            var metadataJson = await System.IO.File.ReadAllTextAsync(metadataPath);
+            var metadata = System.Text.Json.JsonSerializer.Deserialize<EnhancedMetadata>(metadataJson, new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            _logger.LogDebug("Loaded metadata from: {MetadataPath}", metadataPath);
+            return metadata;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load metadata from file: {FilePath}", filePath);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Get episodes for a series
+    /// </summary>
+    private async Task<object[]> GetSeriesEpisodes(int seriesId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // For now, return empty array - episodes will be implemented later
+            // This matches the expected structure from the frontend
+            return new object[0];
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get episodes for series: {SeriesId}", seriesId);
+            return new object[0];
         }
     }
 
@@ -310,4 +382,24 @@ public class LibraryController : ControllerBase
             return StatusCode(500, new { error = "Failed to remove content from library", details = ex.Message });
         }
     }
+}
+
+/// <summary>
+/// Enhanced metadata structure from metadata.json files
+/// </summary>
+public class EnhancedMetadata
+{
+    public string? Title { get; set; }
+    public string? Overview { get; set; }
+    public string? ReleaseDate { get; set; }
+    public int? Year { get; set; }
+    public double? VoteAverage { get; set; }
+    public int? Runtime { get; set; }
+    public string[]? Genres { get; set; }
+    public string? Tagline { get; set; }
+    public string? Status { get; set; }
+    public string? OriginalLanguage { get; set; }
+    public string[]? ProductionCompanies { get; set; }
+    public string? PosterPath { get; set; }
+    public string? BackdropPath { get; set; }
 }

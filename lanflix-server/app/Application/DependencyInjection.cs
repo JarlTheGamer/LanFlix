@@ -3,6 +3,7 @@ using FluentValidation;
 using Lanflix.Application.Common.Behaviors;
 using Lanflix.Application.Features.Streaming.Services;
 using Lanflix.Application.Features.Streaming.Strategies;
+using Lanflix.Domain.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,15 +29,33 @@ public static class DependencyInjection
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
-        // Register Streaming Strategies (order by priority)
+        // Register Enhanced Streaming Services
+        services.AddScoped<TranscodingDecisionEngine>();
+        services.AddScoped<EnhancedStreamingService>();
+
+        // Register New Streaming Strategies (order by priority)
         services.AddScoped<IStreamingStrategy, DirectPlayStrategy>();
+        services.AddScoped<IStreamingStrategy, RemuxStrategy>();
         services.AddScoped<IStreamingStrategy, DirectStreamStrategy>();
-        services.AddScoped<IStreamingStrategy, TranscodeAudioStrategy>();
-        services.AddScoped<IStreamingStrategy, TranscodeVideoStrategy>();
-        services.AddScoped<IStreamingStrategy, FullTranscodeStrategy>();
-        
-        // Register Streaming Strategy Selector
-        services.AddScoped<StreamingStrategySelector>();
+        services.AddScoped<IStreamingStrategy, TranscodeStrategy>();
+
+        // Register default transcoding settings (can be overridden in Infrastructure)
+        services.AddSingleton(new TranscodingSettings
+        {
+            EnableHardwareAcceleration = true,
+            ThreadCount = 0, // Auto-detect
+            EnableToneMapping = true,
+            ToneMappingAlgorithm = ToneMappingAlgorithm.Hable,
+            AllowSoftwareFallback = true,
+            MaxConcurrentTranscodes = 2,
+            EnableLowPowerEncoding = false,
+            EncodingPreset = EncodingPreset.Medium,
+            EnableBFrames = true,
+            EnableAdaptiveBitrate = true,
+            SegmentDuration = 6,
+            PlaylistLength = 6,
+            DeleteSegmentsAfterStreaming = true
+        });
 
         return services;
     }

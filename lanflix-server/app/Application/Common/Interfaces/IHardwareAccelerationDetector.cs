@@ -1,16 +1,16 @@
-using Lanflix.Application.Common.Models;
+using Lanflix.Domain.ValueObjects;
 
 namespace Lanflix.Application.Common.Interfaces;
 
 /// <summary>
-/// Service for detecting hardware acceleration capabilities
+/// Service for detecting hardware acceleration capabilities for modern transcoding
+/// Supports Intel, AMD, Nvidia, Apple, and Rockchip GPUs
 /// </summary>
 public interface IHardwareAccelerationDetector
 {
     /// <summary>
-    /// Detects available hardware acceleration methods
+    /// Detects available hardware acceleration methods and capabilities
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Hardware acceleration capabilities</returns>
-    Task<HwAccelCapabilities> DetectAsync(CancellationToken cancellationToken = default);
+    /// <returns>Enhanced hardware acceleration capabilities</returns>
+    Task<HardwareAcceleration> DetectAsync();
 }

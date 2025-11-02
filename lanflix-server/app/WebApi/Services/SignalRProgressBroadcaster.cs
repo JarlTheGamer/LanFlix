@@ -21,19 +21,17 @@ public class SignalRProgressBroadcaster : IProgressBroadcaster
         _logger = logger;
     }
 
-    public async Task BroadcastProgressAsync(
-        TranscodingProgress progress,
-        CancellationToken cancellationToken = default)
+    public async Task BroadcastProgressAsync(string sessionId, TranscodingProgress progress)
     {
         try
         {
             await _hubContext.Clients
-                .Group($"session-{progress.SessionId}")
-                .SendAsync("TranscodingProgress", progress, cancellationToken);
+                .Group($"session-{sessionId}")
+                .SendAsync("TranscodingProgress", progress);
 
             _logger.LogDebug(
                 "Broadcasted transcoding progress for session {SessionId}: {Percent}%",
-                progress.SessionId,
+                sessionId,
                 progress.PercentComplete);
         }
         catch (Exception ex)
@@ -66,11 +64,7 @@ public class SignalRProgressBroadcaster : IProgressBroadcaster
         }
     }
 
-    public async Task BroadcastNewContentAsync(
-        int contentId,
-        string title,
-        string contentType,
-        CancellationToken cancellationToken = default)
+    public async Task BroadcastNewContentAsync(int contentId, string title, string type, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -80,7 +74,7 @@ public class SignalRProgressBroadcaster : IProgressBroadcaster
                 {
                     ContentId = contentId,
                     Title = title,
-                    ContentType = contentType,
+                    ContentType = type,
                     Timestamp = DateTime.UtcNow
                 }, cancellationToken);
 

@@ -1,4 +1,3 @@
-using System.Buffers;
 using Lanflix.Application.Common.Models;
 using Lanflix.Domain.Enums;
 using Lanflix.Domain.ValueObjects;
@@ -7,154 +6,158 @@ using Microsoft.Extensions.Logging;
 namespace Lanflix.Application.Features.Streaming.Strategies;
 
 /// <summary>
-/// Direct play strategy - serves media file as-is without any transcoding
-/// Highest priority strategy for optimal performance
+/// Direct Play strategy - serves the file as-is without any transcoding
+/// Highest priority strategy when media is fully compatible with client
 /// </summary>
-public class DirectPlayStrategy : BaseStreamingStrategy
+public class DirectPlayStrategy : IStreamingStrategy
 {
-    public DirectPlayStrategy(ILogger<DirectPlayStrategy> logger) : base(logger)
+    private readonly ILogger<DirectPlayStrategy> _logger;
+
+    public DirectPlayStrategy(ILogger<DirectPlayStrategy> logger)
     {
+        _logger = logger;
     }
 
-    public override StreamingMode Mode => StreamingMode.DirectPlay;
+    public StreamingMode Mode => StreamingMode.DirectPlay;
+    public int Priority => 1; // Highest priority
 
-    public override int Priority => 1; // Highest priority
-
-    public override bool CanHandle(MediaInfo media, ClientCapabilities client)
+    public bool CanHandle(TranscodingDecision decision)
     {
-        // Check if video codec is supported
-        if (!IsVideoCodecSupported(media.Video.Codec, client))
-        {
-            Logger.LogDebug("DirectPlay not possible: Video codec {Codec} not supported", media.Video.Codec);
-            return false;
-        }
-
-        // Check if at least one audio codec is supported
-        var hasCompatibleAudio = media.Audio.Any(a => IsAudioCodecSupported(a.Codec, client));
-        if (!hasCompatibleAudio)
-        {
-            Logger.LogDebug("DirectPlay not possible: No compatible audio codec found");
-            return false;
-        }
-
-        // Check if container is supported
-        if (!IsContainerSupported(media.Container, client))
-        {
-            Logger.LogDebug("DirectPlay not possible: Container {Container} not supported", media.Container);
-            return false;
-        }
-
-        // Check if resolution is supported
-        if (!IsResolutionSupported(media.Video, client))
-        {
-            Logger.LogDebug("DirectPlay not possible: Resolution {Width}x{Height} exceeds client max {MaxResolution}",
-                media.Video.Width, media.Video.Height, client.MaxResolution);
-            return false;
-        }
-
-        // Check if bitrate is within limits
-        if (!IsBitrateSupported(media, client))
-        {
-            Logger.LogDebug("DirectPlay not possible: Bitrate {Bitrate} exceeds client max {MaxBitrate}",
-                media.OverallBitrate ?? media.Video.Bitrate, client.MaxBitrate);
-            return false;
-        }
-
-        // Check if HDR is supported (if content is HDR)
-        if (!IsHdrSupported(media.Video, client))
-        {
-            Logger.LogDebug("DirectPlay not possible: HDR content not supported by client");
-            return false;
-        }
-
-        Logger.LogInformation("DirectPlay is possible for {Container} with {VideoCodec}/{AudioCodec}",
-            media.Container, media.Video.Codec, media.Audio.FirstOrDefault()?.Codec ?? "unknown");
-
-        return true;
+        return decision.PlaybackMethod == PlaybackMethod.DirectPlay;
     }
 
-    public override async Task<StreamResult> ExecuteAsync(StreamRequest request, CancellationToken cancellationToken)
+    public Task<StreamResult> ExecuteAsync(StreamRequest request, TranscodingDecision decision, CancellationToken cancellationToken)
     {
-        ValidateFilePath(request.FilePath);
+        if (!File.Exists(request.FilePath))
+        {
+            throw new FileNotFoundException($"Media file not found: {request.FilePath}");
+        }
 
-        Logger.LogInformation("Starting DirectPlay stream for session {SessionId}, file: {FilePath}",
+        _logger.LogInformation("Starting DirectPlay for session {SessionId}, file: {FilePath}",
             request.SessionId, request.FilePath);
 
         var fileInfo = new FileInfo(request.FilePath);
-        var fileSize = fileInfo.Length;
+        var fileStream = new FileStream(request.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-        // Parse range header if present
-        var (rangeStart, rangeEnd) = ParseRangeHeader(request.RangeHeader, fileSize);
-        var actualRangeEnd = rangeEnd ?? fileSize - 1;
-
-        // Open file stream with optimal buffer size for streaming
-        var fileStream = new FileStream(
-            request.FilePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            bufferSize: 81920, // 80KB buffer
-            useAsync: true);
-
-        // Seek to start position if range request
-        if (rangeStart > 0)
-        {
-            fileStream.Seek(rangeStart, SeekOrigin.Begin);
-        }
-
-        // Create a limited stream if range end is specified
+        // Handle range requests for seeking
         Stream dataStream = fileStream;
-        long? contentLength = fileSize;
+        long? rangeStart = null;
+        long? rangeEnd = null;
+        long contentLength = fileInfo.Length;
 
-        if (rangeEnd.HasValue && rangeEnd.Value < fileSize - 1)
+        if (!string.IsNullOrEmpty(request.RangeHeader))
         {
-            var rangeLength = actualRangeEnd - rangeStart + 1;
-            dataStream = new LimitedStream(fileStream, rangeLength);
-            contentLength = rangeLength;
+            var (start, end) = ParseRangeHeader(request.RangeHeader, fileInfo.Length);
+            if (start.HasValue)
+            {
+                rangeStart = start.Value;
+                rangeEnd = end ?? fileInfo.Length - 1;
+                contentLength = rangeEnd.Value - rangeStart.Value + 1;
+
+                fileStream.Seek(rangeStart.Value, SeekOrigin.Begin);
+                dataStream = new RangeStream(fileStream, contentLength);
+            }
         }
 
         var mimeType = GetMimeType(request.MediaInfo.Container);
 
-        Logger.LogDebug("DirectPlay stream prepared: {MimeType}, Size: {Size}, Range: {Start}-{End}",
-            mimeType, contentLength, rangeStart, actualRangeEnd);
+        _logger.LogInformation("DirectPlay prepared: {Container}, Size: {Size} bytes, Range: {RangeStart}-{RangeEnd}",
+            request.MediaInfo.Container, contentLength, rangeStart, rangeEnd);
 
-        return new StreamResult
+        return Task.FromResult(new StreamResult
         {
             DataStream = dataStream,
             ContentType = mimeType,
             ContentLength = contentLength,
             Mode = StreamingMode.DirectPlay,
             SupportsRangeRequests = true,
-            RangeStart = rangeStart > 0 ? rangeStart : null,
+            RangeStart = rangeStart,
             RangeEnd = rangeEnd,
             CleanupAction = () =>
             {
-                Logger.LogDebug("Cleaning up DirectPlay stream for session {SessionId}", request.SessionId);
+                _logger.LogDebug("Cleaning up DirectPlay stream for session {SessionId}", request.SessionId);
                 dataStream.Dispose();
             }
+        });
+    }
+
+    private (long? start, long? end) ParseRangeHeader(string rangeHeader, long fileSize)
+    {
+        try
+        {
+            // Parse "bytes=start-end" format
+            if (!rangeHeader.StartsWith("bytes=", StringComparison.OrdinalIgnoreCase))
+                return (null, null);
+
+            var range = rangeHeader.Substring(6);
+            var parts = range.Split('-');
+
+            if (parts.Length != 2)
+                return (null, null);
+
+            long? start = null;
+            long? end = null;
+
+            if (!string.IsNullOrEmpty(parts[0]) && long.TryParse(parts[0], out var startValue))
+                start = startValue;
+
+            if (!string.IsNullOrEmpty(parts[1]) && long.TryParse(parts[1], out var endValue))
+                end = endValue;
+
+            // Validate range
+            if (start.HasValue && start.Value >= fileSize)
+                return (null, null);
+
+            if (end.HasValue && end.Value >= fileSize)
+                end = fileSize - 1;
+
+            return (start, end);
+        }
+        catch
+        {
+            return (null, null);
+        }
+    }
+
+    private string GetMimeType(string container)
+    {
+        return container.ToLowerInvariant() switch
+        {
+            "mp4" => "video/mp4",
+            "mkv" => "video/x-matroska",
+            "avi" => "video/x-msvideo",
+            "webm" => "video/webm",
+            "mov" => "video/quicktime",
+            "wmv" => "video/x-ms-wmv",
+            "flv" => "video/x-flv",
+            "m4v" => "video/x-m4v",
+            "3gp" => "video/3gpp",
+            "ts" => "video/mp2t",
+            "mpg" or "mpeg" => "video/mpeg",
+            _ => "application/octet-stream"
         };
     }
 
     /// <summary>
-    /// Stream wrapper that limits the number of bytes read
+    /// Stream wrapper that limits reading to a specific range
     /// </summary>
-    private class LimitedStream : Stream
+    private class RangeStream : Stream
     {
         private readonly Stream _baseStream;
-        private readonly long _maxLength;
+        private readonly long _length;
         private long _position;
 
-        public LimitedStream(Stream baseStream, long maxLength)
+        public RangeStream(Stream baseStream, long length)
         {
             _baseStream = baseStream;
-            _maxLength = maxLength;
+            _length = length;
             _position = 0;
         }
 
-        public override bool CanRead => true;
+        public override bool CanRead => _baseStream.CanRead;
         public override bool CanSeek => false;
         public override bool CanWrite => false;
-        public override long Length => _maxLength;
+        public override long Length => _length;
         public override long Position
         {
             get => _position;
@@ -163,36 +166,24 @@ public class DirectPlayStrategy : BaseStreamingStrategy
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            var remaining = _maxLength - _position;
-            if (remaining <= 0)
+            var remainingBytes = _length - _position;
+            if (remainingBytes <= 0)
                 return 0;
 
-            var toRead = (int)Math.Min(count, remaining);
-            var bytesRead = _baseStream.Read(buffer, offset, toRead);
+            var bytesToRead = (int)Math.Min(count, remainingBytes);
+            var bytesRead = _baseStream.Read(buffer, offset, bytesToRead);
             _position += bytesRead;
             return bytesRead;
         }
 
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            var remaining = _maxLength - _position;
-            if (remaining <= 0)
+            var remainingBytes = _length - _position;
+            if (remainingBytes <= 0)
                 return 0;
 
-            var toRead = (int)Math.Min(count, remaining);
-            var bytesRead = await _baseStream.ReadAsync(buffer.AsMemory(offset, toRead), cancellationToken);
-            _position += bytesRead;
-            return bytesRead;
-        }
-
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            var remaining = _maxLength - _position;
-            if (remaining <= 0)
-                return 0;
-
-            var toRead = (int)Math.Min(buffer.Length, remaining);
-            var bytesRead = await _baseStream.ReadAsync(buffer.Slice(0, toRead), cancellationToken);
+            var bytesToRead = (int)Math.Min(count, remainingBytes);
+            var bytesRead = await _baseStream.ReadAsync(buffer, offset, bytesToRead, cancellationToken);
             _position += bytesRead;
             return bytesRead;
         }
@@ -206,9 +197,20 @@ public class DirectPlayStrategy : BaseStreamingStrategy
         {
             if (disposing)
             {
-                _baseStream.Dispose();
+                _baseStream?.Dispose();
             }
             base.Dispose(disposing);
         }
     }
+}
+
+/// <summary>
+/// Interface for streaming strategies
+/// </summary>
+public interface IStreamingStrategy
+{
+    StreamingMode Mode { get; }
+    int Priority { get; }
+    bool CanHandle(TranscodingDecision decision);
+    Task<StreamResult> ExecuteAsync(StreamRequest request, TranscodingDecision decision, CancellationToken cancellationToken);
 }

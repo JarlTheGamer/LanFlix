@@ -18,6 +18,7 @@ public class LibraryService : ILibraryService
     private readonly ISettingsService _settingsService;
     private readonly IMetadataService _metadataService;
     private readonly ITmdbClient _tmdbClient;
+    private readonly IMediaAnalyzer _mediaAnalyzer;
     private readonly ILogger<LibraryService> _logger;
 
     private readonly string[] _videoExtensions = { ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v" };
@@ -29,12 +30,14 @@ public class LibraryService : ILibraryService
         ISettingsService settingsService,
         IMetadataService metadataService,
         ITmdbClient tmdbClient,
+        IMediaAnalyzer mediaAnalyzer,
         ILogger<LibraryService> logger)
     {
         _context = context;
         _settingsService = settingsService;
         _metadataService = metadataService;
         _tmdbClient = tmdbClient;
+        _mediaAnalyzer = mediaAnalyzer;
         _logger = logger;
     }
 
@@ -219,16 +222,117 @@ public class LibraryService : ILibraryService
 
         if (existing != null)
         {
-            _logger.LogDebug("Movie already exists in database: {Title}", existing.Title);
+            // If existing content lacks MediaInfo, analyze and update it
+            if (existing.MediaInfo == null)
+            {
+                _logger.LogWarning("Found existing movie without MediaInfo, analyzing: {Title} at {FilePath}", existing.Title, existing.FilePath);
+                
+                try
+                {
+                    // Analyze media file to get technical information
+                    var analyzedMediaInfo = await _mediaAnalyzer.AnalyzeAsync(existing.FilePath, cancellationToken);
+                    existing.MediaInfo = analyzedMediaInfo;
+                    
+                    await _context.SaveChangesAsync(cancellationToken);
+                    stats.Updated++;
+                    
+                    _logger.LogInformation("Successfully updated movie MediaInfo: {Title}", existing.Title);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to analyze media file for existing movie: {Title} at {FilePath}", existing.Title, existing.FilePath);
+                    stats.Errors.Add($"Failed to analyze: {existing.Title} - {ex.Message}");
+                }
+            }
+            else
+            {
+                _logger.LogDebug("Movie already exists with MediaInfo: {Title}", existing.Title);
+            }
             return;
         }
 
         // Try to load metadata from folder
         var metadata = await _metadataService.LoadMetadataFromMediaFolderAsync(movieFolder, cancellationToken);
         
-        // If no metadata, try to search and fetch from TMDB
-        if (metadata == null)
+        if (metadata != null)
         {
+            // Metadata exists, parse the TMDB ID from the JSON
+            var metadataJson = (System.Text.Json.JsonElement)metadata;
+            if (metadataJson.TryGetProperty("tmdbId", out var tmdbIdElement) && tmdbIdElement.TryGetInt32(out var tmdbId))
+            {
+                // Check if we need to add/update content in database
+                var existingByTmdb = await _context.Contents
+                    .FirstOrDefaultAsync(c => c.TmdbId == tmdbId && c.Type == ContentType.Movie, cancellationToken);
+
+                if (existingByTmdb != null)
+                {
+                    // Content exists, check if MediaInfo needs to be added
+                    if (existingByTmdb.MediaInfo == null)
+                    {
+                        _logger.LogWarning("Found existing movie with metadata but no MediaInfo, analyzing: {Title} at {FilePath}", existingByTmdb.Title, existingByTmdb.FilePath);
+                        
+                        // Check if file path is relative and make it absolute
+                        var fullFilePath = existingByTmdb.FilePath;
+                        if (!Path.IsPathRooted(fullFilePath))
+                        {
+                            _logger.LogWarning("File path is relative, converting to absolute: {RelativePath}", fullFilePath);
+                            // Try to construct full path using the movie folder
+                            fullFilePath = Path.Combine(movieFolder, Path.GetFileName(fullFilePath));
+                            _logger.LogInformation("Converted to absolute path: {AbsolutePath}", fullFilePath);
+                        }
+                        
+                        // Verify file exists
+                        if (!System.IO.File.Exists(fullFilePath))
+                        {
+                            _logger.LogError("Media file does not exist at path: {FilePath}", fullFilePath);
+                            stats.Errors.Add($"File not found: {existingByTmdb.Title}");
+                            return;
+                        }
+                        
+                        try
+                        {
+                            var analyzedMediaInfo = await _mediaAnalyzer.AnalyzeAsync(fullFilePath, cancellationToken);
+                            existingByTmdb.MediaInfo = analyzedMediaInfo;
+                            
+                            // Update the file path if it was corrected
+                            if (fullFilePath != existingByTmdb.FilePath)
+                            {
+                                _logger.LogInformation("Updating file path in database: {OldPath} -> {NewPath}", existingByTmdb.FilePath, fullFilePath);
+                                existingByTmdb.FilePath = fullFilePath;
+                            }
+                            
+                            await _context.SaveChangesAsync(cancellationToken);
+                            stats.Updated++;
+                            
+                            _logger.LogInformation("Successfully updated movie MediaInfo from metadata: {Title}", existingByTmdb.Title);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to analyze media file for existing movie with metadata: {Title} at {FilePath}", existingByTmdb.Title, existingByTmdb.FilePath);
+                            stats.Errors.Add($"Failed to analyze: {existingByTmdb.Title} - {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogDebug("Movie with metadata already exists with MediaInfo: {Title}", existingByTmdb.Title);
+                    }
+                }
+                else
+                {
+                    // Content doesn't exist, add it using the metadata
+                    _logger.LogInformation("Found metadata for new movie, adding to library: TMDB ID {TmdbId}", tmdbId);
+                    await AddMovieToLibraryAsync(tmdbId, videoFile, movieFolder, stats, cancellationToken);
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Metadata file exists but doesn't contain valid tmdbId: {Folder}", movieFolder);
+                stats.Errors.Add($"Invalid metadata: {folderName}");
+            }
+        }
+        else
+        {
+            // If no metadata, try to search and fetch from TMDB
             try
             {
                 // Parse movie title and year from folder name (like the old backend)
@@ -269,7 +373,7 @@ public class LibraryService : ILibraryService
                 _logger.LogError(ex, "Failed to fetch metadata for movie {FolderName}", folderName);
                 stats.Errors.Add($"Failed to fetch metadata: {folderName}");
             }
-        }
+        } // End of else block for when metadata == null
     }
 
     private async Task ScanSingleSeriesFolderAsync(string seriesFolder, LibraryScanResult stats, CancellationToken cancellationToken)
@@ -337,12 +441,33 @@ public class LibraryService : ILibraryService
 
             if (existing != null)
             {
-                _logger.LogDebug("Movie already exists in library: {Title}", existing.Title);
+                // If existing content lacks MediaInfo, analyze and update it
+                if (existing.MediaInfo == null)
+                {
+                    _logger.LogWarning("Found existing movie without MediaInfo (via TMDB), analyzing: {Title} at {FilePath}", existing.Title, existing.FilePath);
+                    
+                    // Analyze media file to get technical information
+                    var analyzedMediaInfo = await _mediaAnalyzer.AnalyzeAsync(existing.FilePath, cancellationToken);
+                    existing.MediaInfo = analyzedMediaInfo;
+                    
+                    await _context.SaveChangesAsync(cancellationToken);
+                    stats.Updated++;
+                    
+                    _logger.LogInformation("Successfully updated movie MediaInfo (via TMDB): {Title}", existing.Title);
+                }
+                else
+                {
+                    _logger.LogDebug("Movie already exists with MediaInfo (via TMDB): {Title}", existing.Title);
+                }
                 return;
             }
 
             // Fetch metadata from TMDB
             var movieDetails = await _tmdbClient.GetMovieDetailsAsync(tmdbId, cancellationToken);
+
+            // Analyze media file to get technical information
+            _logger.LogInformation("Analyzing media file: {FilePath}", filePath);
+            var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath, cancellationToken);
 
             // Create content entry
             var content = new Content
@@ -357,6 +482,7 @@ public class LibraryService : ILibraryService
                 Rating = movieDetails.VoteAverage,
                 Genres = movieDetails.Genres?.Select(g => g.Name).ToArray(),
                 FilePath = filePath,
+                MediaInfo = mediaInfo, // Add the analyzed media information
                 AddedAt = DateTime.UtcNow
             };
 

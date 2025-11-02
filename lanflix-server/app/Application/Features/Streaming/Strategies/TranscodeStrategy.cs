@@ -7,28 +7,28 @@ using Microsoft.Extensions.Logging;
 namespace Lanflix.Application.Features.Streaming.Strategies;
 
 /// <summary>
-/// Direct Stream strategy - transcodes audio while copying video
-/// Used when video codec is compatible but audio needs transcoding
+/// Transcode strategy - transcodes both video and audio
+/// Fallback strategy that handles all incompatible media
 /// </summary>
-public class DirectStreamStrategy : IStreamingStrategy
+public class TranscodeStrategy : IStreamingStrategy
 {
     private readonly ITranscodingPipeline _transcodingPipeline;
-    private readonly ILogger<DirectStreamStrategy> _logger;
+    private readonly ILogger<TranscodeStrategy> _logger;
 
-    public DirectStreamStrategy(
+    public TranscodeStrategy(
         ITranscodingPipeline transcodingPipeline,
-        ILogger<DirectStreamStrategy> logger)
+        ILogger<TranscodeStrategy> logger)
     {
         _transcodingPipeline = transcodingPipeline;
         _logger = logger;
     }
 
-    public StreamingMode Mode => StreamingMode.TranscodeAudio;
-    public int Priority => 3; // Third priority
+    public StreamingMode Mode => StreamingMode.FullTranscode;
+    public int Priority => 4; // Lowest priority (fallback)
 
     public bool CanHandle(TranscodingDecision decision)
     {
-        return decision.PlaybackMethod == PlaybackMethod.DirectStream;
+        return decision.PlaybackMethod == PlaybackMethod.Transcode;
     }
 
     public Task<StreamResult> ExecuteAsync(StreamRequest request, TranscodingDecision decision, CancellationToken cancellationToken)
@@ -38,31 +38,47 @@ public class DirectStreamStrategy : IStreamingStrategy
             throw new FileNotFoundException($"Media file not found: {request.FilePath}");
         }
 
-        _logger.LogInformation("Starting DirectStream for session {SessionId}, file: {FilePath}, Audio: {SourceAudio} -> {TargetAudio}",
-            request.SessionId, request.FilePath, 
-            string.Join(", ", request.MediaInfo.Audio.Select(a => a.Codec)), 
-            decision.TargetAudioCodec);
+        // Validate that we have usable media information
+        if (request.MediaInfo.Video.Codec == "unknown" || 
+            request.MediaInfo.Video.Width == 0 || 
+            request.MediaInfo.Video.Height == 0)
+        {
+            _logger.LogError("Cannot transcode media with unknown or invalid video stream information. " +
+                           "Video codec: {VideoCodec}, Resolution: {Width}x{Height}",
+                           request.MediaInfo.Video.Codec, request.MediaInfo.Video.Width, request.MediaInfo.Video.Height);
+            throw new InvalidOperationException("Media file has invalid or undetectable video stream. " +
+                                              "The file may be corrupted or in an unsupported format.");
+        }
 
-        // Create transcode request for audio-only transcoding
+        _logger.LogInformation("Starting Transcode for session {SessionId}, file: {FilePath}, " +
+                             "Video: {SourceVideo} -> {TargetVideo}, Audio: {SourceAudio} -> {TargetAudio}",
+            request.SessionId, request.FilePath,
+            request.MediaInfo.Video.Codec, decision.TargetVideoCodec,
+            string.Join(", ", request.MediaInfo.Audio.Select(a => a.Codec)), decision.TargetAudioCodec);
+
+        // Create transcode request
         var transcodeRequest = new TranscodeRequest
         {
             InputPath = request.FilePath,
-            Mode = StreamingMode.TranscodeAudio,
+            Mode = StreamingMode.FullTranscode,
             SourceMedia = request.MediaInfo,
-            TargetVideoCodec = "copy", // Copy video stream
+            TargetVideoCodec = decision.TargetVideoCodec ?? "libx264",
             TargetAudioCodec = decision.TargetAudioCodec ?? "aac",
+            TargetVideoBitrate = decision.TargetVideoBitrate,
             TargetAudioBitrate = decision.TargetAudioBitrate,
+            TargetWidth = decision.TargetWidth,
+            TargetHeight = decision.TargetHeight,
             StartPosition = request.StartPosition,
             AudioStreamIndex = request.AudioStreamIndex,
             SubtitleStreamIndex = request.SubtitleStreamIndex,
-            HwAccelMethod = HwAccelMethod.None, // No video transcoding
+            HwAccelMethod = decision.HwAccelMethod,
             OutputFormat = decision.TargetContainer ?? "mp4",
             SessionId = request.SessionId,
             TotalDuration = request.MediaInfo.Duration.TotalSeconds
         };
 
-        // Create direct stream
-        var directStream = new DirectStreamTranscodeStream(
+        // Create transcoding stream
+        var transcodeStream = new FullTranscodeStream(
             _transcodingPipeline,
             transcodeRequest,
             request.SessionId,
@@ -71,22 +87,26 @@ public class DirectStreamStrategy : IStreamingStrategy
 
         var mimeType = GetMimeType(decision.TargetContainer ?? "mp4");
 
-        _logger.LogInformation("DirectStream prepared: Video -> copy, Audio: {SourceAudio} -> {TargetAudio}, Container: {Container}",
-            string.Join(", ", request.MediaInfo.Audio.Select(a => a.Codec)), 
-            decision.TargetAudioCodec, 
-            decision.TargetContainer);
+        _logger.LogInformation(
+            "Transcode prepared: Video: {SourceVideoCodec} -> {TargetVideoCodec} ({VideoBitrate} bps), " +
+            "Audio: {SourceAudioCodec} -> {TargetAudioCodec} ({AudioBitrate} bps), " +
+            "Resolution: {Width}x{Height}, HwAccel: {HwAccel}, Container: {Container}",
+            request.MediaInfo.Video.Codec, decision.TargetVideoCodec, decision.TargetVideoBitrate,
+            string.Join(", ", request.MediaInfo.Audio.Select(a => a.Codec)), decision.TargetAudioCodec, decision.TargetAudioBitrate,
+            decision.TargetWidth ?? request.MediaInfo.Video.Width, decision.TargetHeight ?? request.MediaInfo.Video.Height,
+            decision.HwAccelMethod, decision.TargetContainer);
 
         return Task.FromResult(new StreamResult
         {
-            DataStream = directStream,
+            DataStream = transcodeStream,
             ContentType = mimeType,
             ContentLength = null, // Unknown for streaming transcode
-            Mode = StreamingMode.TranscodeAudio,
+            Mode = StreamingMode.FullTranscode,
             SupportsRangeRequests = false, // Range requests not supported during transcode
             CleanupAction = () =>
             {
-                _logger.LogDebug("Cleaning up DirectStream for session {SessionId}", request.SessionId);
-                directStream.Dispose();
+                _logger.LogDebug("Cleaning up Transcode stream for session {SessionId}", request.SessionId);
+                transcodeStream.Dispose();
             }
         });
     }
@@ -107,9 +127,9 @@ public class DirectStreamStrategy : IStreamingStrategy
     }
 
     /// <summary>
-    /// Stream implementation for DirectStream (audio transcode only)
+    /// Stream implementation for full transcoding
     /// </summary>
-    private class DirectStreamTranscodeStream : Stream
+    private class FullTranscodeStream : Stream
     {
         private readonly ITranscodingPipeline _pipeline;
         private readonly TranscodeRequest _request;
@@ -121,7 +141,7 @@ public class DirectStreamStrategy : IStreamingStrategy
         private int _currentChunkPosition;
         private bool _disposed;
 
-        public DirectStreamTranscodeStream(
+        public FullTranscodeStream(
             ITranscodingPipeline pipeline,
             TranscodeRequest request,
             string sessionId,
@@ -201,7 +221,7 @@ public class DirectStreamStrategy : IStreamingStrategy
             {
                 _disposed = true;
                 _enumerator?.DisposeAsync().AsTask().Wait();
-                _logger.LogDebug("DirectStreamTranscodeStream disposed for session {SessionId}", _sessionId);
+                _logger.LogDebug("FullTranscodeStream disposed for session {SessionId}", _sessionId);
             }
             base.Dispose(disposing);
         }
@@ -215,7 +235,7 @@ public class DirectStreamStrategy : IStreamingStrategy
                 {
                     await _enumerator.DisposeAsync();
                 }
-                _logger.LogDebug("DirectStreamTranscodeStream disposed asynchronously for session {SessionId}", _sessionId);
+                _logger.LogDebug("FullTranscodeStream disposed asynchronously for session {SessionId}", _sessionId);
             }
             await base.DisposeAsync();
         }

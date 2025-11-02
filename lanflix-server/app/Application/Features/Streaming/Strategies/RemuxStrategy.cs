@@ -7,28 +7,28 @@ using Microsoft.Extensions.Logging;
 namespace Lanflix.Application.Features.Streaming.Strategies;
 
 /// <summary>
-/// Direct Stream strategy - transcodes audio while copying video
-/// Used when video codec is compatible but audio needs transcoding
+/// Remux strategy - changes container format while preserving codecs
+/// Used when codecs are compatible but container format needs to be changed
 /// </summary>
-public class DirectStreamStrategy : IStreamingStrategy
+public class RemuxStrategy : IStreamingStrategy
 {
     private readonly ITranscodingPipeline _transcodingPipeline;
-    private readonly ILogger<DirectStreamStrategy> _logger;
+    private readonly ILogger<RemuxStrategy> _logger;
 
-    public DirectStreamStrategy(
+    public RemuxStrategy(
         ITranscodingPipeline transcodingPipeline,
-        ILogger<DirectStreamStrategy> logger)
+        ILogger<RemuxStrategy> logger)
     {
         _transcodingPipeline = transcodingPipeline;
         _logger = logger;
     }
 
-    public StreamingMode Mode => StreamingMode.TranscodeAudio;
-    public int Priority => 3; // Third priority
+    public StreamingMode Mode => StreamingMode.DirectStream;
+    public int Priority => 2; // Second highest priority
 
     public bool CanHandle(TranscodingDecision decision)
     {
-        return decision.PlaybackMethod == PlaybackMethod.DirectStream;
+        return decision.PlaybackMethod == PlaybackMethod.Remux;
     }
 
     public Task<StreamResult> ExecuteAsync(StreamRequest request, TranscodingDecision decision, CancellationToken cancellationToken)
@@ -38,31 +38,28 @@ public class DirectStreamStrategy : IStreamingStrategy
             throw new FileNotFoundException($"Media file not found: {request.FilePath}");
         }
 
-        _logger.LogInformation("Starting DirectStream for session {SessionId}, file: {FilePath}, Audio: {SourceAudio} -> {TargetAudio}",
-            request.SessionId, request.FilePath, 
-            string.Join(", ", request.MediaInfo.Audio.Select(a => a.Codec)), 
-            decision.TargetAudioCodec);
+        _logger.LogInformation("Starting Remux for session {SessionId}, file: {FilePath}, {SourceContainer} -> {TargetContainer}",
+            request.SessionId, request.FilePath, request.MediaInfo.Container, decision.TargetContainer);
 
-        // Create transcode request for audio-only transcoding
+        // Create transcode request for remuxing
         var transcodeRequest = new TranscodeRequest
         {
             InputPath = request.FilePath,
-            Mode = StreamingMode.TranscodeAudio,
+            Mode = StreamingMode.DirectStream,
             SourceMedia = request.MediaInfo,
             TargetVideoCodec = "copy", // Copy video stream
-            TargetAudioCodec = decision.TargetAudioCodec ?? "aac",
-            TargetAudioBitrate = decision.TargetAudioBitrate,
+            TargetAudioCodec = "copy", // Copy audio stream
             StartPosition = request.StartPosition,
             AudioStreamIndex = request.AudioStreamIndex,
             SubtitleStreamIndex = request.SubtitleStreamIndex,
-            HwAccelMethod = HwAccelMethod.None, // No video transcoding
+            HwAccelMethod = HwAccelMethod.None, // No transcoding needed
             OutputFormat = decision.TargetContainer ?? "mp4",
             SessionId = request.SessionId,
             TotalDuration = request.MediaInfo.Duration.TotalSeconds
         };
 
-        // Create direct stream
-        var directStream = new DirectStreamTranscodeStream(
+        // Create remux stream
+        var remuxStream = new RemuxStream(
             _transcodingPipeline,
             transcodeRequest,
             request.SessionId,
@@ -71,22 +68,20 @@ public class DirectStreamStrategy : IStreamingStrategy
 
         var mimeType = GetMimeType(decision.TargetContainer ?? "mp4");
 
-        _logger.LogInformation("DirectStream prepared: Video -> copy, Audio: {SourceAudio} -> {TargetAudio}, Container: {Container}",
-            string.Join(", ", request.MediaInfo.Audio.Select(a => a.Codec)), 
-            decision.TargetAudioCodec, 
-            decision.TargetContainer);
+        _logger.LogInformation("Remux prepared: {SourceContainer} -> {TargetContainer}",
+            request.MediaInfo.Container, decision.TargetContainer);
 
         return Task.FromResult(new StreamResult
         {
-            DataStream = directStream,
+            DataStream = remuxStream,
             ContentType = mimeType,
-            ContentLength = null, // Unknown for streaming transcode
-            Mode = StreamingMode.TranscodeAudio,
-            SupportsRangeRequests = false, // Range requests not supported during transcode
+            ContentLength = null, // Unknown for streaming remux
+            Mode = StreamingMode.DirectStream,
+            SupportsRangeRequests = false, // Range requests not supported during remux
             CleanupAction = () =>
             {
-                _logger.LogDebug("Cleaning up DirectStream for session {SessionId}", request.SessionId);
-                directStream.Dispose();
+                _logger.LogDebug("Cleaning up Remux stream for session {SessionId}", request.SessionId);
+                remuxStream.Dispose();
             }
         });
     }
@@ -107,9 +102,9 @@ public class DirectStreamStrategy : IStreamingStrategy
     }
 
     /// <summary>
-    /// Stream implementation for DirectStream (audio transcode only)
+    /// Stream implementation for remuxing operations
     /// </summary>
-    private class DirectStreamTranscodeStream : Stream
+    private class RemuxStream : Stream
     {
         private readonly ITranscodingPipeline _pipeline;
         private readonly TranscodeRequest _request;
@@ -121,7 +116,7 @@ public class DirectStreamStrategy : IStreamingStrategy
         private int _currentChunkPosition;
         private bool _disposed;
 
-        public DirectStreamTranscodeStream(
+        public RemuxStream(
             ITranscodingPipeline pipeline,
             TranscodeRequest request,
             string sessionId,
@@ -201,7 +196,7 @@ public class DirectStreamStrategy : IStreamingStrategy
             {
                 _disposed = true;
                 _enumerator?.DisposeAsync().AsTask().Wait();
-                _logger.LogDebug("DirectStreamTranscodeStream disposed for session {SessionId}", _sessionId);
+                _logger.LogDebug("RemuxStream disposed for session {SessionId}", _sessionId);
             }
             base.Dispose(disposing);
         }
@@ -215,7 +210,7 @@ public class DirectStreamStrategy : IStreamingStrategy
                 {
                     await _enumerator.DisposeAsync();
                 }
-                _logger.LogDebug("DirectStreamTranscodeStream disposed asynchronously for session {SessionId}", _sessionId);
+                _logger.LogDebug("RemuxStream disposed asynchronously for session {SessionId}", _sessionId);
             }
             await base.DisposeAsync();
         }

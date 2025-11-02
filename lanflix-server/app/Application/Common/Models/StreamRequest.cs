@@ -3,7 +3,7 @@ using Lanflix.Domain.ValueObjects;
 namespace Lanflix.Application.Common.Models;
 
 /// <summary>
-/// Request for streaming media content
+/// Request for streaming media content with enhanced transcoding profile support
 /// </summary>
 public class StreamRequest
 {
@@ -21,11 +21,6 @@ public class StreamRequest
     /// Media information
     /// </summary>
     public required MediaInfo MediaInfo { get; init; }
-
-    /// <summary>
-    /// Client capabilities
-    /// </summary>
-    public required ClientCapabilities ClientCapabilities { get; init; }
 
     /// <summary>
     /// User preferences
