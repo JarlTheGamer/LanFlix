@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Lanflix.Application.Common.Interfaces;
+using Lanflix.Application.Common.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Lanflix.Infrastructure.Services.Metadata;
@@ -307,5 +308,147 @@ public class MetadataService : IMetadataService
             _logger.LogError(ex, "Failed to load metadata from {Path}", mediaFolderPath);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Search for movie with different variations of the folder name
+    /// Based on the old backend's search logic
+    /// </summary>
+    public async Task<TmdbSearchItem?> SearchMovieWithVariationsAsync(
+        string folderName,
+        CancellationToken cancellationToken = default)
+    {
+        var searchQueries = GenerateSearchVariations(folderName);
+        
+        foreach (var query in searchQueries)
+        {
+            try
+            {
+                _logger.LogDebug("Searching TMDB for movie: {Query}", query);
+                var searchResults = await _tmdbClient.SearchMoviesAsync(query, cancellationToken);
+                
+                if (searchResults.Results.Any())
+                {
+                    _logger.LogInformation("Found TMDB match for movie: {Query} -> {Title}", query, searchResults.Results.First().Title);
+                    return searchResults.Results.First();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Search failed for query: {Query}", query);
+            }
+        }
+        
+        _logger.LogWarning("No TMDB match found for movie folder: {FolderName} (tried {Count} variations)", folderName, searchQueries.Count);
+        return null;
+    }
+
+    /// <summary>
+    /// Search for TV series with different variations of the folder name
+    /// Based on the old backend's search logic
+    /// </summary>
+    public async Task<TmdbSearchItem?> SearchSeriesWithVariationsAsync(
+        string folderName,
+        CancellationToken cancellationToken = default)
+    {
+        var searchQueries = GenerateSearchVariations(folderName);
+        
+        foreach (var query in searchQueries)
+        {
+            try
+            {
+                _logger.LogDebug("Searching TMDB for series: {Query}", query);
+                var searchResults = await _tmdbClient.SearchTvSeriesAsync(query, cancellationToken);
+                
+                if (searchResults.Results.Any())
+                {
+                    _logger.LogInformation("Found TMDB match for series: {Query} -> {Title}", query, searchResults.Results.First().Name);
+                    return searchResults.Results.First();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Search failed for query: {Query}", query);
+            }
+        }
+        
+        _logger.LogWarning("No TMDB match found for series folder: {FolderName} (tried {Count} variations)", folderName, searchQueries.Count);
+        return null;
+    }
+
+    /// <summary>
+    /// Generate different search variations for a folder name
+    /// Based on the old backend's search logic
+    /// </summary>
+    private List<string> GenerateSearchVariations(string folderName)
+    {
+        var variations = new List<string>();
+        
+        // Original name
+        variations.Add(folderName);
+        
+        // Remove year in parentheses (e.g., "Movie (2023)" -> "Movie")
+        var withoutYear = System.Text.RegularExpressions.Regex.Replace(folderName, @"\s*\(\d{4}\)\s*", "").Trim();
+        if (withoutYear != folderName)
+        {
+            variations.Add(withoutYear);
+        }
+        
+        // Remove common suffixes
+        var commonSuffixes = new[] { "REMASTERED", "EXTENDED", "DIRECTOR'S CUT", "UNCUT", "4K", "HDR", "REMUX" };
+        foreach (var suffix in commonSuffixes)
+        {
+            var withoutSuffix = System.Text.RegularExpressions.Regex.Replace(folderName, $@"\s*{suffix}\s*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+            if (withoutSuffix != folderName && !variations.Contains(withoutSuffix))
+            {
+                variations.Add(withoutSuffix);
+            }
+        }
+        
+        // Replace dots and underscores with spaces
+        var withSpaces = folderName.Replace(".", " ").Replace("_", " ");
+        if (withSpaces != folderName && !variations.Contains(withSpaces))
+        {
+            variations.Add(withSpaces);
+        }
+        
+        // Try without "The" prefix
+        if (folderName.StartsWith("The ", StringComparison.OrdinalIgnoreCase))
+        {
+            var withoutThe = folderName.Substring(4).Trim();
+            if (!variations.Contains(withoutThe))
+            {
+                variations.Add(withoutThe);
+            }
+        }
+        
+        // Try with "The" prefix if it doesn't have it
+        if (!folderName.StartsWith("The ", StringComparison.OrdinalIgnoreCase))
+        {
+            var withThe = $"The {folderName}";
+            if (!variations.Contains(withThe))
+            {
+                variations.Add(withThe);
+            }
+        }
+        
+        // Remove common release group tags in brackets
+        var withoutBrackets = System.Text.RegularExpressions.Regex.Replace(folderName, @"\[.*?\]", "").Trim();
+        if (withoutBrackets != folderName && !variations.Contains(withoutBrackets))
+        {
+            variations.Add(withoutBrackets);
+        }
+        
+        // Remove extra spaces and normalize
+        for (int i = 0; i < variations.Count; i++)
+        {
+            variations[i] = System.Text.RegularExpressions.Regex.Replace(variations[i], @"\s+", " ").Trim();
+        }
+        
+        // Remove duplicates and empty strings
+        var finalVariations = variations.Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().ToList();
+        
+        _logger.LogDebug("Generated search variations for '{FolderName}': {Variations}", folderName, string.Join(", ", finalVariations));
+        return finalVariations;
     }
 }

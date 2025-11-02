@@ -230,6 +230,50 @@ public class SettingsController : ControllerBase
     }
 
     /// <summary>
+    /// Get a custom setting (like per-profile user settings)
+    /// </summary>
+    [HttpGet("custom/{key}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetCustomSetting(
+        [FromRoute] string key,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Getting custom setting: {Key}", key);
+
+        try
+        {
+            var setting = await _context.ServerSettings
+                .FirstOrDefaultAsync(s => s.Key == key, cancellationToken);
+
+            if (setting == null)
+            {
+                // Return default values for known settings instead of 404
+                if (key.StartsWith("streamingPreferences_"))
+                {
+                    var defaultPreferences = new
+                    {
+                        quality = "auto",
+                        autoPlay = true,
+                        skipIntro = true,
+                        subtitles = "off",
+                        audioLanguage = "original"
+                    };
+                    return Ok(new { value = System.Text.Json.JsonSerializer.Serialize(defaultPreferences) });
+                }
+
+                return NotFound(new { message = $"Setting '{key}' not found" });
+            }
+
+            return Ok(new { value = setting.Value });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting custom setting: {Key}", key);
+            return BadRequest(new { message = "Error getting setting", error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Save a custom setting (like per-profile user settings)
     /// </summary>
     [HttpPut("custom/{key}")]

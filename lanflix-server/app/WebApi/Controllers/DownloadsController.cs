@@ -107,7 +107,7 @@ public class DownloadsController : ControllerBase
     /// Cancel/remove download from queue
     /// </summary>
     [HttpDelete("queue/{id}")]
-    public async Task<IActionResult> CancelDownload(
+    public Task<IActionResult> CancelDownload(
         [FromRoute] string id,
         [FromBody] CancelDownloadRequest request,
         CancellationToken cancellationToken = default)
@@ -121,24 +121,24 @@ public class DownloadsController : ControllerBase
                 var radarrId = int.Parse(id.Replace("radarr_", ""));
                 // Note: Radarr doesn't have a direct cancel API, but we could implement removal
                 // For now, return success
-                return Ok(new { message = "Download removal requested" });
+                return Task.FromResult<IActionResult>(Ok(new { message = "Download removal requested" }));
             }
             else if (id.StartsWith("sonarr_") && request.Service == "sonarr")
             {
                 var sonarrId = int.Parse(id.Replace("sonarr_", ""));
                 // Note: Sonarr doesn't have a direct cancel API, but we could implement removal
                 // For now, return success
-                return Ok(new { message = "Download removal requested" });
+                return Task.FromResult<IActionResult>(Ok(new { message = "Download removal requested" }));
             }
             else
             {
-                return BadRequest(new { error = "Invalid download ID or service" });
+                return Task.FromResult<IActionResult>(BadRequest(new { error = "Invalid download ID or service" }));
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to cancel download: {Id}", id);
-            return StatusCode(500, new { error = "Failed to cancel download", details = ex.Message });
+            return Task.FromResult<IActionResult>(StatusCode(500, new { error = "Failed to cancel download", details = ex.Message }));
         }
     }
 

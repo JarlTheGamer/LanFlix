@@ -6,6 +6,7 @@ using Lanflix.Application.Features.Streaming.Commands.StopStream;
 using Lanflix.Application.Features.Streaming.Commands.UpdateProgress;
 using Lanflix.Application.Features.Streaming.Queries.GetStreamInfo;
 using Lanflix.Application.Features.Streaming.Services;
+using Lanflix.Domain.ValueObjects;
 using Lanflix.Infrastructure.Telemetry;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -35,6 +36,183 @@ public class StreamingController : ControllerBase
         _strategySelector = strategySelector;
         _metrics = metrics;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Direct stream endpoint for content with profile
+    /// </summary>
+    [HttpGet("{id:int}")]
+    [HttpHead("{id:int}")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("streaming")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status206PartialContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status416RangeNotSatisfiable)]
+    public async Task<IActionResult> StreamContentDirect(
+        int id,
+        [FromQuery] int profileId,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Direct streaming request for content {ContentId}, profile {ProfileId}", id, profileId);
+
+        // Get content
+        var content = await _context.Contents
+            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+        if (content == null)
+        {
+            _logger.LogWarning("Content {ContentId} not found", id);
+            return NotFound(new { message = "Content not found" });
+        }
+
+        // Get profile
+        var profile = await _context.Profiles
+            .FirstOrDefaultAsync(p => p.Id == profileId, cancellationToken);
+
+        if (profile == null)
+        {
+            _logger.LogWarning("Profile {ProfileId} not found", profileId);
+            return NotFound(new { message = "Profile not found" });
+        }
+
+        // For HEAD requests, just return headers
+        if (Request.Method == "HEAD")
+        {
+            if (content.MediaInfo?.Duration != null)
+            {
+                Response.Headers.Append("Content-Length", content.MediaInfo.FileSize.ToString());
+                Response.Headers.Append("Content-Type", "video/mp4");
+                Response.Headers.Append("Accept-Ranges", "bytes");
+            }
+            return Ok();
+        }
+
+        // Check if file exists
+        if (!System.IO.File.Exists(content.FilePath))
+        {
+            _logger.LogError("Content file not found: {FilePath}", content.FilePath);
+            return NotFound(new { message = "Content file not found" });
+        }
+
+        // Check if content has media info
+        if (content.MediaInfo == null)
+        {
+            _logger.LogError("Content {ContentId} has no media info", id);
+            return BadRequest(new { message = "Content media information not available" });
+        }
+
+        // Get client capabilities from request headers or use defaults
+        var clientCapabilities = GetClientCapabilities();
+
+        // Select optimal streaming strategy
+        var strategy = _strategySelector.SelectOptimalStrategy(
+            content.MediaInfo,
+            clientCapabilities,
+            profile.Preferences);
+
+        if (strategy == null)
+        {
+            _logger.LogError("No suitable streaming strategy found for content {ContentId}", id);
+            return BadRequest(new { message = "No suitable streaming strategy available" });
+        }
+
+        _logger.LogInformation(
+            "Using {Strategy} strategy for direct stream of content {ContentId}",
+            strategy.Mode, id);
+
+        // Record stream start metric
+        _metrics.RecordStreamStart(
+            strategy.Mode.ToString(),
+            content.Type.ToString());
+
+        // Create stream request
+        var streamRequest = new StreamRequest
+        {
+            SessionId = $"direct-{id}-{profileId}-{Guid.NewGuid():N}",
+            FilePath = content.FilePath,
+            MediaInfo = content.MediaInfo,
+            ClientCapabilities = clientCapabilities,
+            UserPreferences = profile.Preferences,
+            RangeHeader = Request.Headers["Range"].ToString()
+        };
+
+        // Execute streaming strategy
+        StreamResult streamResult;
+        try
+        {
+            streamResult = await strategy.ExecuteAsync(streamRequest, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error executing streaming strategy for content {ContentId}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Error starting stream" });
+        }
+
+        // Register cleanup action
+        Response.RegisterForDispose(new DisposableAction(() =>
+        {
+            streamResult.CleanupAction?.Invoke();
+        }));
+
+        // Return appropriate response based on range request
+        if (streamResult.RangeStart.HasValue || streamResult.RangeEnd.HasValue)
+        {
+            var rangeStart = streamResult.RangeStart ?? 0;
+            var rangeEnd = streamResult.RangeEnd ?? ((streamResult.ContentLength ?? 1) - 1);
+            var contentLength = streamResult.ContentLength ?? 0;
+
+            Response.Headers.Append("Accept-Ranges", "bytes");
+            Response.Headers.Append("Content-Range",
+                $"bytes {rangeStart}-{rangeEnd}/{contentLength}");
+            Response.StatusCode = StatusCodes.Status206PartialContent;
+
+            return new FileStreamResult(streamResult.DataStream, streamResult.ContentType)
+            {
+                EnableRangeProcessing = streamResult.SupportsRangeRequests
+            };
+        }
+
+        // Return full content
+        if (streamResult.SupportsRangeRequests)
+        {
+            Response.Headers.Append("Accept-Ranges", "bytes");
+        }
+
+        return new FileStreamResult(streamResult.DataStream, streamResult.ContentType)
+        {
+            EnableRangeProcessing = streamResult.SupportsRangeRequests
+        };
+    }
+
+    /// <summary>
+    /// Gets client capabilities from request headers or returns defaults
+    /// </summary>
+    private ClientCapabilities GetClientCapabilities()
+    {
+        // In a real implementation, you might parse User-Agent header or 
+        // have the client send capabilities in a custom header
+        // For now, return reasonable defaults that support most modern browsers
+        
+        var userAgent = Request.Headers["User-Agent"].ToString().ToLowerInvariant();
+        
+        // Detect basic client type from User-Agent
+        var isModernBrowser = userAgent.Contains("chrome") || userAgent.Contains("firefox") || 
+                             userAgent.Contains("safari") || userAgent.Contains("edge");
+        
+        return new ClientCapabilities
+        {
+            SupportedVideoCodecs = isModernBrowser 
+                ? new[] { "h264", "hevc", "vp9", "av1" }
+                : new[] { "h264" }, // Fallback for older clients
+            SupportedAudioCodecs = new[] { "aac", "mp3", "ac3", "eac3", "opus" },
+            SupportedContainers = isModernBrowser 
+                ? new[] { "mp4", "webm", "mkv" }
+                : new[] { "mp4" }, // Fallback for older clients
+            MaxBitrate = 20_000_000, // 20 Mbps
+            MaxResolution = VideoResolution.UHD4K,
+            SupportsHDR = isModernBrowser
+        };
     }
 
     /// <summary>
@@ -168,7 +346,7 @@ public class StreamingController : ControllerBase
         if (streamResult.RangeStart.HasValue || streamResult.RangeEnd.HasValue)
         {
             var rangeStart = streamResult.RangeStart ?? 0;
-            var rangeEnd = streamResult.RangeEnd ?? (streamResult.ContentLength - 1) ?? 0;
+            var rangeEnd = streamResult.RangeEnd ?? ((streamResult.ContentLength ?? 1) - 1);
             var contentLength = streamResult.ContentLength ?? 0;
 
             Response.Headers.Append("Accept-Ranges", "bytes");

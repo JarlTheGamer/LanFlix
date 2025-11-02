@@ -22,14 +22,14 @@ public class JobsController : ControllerBase
     /// Get status of background jobs
     /// </summary>
     [HttpGet("status")]
-    public async Task<IActionResult> GetJobsStatus()
+    public Task<IActionResult> GetJobsStatus()
     {
         try
         {
             _logger.LogInformation("Getting background jobs status");
 
             // Return configured background jobs
-            var jobs = new[]
+            var jobs = new object[]
             {
                 new
                 {
@@ -77,12 +77,12 @@ public class JobsController : ControllerBase
                 }
             };
 
-            return Ok(new { jobs });
+            return Task.FromResult<IActionResult>(Ok(new { jobs }));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get jobs status");
-            return StatusCode(500, new { error = "Failed to get jobs status", details = ex.Message });
+            return Task.FromResult<IActionResult>(StatusCode(500, new { error = "Failed to get jobs status", details = ex.Message }));
         }
     }
 

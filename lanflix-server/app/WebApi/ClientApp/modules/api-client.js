@@ -690,6 +690,25 @@ class ApiClient {
     return this.request('/settings/sonarr/root-folders');
   }
 
+  /**
+   * GET /api/settings/custom/:key
+   * Get a custom setting
+   */
+  async getCustomSetting(key) {
+    return this.request(`/settings/custom/${key}`);
+  }
+
+  /**
+   * PUT /api/settings/custom/:key
+   * Save a custom setting
+   */
+  async saveCustomSetting(key, value) {
+    return this.request(`/settings/custom/${key}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value })
+    });
+  }
+
   // ==================== NOTIFICATION ENDPOINTS ====================
 
   /**

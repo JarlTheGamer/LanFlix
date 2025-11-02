@@ -32,7 +32,8 @@ public class TmdbClient : ITmdbClient
         {
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            Converters = { new NullableDateTimeConverter() }
         };
     }
 
@@ -389,6 +390,55 @@ public class TmdbClient : ITmdbClient
         {
             _logger.LogError(ex, "JSON deserialization error for TMDB popular TV series: Page={Page}", page);
             throw;
+        }
+    }
+}
+
+/// <summary>
+/// Custom JSON converter for nullable DateTime that handles empty strings from TMDB API
+/// </summary>
+public class NullableDateTimeConverter : JsonConverter<DateTime?>
+{
+    public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return null;
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var stringValue = reader.GetString();
+            
+            // Handle empty strings or whitespace as null
+            if (string.IsNullOrWhiteSpace(stringValue))
+            {
+                return null;
+            }
+
+            // Try to parse the date
+            if (DateTime.TryParse(stringValue, out var dateValue))
+            {
+                return dateValue;
+            }
+
+            // If parsing fails, return null instead of throwing
+            return null;
+        }
+
+        // For other token types, try the default behavior
+        return JsonSerializer.Deserialize<DateTime?>(ref reader, options);
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options)
+    {
+        if (value.HasValue)
+        {
+            writer.WriteStringValue(value.Value.ToString("yyyy-MM-dd"));
+        }
+        else
+        {
+            writer.WriteNullValue();
         }
     }
 }

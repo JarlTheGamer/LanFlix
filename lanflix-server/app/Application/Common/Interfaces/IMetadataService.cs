@@ -1,3 +1,5 @@
+using Lanflix.Application.Common.Models;
+
 namespace Lanflix.Application.Common.Interfaces;
 
 public interface IMetadataService
@@ -42,5 +44,19 @@ public interface IMetadataService
     /// </summary>
     Task<object?> LoadMetadataFromMediaFolderAsync(
         string mediaFolderPath,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Search for movie with different variations of the folder name
+    /// </summary>
+    Task<TmdbSearchItem?> SearchMovieWithVariationsAsync(
+        string folderName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Search for TV series with different variations of the folder name
+    /// </summary>
+    Task<TmdbSearchItem?> SearchSeriesWithVariationsAsync(
+        string folderName,
         CancellationToken cancellationToken = default);
 }

@@ -42,17 +42,25 @@ export class SettingsManager {
    */
   async loadSettings() {
     try {
-      const response = await apiClient.getSettings();
       const profileId = stateManager.currentProfileId;
       
       // Load per-profile settings
       const settingKey = `userSettings_${profileId}`;
-      if (response.settings && response.settings[settingKey]) {
-        const savedSettings = typeof response.settings[settingKey] === 'string'
-          ? JSON.parse(response.settings[settingKey])
-          : response.settings[settingKey];
+      
+      try {
+        const response = await apiClient.getCustomSetting(settingKey);
+        const savedSettings = typeof response.value === 'string'
+          ? JSON.parse(response.value)
+          : response.value;
         this.settings = savedSettings;
-      } else {
+        console.log('Loaded saved settings for profile', profileId, this.settings);
+      } catch (error) {
+        if (error.statusCode === 404) {
+          console.log('No saved settings found for profile', profileId, '- using defaults');
+        } else {
+          console.error('Error loading settings:', error);
+        }
+        
         // Default settings
         this.settings = {
           'language': 'en',
@@ -70,7 +78,17 @@ export class SettingsManager {
       this.applySettings();
     } catch (error) {
       console.error('Failed to load settings:', error);
-      this.settings = {};
+      this.settings = {
+        'language': 'en',
+        'timezone': 'utc',
+        'auto-play-next': true,
+        'skip-intro': true,
+        'quality': 'auto',
+        'data-saver': false,
+        'audio-lang': 'en',
+        'theme': 'dark',
+        'show-backdrop': true
+      };
     }
   }
 
@@ -148,13 +166,13 @@ export class SettingsManager {
         return;
       }
 
-      const response = await apiClient.getSettings();
       const settingKey = `streamingPreferences_${profileId}`;
 
-      if (response.settings && response.settings[settingKey]) {
-        const prefs = typeof response.settings[settingKey] === 'string'
-          ? JSON.parse(response.settings[settingKey])
-          : response.settings[settingKey];
+      try {
+        const response = await apiClient.getCustomSetting(settingKey);
+        const prefs = typeof response.value === 'string'
+          ? JSON.parse(response.value)
+          : response.value;
 
         console.log('Loaded streaming preferences:', prefs);
 
@@ -191,8 +209,12 @@ export class SettingsManager {
 
         // Update custom select displays
         this.updateCustomSelectDisplays();
-      } else {
-        console.log('No saved streaming preferences found for profile', profileId);
+      } catch (error) {
+        if (error.statusCode === 404) {
+          console.log('No saved streaming preferences found for profile', profileId);
+        } else {
+          console.error('Error loading streaming preferences:', error);
+        }
       }
     } catch (error) {
       console.error('Failed to load streaming preferences:', error);
@@ -496,7 +518,9 @@ export class SettingsManager {
 
       console.log('Saving streaming preferences for profile', profileId, ':', streamingPreferences);
 
-      await apiClient.updateStreamingPreferences(profileId, streamingPreferences);
+      // Save to custom settings
+      const settingKey = `streamingPreferences_${profileId}`;
+      await apiClient.saveCustomSetting(settingKey, JSON.stringify(streamingPreferences));
 
       // Update local settings cache
       this.settings['transcoding-mode'] = transcodingMode;
@@ -927,12 +951,9 @@ export class SettingsManager {
       const settingKey = `userSettings_${profileId}`;
       const settingValue = JSON.stringify(this.settings);
       
-      await apiClient.request(`/settings/custom/${settingKey}`, {
-        method: 'PUT',
-        body: JSON.stringify({ value: settingValue })
-      });
+      await apiClient.saveCustomSetting(settingKey, settingValue);
 
-      console.log('Settings saved successfully');
+      console.log('Settings saved successfully for profile', profileId);
       this.showSaveNotification('Settings saved!');
     } catch (error) {
       console.error('Failed to save settings:', error);
