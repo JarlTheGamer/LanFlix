@@ -234,6 +234,42 @@ class ApiClient {
   }
 
   /**
+   * Convenience method for GET requests
+   */
+  async get(endpoint, options = {}) {
+    return this.request(endpoint, { ...options, method: 'GET' });
+  }
+
+  /**
+   * Convenience method for POST requests
+   */
+  async post(endpoint, data = null, options = {}) {
+    const requestOptions = { ...options, method: 'POST' };
+    if (data) {
+      requestOptions.body = JSON.stringify(data);
+    }
+    return this.request(endpoint, requestOptions);
+  }
+
+  /**
+   * Convenience method for PUT requests
+   */
+  async put(endpoint, data = null, options = {}) {
+    const requestOptions = { ...options, method: 'PUT' };
+    if (data) {
+      requestOptions.body = JSON.stringify(data);
+    }
+    return this.request(endpoint, requestOptions);
+  }
+
+  /**
+   * Convenience method for DELETE requests
+   */
+  async delete(endpoint, options = {}) {
+    return this.request(endpoint, { ...options, method: 'DELETE' });
+  }
+
+  /**
    * Get TMDB image URL
    */
   getImageUrl(path, size = 'w500') {

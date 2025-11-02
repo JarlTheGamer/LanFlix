@@ -1,6 +1,7 @@
 using Lanflix.Application.Common.DTOs;
 using Lanflix.Application.Common.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Lanflix.WebApi.Controllers;
 
@@ -9,13 +10,16 @@ namespace Lanflix.WebApi.Controllers;
 public class SettingsController : ControllerBase
 {
     private readonly ISettingsService _settingsService;
+    private readonly IApplicationDbContext _context;
     private readonly ILogger<SettingsController> _logger;
 
     public SettingsController(
         ISettingsService settingsService,
+        IApplicationDbContext context,
         ILogger<SettingsController> logger)
     {
         _settingsService = settingsService;
+        _context = context;
         _logger = logger;
     }
 
@@ -24,15 +28,53 @@ public class SettingsController : ControllerBase
     /// </summary>
     [HttpGet]
     // [Authorize(Roles = "Admin")] // Uncomment when authentication is implemented
-    [ProducesResponseType(typeof(ServerSettingsDto), StatusCodes.Status200OK)]
-    public async Task<ActionResult<ServerSettingsDto>> GetSettings(
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetSettings(
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("Getting server settings");
 
         var settings = await _settingsService.GetSettingsAsync(cancellationToken);
 
-        return Ok(settings);
+        // Also load all per-profile streaming preferences and other custom settings
+        var customSettings = new Dictionary<string, object>();
+        
+        // Get all custom settings (like streamingPreferences_X)
+        var allSettings = await _context.ServerSettings
+            .AsNoTracking()
+            .Where(s => s.Key.StartsWith("streamingPreferences_") || 
+                       s.Key.StartsWith("custom_") ||
+                       !s.Key.StartsWith("Lanflix:"))
+            .ToListAsync(cancellationToken);
+
+        foreach (var setting in allSettings)
+        {
+            try
+            {
+                // Try to deserialize JSON values
+                var prefValue = System.Text.Json.JsonSerializer.Deserialize<object>(setting.Value);
+                customSettings[setting.Key] = prefValue ?? setting.Value;
+            }
+            catch
+            {
+                // If not JSON, store as string
+                customSettings[setting.Key] = setting.Value;
+            }
+        }
+
+        // Return both structured settings and custom settings
+        return Ok(new
+        {
+            // Custom settings (like per-profile preferences)
+            settings = customSettings,
+            
+            // Structured server settings
+            mediaPaths = settings.MediaPaths,
+            transcoding = settings.Transcoding,
+            streaming = settings.Streaming,
+            cache = settings.Cache,
+            externalApis = settings.ExternalApis
+        });
     }
 
     /// <summary>
@@ -63,6 +105,37 @@ public class SettingsController : ControllerBase
         {
             _logger.LogError(ex, "Error updating server settings");
             return BadRequest(new { message = "Error updating settings", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Update streaming preferences for a profile
+    /// </summary>
+    [HttpPut("streaming/{profileId}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateStreamingPreferences(
+        [FromRoute] int profileId,
+        [FromBody] UpdateStreamingPreferencesRequest request,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Updating streaming preferences for profile {ProfileId}", profileId);
+
+        try
+        {
+            // Save per-profile streaming preferences as a JSON string in ServerSettings
+            var settingKey = $"streamingPreferences_{profileId}";
+            var settingValue = System.Text.Json.JsonSerializer.Serialize(request.StreamingPreferences);
+            
+            await _settingsService.UpdateSettingAsync(settingKey, settingValue, cancellationToken);
+
+            _logger.LogInformation("Streaming preferences updated successfully for profile {ProfileId}", profileId);
+            return Ok(new { message = "Streaming preferences updated successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating streaming preferences for profile {ProfileId}", profileId);
+            return BadRequest(new { message = "Error updating streaming preferences", error = ex.Message });
         }
     }
 
@@ -115,10 +188,78 @@ public class SettingsController : ControllerBase
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// Get database settings count for debugging
+    /// </summary>
+    [HttpGet("debug/count")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetSettingsCount(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Getting settings count for debugging");
+
+        try
+        {
+            var settings = await _settingsService.GetSettingsAsync(cancellationToken);
+            
+            return Ok(new
+            {
+                message = "Settings loaded successfully",
+                hasMoviesPath = !string.IsNullOrEmpty(settings.MediaPaths.Movies),
+                hasSeriesPath = !string.IsNullOrEmpty(settings.MediaPaths.Series),
+                hasTmdbKey = !string.IsNullOrEmpty(settings.ExternalApis.Tmdb.ApiKey),
+                hasSonarrUrl = !string.IsNullOrEmpty(settings.ExternalApis.Sonarr.Url),
+                hasSonarrKey = !string.IsNullOrEmpty(settings.ExternalApis.Sonarr.ApiKey),
+                hasRadarrUrl = !string.IsNullOrEmpty(settings.ExternalApis.Radarr.Url),
+                hasRadarrKey = !string.IsNullOrEmpty(settings.ExternalApis.Radarr.ApiKey),
+                hasProwlarrUrl = !string.IsNullOrEmpty(settings.ExternalApis.Prowlarr.Url),
+                hasProwlarrKey = !string.IsNullOrEmpty(settings.ExternalApis.Prowlarr.ApiKey)
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting settings count");
+            return BadRequest(new { message = "Error getting settings count", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Save a custom setting (like per-profile user settings)
+    /// </summary>
+    [HttpPut("custom/{key}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult> SaveCustomSetting(
+        [FromRoute] string key,
+        [FromBody] CustomSettingRequest request,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Saving custom setting: {Key}", key);
+
+        try
+        {
+            await _settingsService.UpdateSettingAsync(key, request.Value, cancellationToken);
+            return Ok(new { message = "Setting saved successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving custom setting: {Key}", key);
+            return BadRequest(new { message = "Error saving setting", error = ex.Message });
+        }
+    }
+}
+
+public class CustomSettingRequest
+{
+    public string Value { get; set; } = string.Empty;
 }
 
 public class ValidationResult
 {
     public bool IsValid { get; set; }
     public List<string> Errors { get; set; } = new();
+}
+
+public class UpdateStreamingPreferencesRequest
+{
+    public StreamingSettings? StreamingPreferences { get; set; }
 }

@@ -43,7 +43,30 @@ export class SettingsManager {
   async loadSettings() {
     try {
       const response = await apiClient.getSettings();
-      this.settings = response.settings || {};
+      const profileId = stateManager.currentProfileId;
+      
+      // Load per-profile settings
+      const settingKey = `userSettings_${profileId}`;
+      if (response.settings && response.settings[settingKey]) {
+        const savedSettings = typeof response.settings[settingKey] === 'string'
+          ? JSON.parse(response.settings[settingKey])
+          : response.settings[settingKey];
+        this.settings = savedSettings;
+      } else {
+        // Default settings
+        this.settings = {
+          'language': 'en',
+          'timezone': 'utc',
+          'auto-play-next': true,
+          'skip-intro': true,
+          'quality': 'auto',
+          'data-saver': false,
+          'audio-lang': 'en',
+          'theme': 'dark',
+          'show-backdrop': true
+        };
+      }
+      
       this.applySettings();
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -890,12 +913,27 @@ export class SettingsManager {
   }
 
   /**
-   * Save settings to backend
+   * Save settings to backend (per-profile)
    */
   async saveSettings() {
     try {
-      await apiClient.updateSettings(this.settings);
+      const profileId = stateManager.currentProfileId;
+      if (!profileId) {
+        console.warn('No profile selected, settings not saved');
+        return;
+      }
+
+      // Save per-profile settings
+      const settingKey = `userSettings_${profileId}`;
+      const settingValue = JSON.stringify(this.settings);
+      
+      await apiClient.request(`/settings/custom/${settingKey}`, {
+        method: 'PUT',
+        body: JSON.stringify({ value: settingValue })
+      });
+
       console.log('Settings saved successfully');
+      this.showSaveNotification('Settings saved!');
     } catch (error) {
       console.error('Failed to save settings:', error);
       alert('Failed to save settings. Please try again.');

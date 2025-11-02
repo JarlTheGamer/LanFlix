@@ -42,6 +42,32 @@
                 <p class="admin-subtitle">Configure API keys, storage paths, and external services</p>
 
             <section class="admin-section">
+                <h2>� SServer Updates</h2>
+                <div class="admin-card">
+                    <div class="update-status" id="update-status">
+                        <div class="update-info">
+                            <p><strong>Current Version:</strong> <span id="current-version">Loading...</span></p>
+                            <p id="update-available-msg" style="display: none;">
+                                <strong>Update Available:</strong> <span id="latest-version"></span>
+                            </p>
+                        </div>
+                        <button class="btn-primary" onclick="checkForUpdates()" id="check-update-btn">
+                            Check for Updates
+                        </button>
+                    </div>
+                    <div id="update-details" style="display: none; margin-top: 16px;">
+                        <div class="admin-field">
+                            <label>Release Notes</label>
+                            <div id="release-notes" style="background: #f5f5f5; padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto;"></div>
+                        </div>
+                        <button class="btn-primary" onclick="applyUpdate()" id="apply-update-btn" style="margin-top: 12px;">
+                            Download and Install Update
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-section">
                 <h2>📁 Storage Paths</h2>
                 <div class="admin-card">
                     <div class="admin-field">

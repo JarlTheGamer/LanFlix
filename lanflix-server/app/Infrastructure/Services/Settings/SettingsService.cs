@@ -30,14 +30,23 @@ public class SettingsService : ISettingsService
             .AsNoTracking()
             .ToListAsync(cancellationToken);
         
+        _logger.LogInformation("Loaded {Count} settings from database", dbSettings.Count);
+        
         var settingsDict = dbSettings.ToDictionary(s => s.Key, s => s.Value);
 
         // Helper to get setting from DB or config
         string GetSetting(string key, string defaultValue = "")
         {
             if (settingsDict.TryGetValue(key, out var value) && !string.IsNullOrEmpty(value))
+            {
+                _logger.LogDebug("Setting {Key} loaded from database: {Value}", key, 
+                    key.Contains("ApiKey") || key.Contains("Key") ? "***" : value);
                 return value;
-            return _configuration[key] ?? defaultValue;
+            }
+            var configValue = _configuration[key] ?? defaultValue;
+            _logger.LogDebug("Setting {Key} loaded from config: {Value}", key, 
+                key.Contains("ApiKey") || key.Contains("Key") ? "***" : configValue);
+            return configValue;
         }
 
         int GetIntSetting(string key, int defaultValue)
@@ -191,6 +200,58 @@ public class SettingsService : ISettingsService
         {
             _logger.LogError(ex, "Error updating server settings");
             throw;
+        }
+    }
+
+    public async Task UpdateSettingAsync(string key, string value, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating setting: {Key}", key);
+
+        try
+        {
+            var now = DateTime.UtcNow;
+            var existing = await _context.ServerSettings
+                .FirstOrDefaultAsync(s => s.Key == key, cancellationToken);
+
+            if (existing != null)
+            {
+                existing.Value = value;
+                existing.UpdatedAt = now;
+            }
+            else
+            {
+                _context.ServerSettings.Add(new Domain.Entities.ServerSetting
+                {
+                    Key = key,
+                    Value = value,
+                    UpdatedAt = now
+                });
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Setting {Key} updated successfully", key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating setting: {Key}", key);
+            throw;
+        }
+    }
+
+    public async Task<string?> GetSettingAsync(string key, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var setting = await _context.ServerSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Key == key, cancellationToken);
+
+            return setting?.Value;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting setting: {Key}", key);
+            return null;
         }
     }
 }

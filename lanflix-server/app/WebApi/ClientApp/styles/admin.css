@@ -587,3 +587,45 @@
 .series-item {
   cursor: pointer;
 }
+
+
+/* Server Update Styles */
+.update-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.update-info {
+  flex: 1;
+}
+
+.update-info p {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.update-info strong {
+  color: #333;
+}
+
+#update-available-msg {
+  color: #e50914;
+  font-weight: 500;
+}
+
+#release-notes {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+@media (max-width: 768px) {
+  .update-status {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

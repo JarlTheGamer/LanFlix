@@ -10,22 +10,46 @@ async function loadSettings() {
     const settings = response;
 
     // Populate form fields from nested structure
-    document.getElementById('movies-path').value = settings.mediaPaths?.movies || '';
-    document.getElementById('series-path').value = settings.mediaPaths?.series || '';
-    document.getElementById('tmdb-key').value = settings.externalApis?.tmdb?.apiKey || '';
+    const moviesPath = settings.mediaPaths?.movies || '';
+    const seriesPath = settings.mediaPaths?.series || '';
+    const tmdbKey = settings.externalApis?.tmdb?.apiKey || '';
+    const sonarrUrl = settings.externalApis?.sonarr?.url || '';
+    const sonarrKey = settings.externalApis?.sonarr?.apiKey || '';
+    const radarrUrl = settings.externalApis?.radarr?.url || '';
+    const radarrKey = settings.externalApis?.radarr?.apiKey || '';
+    const prowlarrUrl = settings.externalApis?.prowlarr?.url || '';
+    const prowlarrKey = settings.externalApis?.prowlarr?.apiKey || '';
+
+    console.log('Setting form values:', {
+      moviesPath,
+      seriesPath,
+      tmdbKey: tmdbKey ? '***' : '(empty)',
+      sonarrUrl,
+      sonarrKey: sonarrKey ? '***' : '(empty)',
+      radarrUrl,
+      radarrKey: radarrKey ? '***' : '(empty)',
+      prowlarrUrl,
+      prowlarrKey: prowlarrKey ? '***' : '(empty)'
+    });
+
+    document.getElementById('movies-path').value = moviesPath;
+    document.getElementById('series-path').value = seriesPath;
+    document.getElementById('tmdb-key').value = tmdbKey;
 
     // External services
-    document.getElementById('sonarr-url').value = settings.externalApis?.sonarr?.url || '';
-    document.getElementById('sonarr-key').value = settings.externalApis?.sonarr?.apiKey || '';
-    document.getElementById('radarr-url').value = settings.externalApis?.radarr?.url || '';
-    document.getElementById('radarr-key').value = settings.externalApis?.radarr?.apiKey || '';
-    document.getElementById('prowlarr-url').value = settings.externalApis?.prowlarr?.url || '';
-    document.getElementById('prowlarr-key').value = settings.externalApis?.prowlarr?.apiKey || '';
+    document.getElementById('sonarr-url').value = sonarrUrl;
+    document.getElementById('sonarr-key').value = sonarrKey;
+    document.getElementById('radarr-url').value = radarrUrl;
+    document.getElementById('radarr-key').value = radarrKey;
+    document.getElementById('prowlarr-url').value = prowlarrUrl;
+    document.getElementById('prowlarr-key').value = prowlarrKey;
 
     // Metadata settings (not stored in backend yet)
     document.getElementById('auto-metadata').checked = true;
     document.getElementById('download-images').checked = true;
     document.getElementById('metadata-language').value = 'en';
+
+    console.log('Settings loaded successfully');
   } catch (error) {
     console.error('Failed to load settings:', error);
     showStatus('Failed to load current settings', 'error');
@@ -513,3 +537,92 @@ function filterMedia(type, query) {
     }
   });
 }
+
+
+// Server Update Functions
+let currentUpdateInfo = null;
+
+async function loadCurrentVersion() {
+  try {
+    const response = await apiClient.get('/server-update/version');
+    document.getElementById('current-version').textContent = response.version;
+  } catch (error) {
+    console.error('Failed to load version:', error);
+    document.getElementById('current-version').textContent = 'Unknown';
+  }
+}
+
+async function checkForUpdates() {
+  const btn = document.getElementById('check-update-btn');
+  btn.textContent = '⏳ Checking...';
+  btn.disabled = true;
+
+  try {
+    const response = await apiClient.get('/server-update/check');
+    
+    if (response.updateAvailable) {
+      currentUpdateInfo = response;
+      document.getElementById('latest-version').textContent = response.latestVersion;
+      document.getElementById('update-available-msg').style.display = 'block';
+      document.getElementById('update-details').style.display = 'block';
+      
+      // Format release notes
+      const releaseNotes = response.releaseNotes || 'No release notes available';
+      document.getElementById('release-notes').innerHTML = releaseNotes.replace(/\n/g, '<br>');
+      
+      showStatus(`Update available: ${response.latestVersion}`, 'success');
+    } else {
+      document.getElementById('update-available-msg').style.display = 'none';
+      document.getElementById('update-details').style.display = 'none';
+      showStatus(response.message || 'Server is up to date', 'success');
+    }
+  } catch (error) {
+    console.error('Failed to check for updates:', error);
+    showStatus('Failed to check for updates', 'error');
+  } finally {
+    btn.textContent = 'Check for Updates';
+    btn.disabled = false;
+  }
+}
+
+async function applyUpdate() {
+  if (!currentUpdateInfo || !currentUpdateInfo.downloadUrl) {
+    showStatus('No update information available', 'error');
+    return;
+  }
+
+  if (!confirm(`This will download and install version ${currentUpdateInfo.latestVersion}. The server will restart. Continue?`)) {
+    return;
+  }
+
+  const btn = document.getElementById('apply-update-btn');
+  btn.textContent = '⏳ Downloading...';
+  btn.disabled = true;
+
+  try {
+    const response = await apiClient.post('/server-update/apply', {
+      downloadUrl: currentUpdateInfo.downloadUrl
+    });
+    
+    showStatus('Update is being applied. Server will restart shortly...', 'success');
+    
+    // Show a countdown or message
+    setTimeout(() => {
+      alert('Server is restarting. Please refresh the page in a moment.');
+    }, 2000);
+  } catch (error) {
+    console.error('Failed to apply update:', error);
+    showStatus('Failed to apply update: ' + (error.message || 'Unknown error'), 'error');
+    btn.textContent = 'Download and Install Update';
+    btn.disabled = false;
+  }
+}
+
+// Make functions globally available
+window.checkForUpdates = checkForUpdates;
+window.applyUpdate = applyUpdate;
+
+// Load version on page load
+document.addEventListener('DOMContentLoaded', () => {
+  loadCurrentVersion();
+});

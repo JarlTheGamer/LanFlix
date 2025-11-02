@@ -75,7 +75,7 @@ class NotificationsManager {
   async loadNotifications() {
     try {
       const profileId = this.getCurrentProfileId();
-      const response = await apiClient.get(`/api/notifications/${profileId}`);
+      const response = await apiClient.getNotifications(profileId);
       
       this.notifications = response.notifications || [];
       this.renderNotifications();
@@ -100,7 +100,7 @@ class NotificationsManager {
 
   async loadJobs() {
     try {
-      const response = await apiClient.get('/api/jobs/status');
+      const response = await apiClient.get('/jobs/status');
       
       this.jobs = response.jobs || [];
       this.renderJobs();
@@ -239,7 +239,7 @@ class NotificationsManager {
 
   async respondToNotification(notificationId, response) {
     try {
-      await apiClient.post(`/api/notifications/${notificationId}/respond`, { response });
+      await apiClient.respondToNotification(notificationId, response);
       await this.loadNotifications();
     } catch (error) {
       console.error('Failed to respond to notification:', error);
@@ -260,7 +260,7 @@ class NotificationsManager {
 
   async triggerJob(jobName) {
     try {
-      await apiClient.post(`/api/jobs/${jobName}/trigger`);
+      await apiClient.post(`/jobs/${jobName}/trigger`);
       alert(`Job "${this.formatJobName(jobName)}" triggered successfully`);
       await this.loadJobs();
     } catch (error) {

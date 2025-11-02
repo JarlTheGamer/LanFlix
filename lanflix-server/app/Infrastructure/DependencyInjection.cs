@@ -201,6 +201,9 @@ public static class DependencyInjection
 
         // App Update Service
         services.AddSingleton<IAppUpdateService, Infrastructure.Services.AppUpdate.AppUpdateService>();
+        
+        // Server Update Service
+        services.AddSingleton<IServerUpdateService, Infrastructure.Services.AppUpdate.ServerUpdateService>();
 
         // Settings Service (Scoped because it uses IApplicationDbContext)
         services.AddScoped<ISettingsService, Infrastructure.Services.Settings.SettingsService>();
@@ -233,6 +236,9 @@ public static class DependencyInjection
         
         // Session cleanup background service
         services.AddHostedService<Infrastructure.Services.BackgroundJobs.SessionCleanupService>();
+        
+        // Server update check background service
+        services.AddHostedService<Infrastructure.Services.BackgroundJobs.ServerUpdateCheckJob>();
 
         // Background Jobs
         // services.AddHangfire(config => config.UseMemoryStorage());
