@@ -2,6 +2,7 @@ using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
 using Lanflix.Application.Features.Streaming.Services;
 using Lanflix.Domain.ValueObjects;
+using Lanflix.Infrastructure.Services.FFmpeg;
 using Lanflix.Infrastructure.Services.Settings;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -262,7 +263,150 @@ public class TranscodingController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Tests FFmpeg encoders (for debugging hardware acceleration)
+    /// </summary>
+    [HttpGet("test-encoders")]
+    public async Task<IActionResult> TestEncoders()
+    {
+        try
+        {
+            // Use the existing detector to see the logs
+            var hwAccel = await _hwAccelDetector.DetectAsync();
+            
+            return Ok(new
+            {
+                Message = "Check server logs for encoder detection details",
+                PreferredMethod = hwAccel.PreferredMethod.ToString(),
+                IsAvailable = hwAccel.IsAvailable
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to test encoders");
+            return StatusCode(500, "Internal server error");
+        }
+    }
 
+
+
+    /// <summary>
+    /// Gets media information for a content item
+    /// </summary>
+    [HttpGet("stream/{contentId}/info")]
+    public async Task<IActionResult> GetMediaInfo(int contentId, [FromQuery] int? profileId = null)
+    {
+        try
+        {
+            // Get content from database
+            var content = await _context.Contents
+                .FirstOrDefaultAsync(c => c.Id == contentId);
+            
+            if (content == null)
+            {
+                return NotFound("Content not found");
+            }
+
+            var filePath = content.FilePath;
+            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+            {
+                return NotFound("Content file not found");
+            }
+
+            // Analyze media
+            var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
+
+            return Ok(new
+            {
+                Duration = mediaInfo.Duration.TotalSeconds,
+                Video = new
+                {
+                    mediaInfo.Video.Codec,
+                    mediaInfo.Video.Width,
+                    mediaInfo.Video.Height,
+                    mediaInfo.Video.FrameRate,
+                    mediaInfo.Video.Bitrate,
+                    mediaInfo.Video.PixelFormat,
+                    mediaInfo.Video.ColorSpace,
+                    mediaInfo.Video.IsHDR,
+                    mediaInfo.Video.HdrFormat
+                },
+                AudioStreams = mediaInfo.Audio?.Select(a => new
+                {
+                    a.Index,
+                    a.Codec,
+                    a.Language,
+                    a.Channels,
+                    a.SampleRate,
+                    a.Bitrate
+                }),
+                SubtitleStreams = mediaInfo.Subtitles?.Select(s => new
+                {
+                    s.Index,
+                    s.Format,
+                    s.Language,
+                    s.Title,
+                    s.IsForced,
+                    s.IsDefault,
+                    s.IsEmbedded
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get media info for content: {ContentId}", contentId);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Gets available subtitles for a content item
+    /// </summary>
+    [HttpGet("stream/{contentId}/subtitles")]
+    public async Task<IActionResult> GetSubtitles(int contentId, [FromQuery] int? profileId = null)
+    {
+        try
+        {
+            // Get content from database
+            var content = await _context.Contents
+                .FirstOrDefaultAsync(c => c.Id == contentId);
+            
+            if (content == null)
+            {
+                return NotFound("Content not found");
+            }
+
+            var filePath = content.FilePath;
+            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+            {
+                return NotFound("Content file not found");
+            }
+
+            // Analyze media to get subtitle streams
+            var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
+
+            var subtitles = mediaInfo.Subtitles == null 
+                ? new object[0]
+                : mediaInfo.Subtitles.Select(s => new
+                {
+                    Index = s.Index,
+                    Language = s.Language ?? "unknown",
+                    Title = s.Title ?? $"Subtitle {s.Index + 1}",
+                    Format = s.Format,
+                    IsForced = s.IsForced,
+                    IsDefault = s.IsDefault,
+                    IsEmbedded = s.IsEmbedded,
+                    Url = $"/api/transcoding/stream/{contentId}/subtitles/{s.Index}"
+                }).ToArray();
+
+            return Ok(new { Subtitles = subtitles });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get subtitles for content: {ContentId}", contentId);
+            return StatusCode(500, "Internal server error");
+        }
+    }
 
     /// <summary>
     /// Test endpoint to stream a file directly (for development)

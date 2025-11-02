@@ -59,6 +59,29 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
 
             var buffer = new byte[64 * 1024]; // 64KB buffer
             var outputStream = process.StandardOutput.BaseStream;
+            var startTime = DateTime.UtcNow;
+            var lastLogTime = startTime;
+            var totalBytesRead = 0L;
+
+            // Start reading stderr in background to capture FFmpeg errors
+            var errorOutput = new StringBuilder();
+            var errorTask = Task.Run(async () =>
+            {
+                try
+                {
+                    var errorReader = process.StandardError;
+                    var errorBuffer = new char[1024];
+                    int charsRead;
+                    while ((charsRead = await errorReader.ReadAsync(errorBuffer, 0, errorBuffer.Length)) > 0)
+                    {
+                        errorOutput.Append(errorBuffer, 0, charsRead);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error reading FFmpeg stderr for session {SessionId}", request.SessionId);
+                }
+            });
 
             while (!process.HasExited && !cancellationToken.IsCancellationRequested)
             {
@@ -70,9 +93,42 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
                     if (process.HasExited)
                         break;
                     
+                    // Log progress every 5 seconds if no data
+                    var now = DateTime.UtcNow;
+                    if ((now - lastLogTime).TotalSeconds >= 5)
+                    {
+                        _logger.LogWarning("FFmpeg session {SessionId} - No output for {Seconds}s, process running: {IsRunning}, total bytes: {Bytes}", 
+                            request.SessionId, (now - startTime).TotalSeconds, !process.HasExited, totalBytesRead);
+                        
+                        // Log any error output we've captured
+                        var currentError = errorOutput.ToString();
+                        if (!string.IsNullOrEmpty(currentError))
+                        {
+                            _logger.LogError("FFmpeg stderr for session {SessionId}: {Error}", request.SessionId, currentError);
+                        }
+                        
+                        lastLogTime = now;
+                        
+                        // If no output for 30 seconds, something is wrong
+                        if ((now - startTime).TotalSeconds >= 30 && totalBytesRead == 0)
+                        {
+                            _logger.LogError("FFmpeg session {SessionId} - No output after 30 seconds, terminating process", request.SessionId);
+                            throw new TimeoutException("FFmpeg process appears to be hanging - no output after 30 seconds");
+                        }
+                    }
+                    
                     // Small delay to prevent busy waiting
-                    await Task.Delay(10, cancellationToken);
+                    await Task.Delay(100, cancellationToken);
                     continue;
+                }
+
+                totalBytesRead += bytesRead;
+                
+                // Log first successful output
+                if (totalBytesRead == bytesRead)
+                {
+                    _logger.LogInformation("FFmpeg session {SessionId} - First output received: {Bytes} bytes after {Seconds}s", 
+                        request.SessionId, bytesRead, (DateTime.UtcNow - startTime).TotalSeconds);
                 }
 
                 yield return new ReadOnlyMemory<byte>(buffer, 0, bytesRead);
@@ -81,15 +137,19 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             // Wait for process to complete
             await process.WaitForExitAsync(cancellationToken);
 
+            // Get final error output
+            await errorTask;
+            var finalError = errorOutput.ToString();
+
             if (process.ExitCode != 0)
             {
-                var error = await process.StandardError.ReadToEndAsync(cancellationToken);
                 _logger.LogError("FFmpeg process failed with exit code {ExitCode}: {Error}",
-                    process.ExitCode, error);
-                throw new InvalidOperationException($"Transcoding failed: {error}");
+                    process.ExitCode, finalError);
+                throw new InvalidOperationException($"Transcoding failed: {finalError}");
             }
 
-            _logger.LogInformation("Transcoding completed successfully for session {SessionId}", request.SessionId);
+            _logger.LogInformation("Transcoding completed successfully for session {SessionId}, total bytes: {Bytes}", 
+                request.SessionId, totalBytesRead);
         }
         finally
         {
@@ -197,8 +257,8 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         {
             case HwAccelMethod.Nvenc:
                 args.Append("-hwaccel cuda ");
-                // Only use cuda output format if we're doing scaling or other GPU operations
-                args.Append("-hwaccel_output_format cuda ");
+                // Skip cuda output format for simpler pipeline (like Jellyfin)
+                // args.Append("-hwaccel_output_format cuda ");
                 if (_settings.EnableLowPowerEncoding)
                 {
                     args.Append("-gpu 0 ");
@@ -237,12 +297,25 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         var videoCodec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
         args.Append($"-c:v {videoCodec} ");
 
-        // Video bitrate
+        // Video bitrate - optimized for streaming speed
         if (request.TargetVideoBitrate.HasValue)
         {
-            args.Append($"-b:v {request.TargetVideoBitrate.Value} ");
-            args.Append($"-maxrate {request.TargetVideoBitrate.Value * 1.2:F0} ");
-            args.Append($"-bufsize {request.TargetVideoBitrate.Value * 2:F0} ");
+            var bitrate = request.TargetVideoBitrate.Value;
+            var targetCodec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
+            
+            // For hardware encoding, use simpler bitrate control
+            if (targetCodec.Contains("nvenc"))
+            {
+                args.Append($"-b:v {bitrate} ");
+                args.Append($"-maxrate {bitrate} ");
+                args.Append($"-bufsize {bitrate / 2} "); // Smaller buffer for faster startup
+            }
+            else
+            {
+                args.Append($"-b:v {bitrate} ");
+                args.Append($"-maxrate {bitrate * 1.2:F0} ");
+                args.Append($"-bufsize {bitrate * 2:F0} ");
+            }
         }
 
         // Build video filter chain
@@ -257,7 +330,15 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             }
             else if (request.HwAccelMethod == HwAccelMethod.Nvenc)
             {
-                videoFilters.Add($"scale_cuda={request.TargetWidth.Value}:{request.TargetHeight.Value}");
+                // For NVENC, use regular scale if we're doing tone mapping (to avoid GPU/CPU conflicts)
+                if (request.SourceMedia.Video.IsHDR && _settings.EnableToneMapping)
+                {
+                    videoFilters.Add($"scale={request.TargetWidth.Value}:{request.TargetHeight.Value}");
+                }
+                else
+                {
+                    videoFilters.Add($"scale_cuda={request.TargetWidth.Value}:{request.TargetHeight.Value}");
+                }
             }
             else
             {
@@ -265,11 +346,20 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             }
         }
 
-        // HDR tone mapping
+        // HDR tone mapping - simplified for speed
         if (request.SourceMedia.Video.IsHDR && _settings.EnableToneMapping)
         {
-            var toneMappingFilters = GetToneMappingFilters(request.HwAccelMethod);
-            videoFilters.AddRange(toneMappingFilters);
+            // For hardware acceleration, use simpler tone mapping or skip it for speed
+            if (request.HwAccelMethod == HwAccelMethod.Nvenc)
+            {
+                // Skip complex tone mapping for NVENC - let the display handle HDR
+                _logger.LogInformation("Skipping tone mapping for NVENC hardware acceleration (speed optimization)");
+            }
+            else
+            {
+                var toneMappingFilters = GetToneMappingFilters(request.HwAccelMethod);
+                videoFilters.AddRange(toneMappingFilters);
+            }
         }
 
         // Apply video filters if any
@@ -387,22 +477,29 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         
         if (codec.Contains("x264") || codec.Contains("x265"))
         {
-            args.Append($"-preset {preset} ");
+            // Use faster presets for software encoding
+            var fastPreset = preset switch
+            {
+                "slow" or "slower" or "veryslow" => "medium",
+                _ => preset
+            };
+            args.Append($"-preset {fastPreset} ");
         }
         else if (codec.Contains("nvenc"))
         {
+            // Use faster NVENC presets for speed
             var nvencPreset = preset switch
             {
                 "ultrafast" => "p1",
                 "superfast" => "p2", 
                 "veryfast" => "p3",
                 "faster" => "p4",
-                "fast" => "p5",
-                "medium" => "p6",
-                "slow" => "p7",
-                "slower" => "p7", // Map slower to p7 as well
-                "veryslow" => "p7", // Map veryslow to p7 as well
-                _ => "p6"
+                "fast" => "p4",      // Use p4 for fast
+                "medium" => "p4",    // Use p4 for medium (faster)
+                "slow" => "p5",      // Use p5 for slow (still fast)
+                "slower" => "p5",    // Use p5 for slower
+                "veryslow" => "p6",  // Use p6 for veryslow
+                _ => "p4"            // Default to p4 (fast)
             };
             args.Append($"-preset {nvencPreset} ");
         }
@@ -452,8 +549,21 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         {
             return new List<string> { "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709" };
         }
+        else if (hwAccel == HwAccelMethod.Nvenc)
+        {
+            // Simplified tone mapping for NVENC - avoid complex zscale chains
+            return new List<string> 
+            { 
+                "hwdownload",
+                "format=nv12",
+                $"tonemap={algorithm}:desat=0",
+                "format=yuv420p",
+                "hwupload_cuda"
+            };
+        }
         else
         {
+            // Software tone mapping
             return new List<string> 
             { 
                 "zscale=t=linear:npl=100",
