@@ -28,8 +28,7 @@ public class JobsController : ControllerBase
         {
             _logger.LogInformation("Getting background jobs status");
 
-            // For now, return some example jobs
-            // In a real implementation, this would connect to a job scheduler like Hangfire or Quartz
+            // Return configured background jobs
             var jobs = new[]
             {
                 new
@@ -38,9 +37,9 @@ public class JobsController : ControllerBase
                     displayName = "Library Scan",
                     description = "Scans media folders for new content and updates the library",
                     schedule = "Every 6 hours",
-                    lastRun = DateTime.UtcNow.AddHours(-2),
-                    nextRun = DateTime.UtcNow.AddHours(4),
-                    running = false,
+                    lastRun = (DateTime?)null, // TODO: Track last run time
+                    nextRun = (DateTime?)null, // TODO: Calculate next run time
+                    running = false, // TODO: Track if currently running
                     enabled = true
                 },
                 new

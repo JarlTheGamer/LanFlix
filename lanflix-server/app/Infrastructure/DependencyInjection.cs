@@ -202,6 +202,9 @@ public static class DependencyInjection
         // Library Service (Scoped for scanning media folders)
         services.AddScoped<ILibraryService, Infrastructure.Services.Library.LibraryService>();
 
+        // Background Jobs
+        services.AddHostedService<Infrastructure.Services.BackgroundJobs.LibraryScanJob>();
+
         // FFmpeg Services
         services.AddSingleton<IMediaAnalyzer, MediaAnalyzer>();
         services.AddSingleton<IHardwareAccelerationDetector, HardwareAccelerationDetector>();
