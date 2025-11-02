@@ -374,53 +374,23 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             AddEncodingPreset(args, videoCodec);
         }
 
-        // Quality settings
-        if (_settings.TargetQuality.HasValue)
+        // Simplified quality settings for streaming
+        var codec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
+        if (codec.Contains("nvenc"))
         {
-            var codec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
+            // Simple NVENC settings for fast streaming
+            args.Append("-rc vbr ");
+            if (_settings.EnableBFrames)
+            {
+                args.Append("-bf 2 ");
+            }
+        }
+        else if (_settings.TargetQuality.HasValue)
+        {
+            // Only use CRF for software encoding
             if (codec.Contains("x264") || codec.Contains("x265"))
             {
                 args.Append($"-crf {_settings.TargetQuality.Value} ");
-            }
-            else if (codec.Contains("nvenc"))
-            {
-                // NVENC uses different quality scale (0-51, but different meaning)
-                var nvencCq = Math.Max(0, Math.Min(51, _settings.TargetQuality.Value));
-                args.Append($"-cq {nvencCq} ");
-            }
-            else if (codec.Contains("qsv"))
-            {
-                // QuickSync uses global_quality
-                var qsvQuality = Math.Max(1, Math.Min(51, _settings.TargetQuality.Value));
-                args.Append($"-global_quality {qsvQuality} ");
-            }
-            else if (codec.Contains("amf"))
-            {
-                // AMF uses qp_i, qp_p, qp_b
-                var amfQp = Math.Max(0, Math.Min(51, _settings.TargetQuality.Value));
-                args.Append($"-qp_i {amfQp} -qp_p {amfQp} -qp_b {amfQp} ");
-            }
-        }
-
-        // B-frames
-        if (_settings.EnableBFrames)
-        {
-            var codec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
-            if (codec.Contains("nvenc"))
-            {
-                args.Append("-bf 3 -b_ref_mode middle ");
-            }
-            else if (codec.Contains("qsv"))
-            {
-                args.Append("-bf 3 ");
-            }
-            else if (codec.Contains("amf"))
-            {
-                args.Append("-bf 3 ");
-            }
-            else if (!codec.Contains("vaapi")) // VAAPI doesn't always support B-frames well
-            {
-                args.Append("-bf 3 ");
             }
         }
     }
@@ -441,6 +411,9 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         {
             args.Append($"-b:a {request.TargetAudioBitrate.Value} ");
         }
+
+        // Video stream mapping (ensure video is included)
+        args.Append("-map 0:v:0 ");
 
         // Audio stream selection
         if (request.AudioStreamIndex.HasValue)
@@ -580,7 +553,7 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
     {
         return container.ToLowerInvariant() switch
         {
-            "mp4" => "mp4",
+            "mp4" => "mpegts", // Use mpegts for streaming instead of mp4
             "mkv" => "matroska",
             "webm" => "webm",
             "ts" or "mpegts" => "mpegts",
