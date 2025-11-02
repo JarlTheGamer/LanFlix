@@ -6,6 +6,8 @@ All build, packaging, and release tools for Lanflix.
 
 ```
 build-tools/
+├── build-full-stack.ps1  # Main build orchestrator
+│
 ├── android/              # Android app (WebView wrapper)
 │   ├── app/             # App source code
 │   ├── build.gradle     # Build configuration
@@ -16,7 +18,14 @@ build-tools/
 │   │   ├── start-server.bat
 │   │   ├── install-service.bat
 │   │   └── README.txt
-│   └── build-installer.bat  # Creates portable ZIP/installer
+│   ├── build-installer.bat  # Creates portable ZIP/installer
+│   ├── publish-win-x64.ps1  # Windows server build
+│   └── publish-linux-x64.sh # Linux server build
+│
+├── scripts/             # Utility scripts
+│   ├── build-server.js  # Server build automation
+│   ├── release.bat      # Release automation
+│   └── convert-audio-to-aac.ps1  # Media conversion utilities
 │
 └── scripts/             # Build and release automation
     ├── build-server.js      # Builds frontend + backend
@@ -242,4 +251,4 @@ After building:
 
 - [Android App](android/README.md)
 - [Server Installer](server/README.md)
-- [Build Guide](../BUILD.md)
+- [Build Guide](../docs/BUILD.md)

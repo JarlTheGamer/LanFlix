@@ -280,5 +280,5 @@ If connection tests fail:
 
 For issues or questions:
 - Check the logs in `lanflix-server/app/WebApi/logs/`
-- Review the EXTERNAL-APIS-MIGRATION.md document
+- Review the [EXTERNAL-APIS-MIGRATION.md](EXTERNAL-APIS-MIGRATION.md) document
 - Check Radarr/Sonarr logs for download issues

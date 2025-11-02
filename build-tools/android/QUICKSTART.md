@@ -152,5 +152,5 @@ build-tools/android/
 ## Need Help?
 
 - Check the main README.md
-- Check BUILD.md for detailed build instructions
+- Check docs/BUILD.md for detailed build instructions
 - Check server logs: `server/backend/logs/`

@@ -65,7 +65,7 @@ Build everything into one executable:
 
 ```powershell
 # Use the build script
-.\build-full-stack.ps1
+..\build-tools\build-full-stack.ps1
 
 # Or manually:
 # 1. Build frontend
@@ -140,7 +140,7 @@ lanflix-server/
 │   │   ├── ClientApp/         # Frontend source (Vite)
 │   │   └── wwwroot/           # Built frontend (served by backend)
 │   └── Tests/                 # Unit and integration tests
-└── build-full-stack.ps1       # Build script
+└── README.md
 ```
 
 ## Key Features

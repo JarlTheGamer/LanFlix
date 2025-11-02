@@ -88,7 +88,7 @@ REQUIREMENTS
 SUPPORT
 -------
 
-Documentation: See BUILD.md and README.md
+Documentation: See docs/BUILD.md and README.md
 Issues: https://github.com/JarlTheGamer/Applications./issues
 
 UNINSTALL

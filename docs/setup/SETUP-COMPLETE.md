@@ -45,7 +45,7 @@ The server is now properly organized in the `server/` folder:
 - `ANDROID-APP.md` - Android app overview
 - `build-tools/android/README.md` - Detailed Android docs
 - `build-tools/android/QUICKSTART.md` - Quick start guide
-- `BUILD.md` - Updated with new structure
+- `docs/BUILD.md` - Updated with new structure
 
 ## Project Structure
 
@@ -243,7 +243,7 @@ The `release.bat` script now:
 - ✅ `scripts/bump-version.js` - Android versioning
 - ✅ `build-tools/scripts/build-server.js` - Server paths
 - ✅ `package.json` - Updated scripts
-- ✅ `BUILD.md` - New structure docs
+- ✅ `docs/BUILD.md` - New structure docs
 
 ### Created
 - ⭐ `build-tools/android/` - Entire Android app
