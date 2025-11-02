@@ -457,33 +457,8 @@ app.UseResponseCompression();
 // Serve static files from wwwroot (frontend build output)
 app.UseStaticFiles();
 
-// Serve cached images (posters and backdrops)
-var posterCachePath = builder.Configuration["Lanflix:MediaPaths:PosterCache"];
-var backdropCachePath = builder.Configuration["Lanflix:MediaPaths:BackdropCache"];
-
-if (!string.IsNullOrEmpty(posterCachePath) && Directory.Exists(posterCachePath))
-{
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(posterCachePath),
-        RequestPath = "/images/posters",
-        ServeUnknownFileTypes = true,
-        DefaultContentType = "image/jpeg"
-    });
-    Log.Information("Serving poster images from: {Path}", posterCachePath);
-}
-
-if (!string.IsNullOrEmpty(backdropCachePath) && Directory.Exists(backdropCachePath))
-{
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(backdropCachePath),
-        RequestPath = "/images/backdrops",
-        ServeUnknownFileTypes = true,
-        DefaultContentType = "image/jpeg"
-    });
-    Log.Information("Serving backdrop images from: {Path}", backdropCachePath);
-}
+// Note: Posters and backdrops are stored in media folders, not in a separate cache
+// They will be served via the /media endpoint below
 
 // Serve media files directly from media folders
 var moviesPath = builder.Configuration["Lanflix:MediaPaths:Movies"];
@@ -618,6 +593,15 @@ try
         // Seed initial data
         var seeder = new Lanflix.Infrastructure.Persistence.DatabaseSeeder(context, logger);
         await seeder.SeedAsync();
+        
+        // Initialize default media folders on first run
+        var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
+        var folderLogger = scope.ServiceProvider.GetRequiredService<ILogger<Lanflix.Infrastructure.Services.Settings.MediaFolderInitializer>>();
+        var folderInitializer = new Lanflix.Infrastructure.Services.Settings.MediaFolderInitializer(
+            builder.Configuration,
+            settingsService,
+            folderLogger);
+        await folderInitializer.InitializeAsync();
     }
     
     app.Run();

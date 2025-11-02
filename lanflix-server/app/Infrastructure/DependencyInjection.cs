@@ -190,6 +190,9 @@ public static class DependencyInjection
         // Settings Service (Scoped because it uses IApplicationDbContext)
         services.AddScoped<ISettingsService, Infrastructure.Services.Settings.SettingsService>();
 
+        // Metadata Service (Scoped for downloading and saving metadata to media folders)
+        services.AddScoped<IMetadataService, Infrastructure.Services.Metadata.MetadataService>();
+
         // FFmpeg Services
         services.AddSingleton<IMediaAnalyzer, MediaAnalyzer>();
         services.AddSingleton<IHardwareAccelerationDetector, HardwareAccelerationDetector>();

@@ -12,16 +12,19 @@ public class ContentController : ControllerBase
     private readonly IRadarrClient? _radarrClient;
     private readonly ISonarrClient? _sonarrClient;
     private readonly IProwlarrClient? _prowlarrClient;
+    private readonly ISettingsService _settingsService;
     private readonly ILogger<ContentController> _logger;
 
     public ContentController(
         ITmdbClient tmdbClient,
+        ISettingsService settingsService,
         ILogger<ContentController> logger,
         IRadarrClient? radarrClient = null,
         ISonarrClient? sonarrClient = null,
         IProwlarrClient? prowlarrClient = null)
     {
         _tmdbClient = tmdbClient;
+        _settingsService = settingsService;
         _radarrClient = radarrClient;
         _sonarrClient = sonarrClient;
         _prowlarrClient = prowlarrClient;
@@ -333,13 +336,50 @@ public class ContentController : ControllerBase
 
             if (request.Type == "movie" && _radarrClient != null)
             {
+                // Get settings to use configured media paths
+                var settings = await _settingsService.GetSettingsAsync(cancellationToken);
+                
                 // Get root folders and quality profiles
                 var rootFolders = await _radarrClient.GetRootFoldersAsync(cancellationToken);
                 var qualityProfiles = await _radarrClient.GetQualityProfilesAsync(cancellationToken);
 
-                if (rootFolders.Count == 0 || qualityProfiles.Count == 0)
+                if (qualityProfiles.Count == 0)
                 {
-                    return BadRequest(new { error = "Radarr is not properly configured. Please set up root folders and quality profiles." });
+                    return BadRequest(new { error = "Radarr has no quality profiles configured. Please configure quality profiles in Radarr." });
+                }
+
+                // Determine root folder path - use configured media path or first available root folder
+                string rootFolderPath;
+                if (!string.IsNullOrEmpty(settings.MediaPaths.Movies))
+                {
+                    // Use configured media path
+                    rootFolderPath = settings.MediaPaths.Movies;
+                    
+                    // Check if this path exists in Radarr's root folders
+                    var matchingFolder = rootFolders.FirstOrDefault(f => 
+                        f.Path.TrimEnd('\\', '/').Equals(rootFolderPath.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase));
+                    
+                    if (matchingFolder == null)
+                    {
+                        _logger.LogWarning("Configured movie path '{Path}' not found in Radarr root folders. You need to add this path as a root folder in Radarr.", rootFolderPath);
+                        return BadRequest(new { 
+                            error = $"The configured movie path '{rootFolderPath}' is not set up as a root folder in Radarr. Please add it in Radarr's settings under Media Management > Root Folders.",
+                            hint = "Go to Radarr > Settings > Media Management > Root Folders and add: " + rootFolderPath
+                        });
+                    }
+                }
+                else if (rootFolders.Count > 0)
+                {
+                    // Use first available root folder from Radarr
+                    rootFolderPath = rootFolders[0].Path;
+                    _logger.LogInformation("No movie path configured in Lanflix settings. Using Radarr's first root folder: {Path}", rootFolderPath);
+                }
+                else
+                {
+                    return BadRequest(new { 
+                        error = "No root folders configured in Radarr and no movie path set in Lanflix settings. Please configure a movie path in Lanflix settings or add a root folder in Radarr.",
+                        hint = "Set the Movies path in Lanflix settings to match where you want Radarr to download movies."
+                    });
                 }
 
                 // Check if movie already exists
@@ -356,7 +396,7 @@ public class ContentController : ControllerBase
                     Title = request.Title,
                     Year = request.Year ?? DateTime.Now.Year,
                     QualityProfileId = qualityProfiles[0].Id,
-                    RootFolderPath = rootFolders[0].Path,
+                    RootFolderPath = rootFolderPath,
                     Monitored = true,
                     SearchForMovie = true
                 }, cancellationToken);
@@ -365,13 +405,50 @@ public class ContentController : ControllerBase
             }
             else if (request.Type == "series" && _sonarrClient != null)
             {
+                // Get settings to use configured media paths
+                var settings = await _settingsService.GetSettingsAsync(cancellationToken);
+                
                 // Get root folders and quality profiles
                 var rootFolders = await _sonarrClient.GetRootFoldersAsync(cancellationToken);
                 var qualityProfiles = await _sonarrClient.GetQualityProfilesAsync(cancellationToken);
 
-                if (rootFolders.Count == 0 || qualityProfiles.Count == 0)
+                if (qualityProfiles.Count == 0)
                 {
-                    return BadRequest(new { error = "Sonarr is not properly configured. Please set up root folders and quality profiles." });
+                    return BadRequest(new { error = "Sonarr has no quality profiles configured. Please configure quality profiles in Sonarr." });
+                }
+
+                // Determine root folder path - use configured media path or first available root folder
+                string rootFolderPath;
+                if (!string.IsNullOrEmpty(settings.MediaPaths.Series))
+                {
+                    // Use configured media path
+                    rootFolderPath = settings.MediaPaths.Series;
+                    
+                    // Check if this path exists in Sonarr's root folders
+                    var matchingFolder = rootFolders.FirstOrDefault(f => 
+                        f.Path.TrimEnd('\\', '/').Equals(rootFolderPath.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase));
+                    
+                    if (matchingFolder == null)
+                    {
+                        _logger.LogWarning("Configured series path '{Path}' not found in Sonarr root folders. You need to add this path as a root folder in Sonarr.", rootFolderPath);
+                        return BadRequest(new { 
+                            error = $"The configured series path '{rootFolderPath}' is not set up as a root folder in Sonarr. Please add it in Sonarr's settings under Media Management > Root Folders.",
+                            hint = "Go to Sonarr > Settings > Media Management > Root Folders and add: " + rootFolderPath
+                        });
+                    }
+                }
+                else if (rootFolders.Count > 0)
+                {
+                    // Use first available root folder from Sonarr
+                    rootFolderPath = rootFolders[0].Path;
+                    _logger.LogInformation("No series path configured in Lanflix settings. Using Sonarr's first root folder: {Path}", rootFolderPath);
+                }
+                else
+                {
+                    return BadRequest(new { 
+                        error = "No root folders configured in Sonarr and no series path set in Lanflix settings. Please configure a series path in Lanflix settings or add a root folder in Sonarr.",
+                        hint = "Set the Series path in Lanflix settings to match where you want Sonarr to download TV shows."
+                    });
                 }
 
                 // For series, we need to search by title to get TVDB ID
@@ -396,7 +473,7 @@ public class ContentController : ControllerBase
                     TvdbId = match.TvdbId,
                     Title = request.Title,
                     QualityProfileId = qualityProfiles[0].Id,
-                    RootFolderPath = rootFolders[0].Path,
+                    RootFolderPath = rootFolderPath,
                     Monitored = true,
                     SearchForMissingEpisodes = true
                 }, cancellationToken);
