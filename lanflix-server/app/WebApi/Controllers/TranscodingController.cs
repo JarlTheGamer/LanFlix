@@ -38,7 +38,8 @@ public class TranscodingController : ControllerBase
         int contentId,
         [FromQuery] string clientType = "web",
         [FromQuery] string? sessionId = null,
-        [FromQuery] double? startTime = null)
+        [FromQuery] double? startTime = null,
+        [FromQuery] int? profileId = null)
     {
         try
         {

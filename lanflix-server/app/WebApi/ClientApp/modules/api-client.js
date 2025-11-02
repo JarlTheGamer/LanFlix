@@ -568,20 +568,20 @@ class ApiClient {
   // ==================== STREAMING ENDPOINTS ====================
 
   /**
-   * GET /api/stream/:id
+   * GET /api/transcoding/stream/:id
    * Get streaming URL for content
    */
   getStreamUrl(contentId, episodeId = null, profileId = null, startTime = null) {
     const params = new URLSearchParams();
     if (episodeId) params.append('episodeId', episodeId);
     if (profileId) params.append('profileId', profileId);
-    if (startTime) params.append('start', startTime.toString());
+    if (startTime) params.append('startTime', startTime.toString());
 
-    return `${this.baseURL}/stream/${contentId}?${params.toString()}`;
+    return `${this.baseURL}/transcoding/stream/${contentId}?${params.toString()}`;
   }
 
   /**
-   * POST /api/stream/:id/progress
+   * POST /api/transcoding/stream/:id/progress
    * Update watch progress
    */
   async updateWatchProgress(contentId, profileId, progressSeconds, durationSeconds = null, episodeId = null) {
@@ -595,32 +595,32 @@ class ApiClient {
       body.episodeId = episodeId;
     }
 
-    return this.request(`/stream/${contentId}/progress`, {
+    return this.request(`/transcoding/stream/${contentId}/progress`, {
       method: 'POST',
       body: JSON.stringify(body)
     });
   }
 
   /**
-   * GET /api/stream/:id/subtitles
+   * GET /api/transcoding/stream/:id/subtitles
    * List available subtitles
    */
   async getSubtitles(contentId, episodeId = null) {
     const params = new URLSearchParams();
     if (episodeId) params.append('episodeId', episodeId);
 
-    return this.request(`/stream/${contentId}/subtitles?${params.toString()}`);
+    return this.request(`/transcoding/stream/${contentId}/subtitles?${params.toString()}`);
   }
 
   /**
-   * GET /api/stream/:id/info
+   * GET /api/transcoding/stream/:id/info
    * Get media file information (codecs, duration, etc.)
    */
   async getMediaInfo(contentId, episodeId = null) {
     const params = new URLSearchParams();
     if (episodeId) params.append('episodeId', episodeId);
 
-    return this.request(`/stream/${contentId}/info?${params.toString()}`);
+    return this.request(`/transcoding/stream/${contentId}/info?${params.toString()}`);
   }
 
   // ==================== SETTINGS ENDPOINTS ====================
