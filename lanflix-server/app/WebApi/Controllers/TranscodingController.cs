@@ -43,12 +43,22 @@ public class TranscodingController : ControllerBase
     {
         try
         {
+            _logger.LogInformation("Stream request for content ID: {ContentId}, profileId: {ProfileId}, clientType: {ClientType}", 
+                contentId, profileId, clientType);
+
             // TODO: Get file path from content database using contentId
             // For now, assume we have a way to get the file path
             var filePath = GetFilePathFromContentId(contentId);
             
-            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+            if (string.IsNullOrEmpty(filePath))
             {
+                _logger.LogWarning("No file path found for content ID: {ContentId}", contentId);
+                return NotFound("Content not found");
+            }
+
+            if (!System.IO.File.Exists(filePath))
+            {
+                _logger.LogWarning("File does not exist: {FilePath}", filePath);
                 return NotFound("Content not found");
             }
 
@@ -214,12 +224,21 @@ public class TranscodingController : ControllerBase
     {
         // This is a placeholder - in a real implementation, you'd query the database
         // For testing, you can hardcode some paths or implement a simple lookup
-        return contentId switch
+        var filePath = contentId switch
         {
             1 => @"C:\Videos\sample1.mp4",
             2 => @"C:\Videos\sample2.mkv",
             _ => string.Empty
         };
+
+        _logger.LogInformation("Looking up content ID {ContentId}, resolved to path: {FilePath}", contentId, filePath);
+        
+        if (!string.IsNullOrEmpty(filePath) && !System.IO.File.Exists(filePath))
+        {
+            _logger.LogWarning("File does not exist at path: {FilePath}", filePath);
+        }
+
+        return filePath;
     }
 
     /// <summary>
