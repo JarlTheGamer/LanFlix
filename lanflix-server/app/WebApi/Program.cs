@@ -342,7 +342,7 @@ builder.Services.AddRateLimiter(options =>
 
 // Add Clean Architecture layers
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 // SignalR for real-time communication
 var signalRBuilder = builder.Services.AddSignalR(options =>

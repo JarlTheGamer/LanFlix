@@ -12,6 +12,6 @@ public interface IApplicationDbContext
     DbSet<Watchlist> Watchlists { get; }
     DbSet<StreamSession> StreamSessions { get; }
     DbSet<ServerSetting> ServerSettings { get; }
-    
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
