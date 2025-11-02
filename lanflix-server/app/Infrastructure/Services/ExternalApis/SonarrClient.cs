@@ -3,6 +3,7 @@ using System.Text.Json;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Lanflix.Infrastructure.Services.ExternalApis;
@@ -11,35 +12,55 @@ public class SonarrClient : ISonarrClient
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<SonarrClient> _logger;
-    private readonly string _apiKey;
+    private readonly IServiceProvider _serviceProvider;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public SonarrClient(
         HttpClient httpClient,
-        IConfiguration configuration,
+        IServiceProvider serviceProvider,
         ILogger<SonarrClient> logger)
     {
         _httpClient = httpClient;
+        _serviceProvider = serviceProvider;
         _logger = logger;
-        _apiKey = configuration["Lanflix:ExternalApis:Sonarr:ApiKey"] ?? string.Empty;
 
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
+    }
 
-        if (!string.IsNullOrEmpty(_apiKey))
+    private async Task<string> GetApiKeyAsync(CancellationToken cancellationToken = default)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
+        var settings = await settingsService.GetSettingsAsync(cancellationToken);
+        return settings.ExternalApis.Sonarr.ApiKey;
+    }
+
+    private async Task<HttpRequestMessage> CreateRequestAsync(
+        HttpMethod method,
+        string requestUri,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new HttpRequestMessage(method, requestUri);
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        
+        if (!string.IsNullOrEmpty(apiKey))
         {
-            _httpClient.DefaultRequestHeaders.Add("X-Api-Key", _apiKey);
+            request.Headers.Add("X-Api-Key", apiKey);
         }
+        
+        return request;
     }
 
     public async Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            var response = await _httpClient.GetAsync("/api/v3/system/status", cancellationToken);
+            var request = await CreateRequestAsync(HttpMethod.Get, "/api/v3/system/status", cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -53,11 +74,11 @@ public class SonarrClient : ISonarrClient
     {
         try
         {
-            var results = await _httpClient.GetFromJsonAsync<List<SonarrSearchResult>>(
-                $"/api/v3/series/lookup?term={Uri.EscapeDataString(query)}",
-                _jsonOptions,
-                cancellationToken);
-
+            var request = await CreateRequestAsync(HttpMethod.Get, $"/api/v3/series/lookup?term={Uri.EscapeDataString(query)}", cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            
+            var results = await response.Content.ReadFromJsonAsync<List<SonarrSearchResult>>(_jsonOptions, cancellationToken);
             return results ?? new List<SonarrSearchResult>();
         }
         catch (Exception ex)
@@ -89,7 +110,10 @@ public class SonarrClient : ISonarrClient
                 }
             };
 
-            var response = await _httpClient.PostAsJsonAsync("/api/v3/series", payload, _jsonOptions, cancellationToken);
+            var httpRequest = await CreateRequestAsync(HttpMethod.Post, "/api/v3/series", cancellationToken);
+            httpRequest.Content = JsonContent.Create(payload, options: _jsonOptions);
+            
+            var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             var series = await response.Content.ReadFromJsonAsync<SonarrSeries>(_jsonOptions, cancellationToken);
@@ -108,11 +132,11 @@ public class SonarrClient : ISonarrClient
     {
         try
         {
-            var series = await _httpClient.GetFromJsonAsync<List<SonarrSeries>>(
-                "/api/v3/series",
-                _jsonOptions,
-                cancellationToken);
-
+            var request = await CreateRequestAsync(HttpMethod.Get, "/api/v3/series", cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            
+            var series = await response.Content.ReadFromJsonAsync<List<SonarrSeries>>(_jsonOptions, cancellationToken);
             return series ?? new List<SonarrSeries>();
         }
         catch (Exception ex)
@@ -140,12 +164,12 @@ public class SonarrClient : ISonarrClient
     {
         try
         {
-            var response = await _httpClient.GetFromJsonAsync<SonarrQueueResponse>(
-                $"/api/v3/queue?page={page}&pageSize={pageSize}",
-                _jsonOptions,
-                cancellationToken);
-
-            return response ?? new SonarrQueueResponse();
+            var request = await CreateRequestAsync(HttpMethod.Get, $"/api/v3/queue?page={page}&pageSize={pageSize}", cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            
+            var queueResponse = await response.Content.ReadFromJsonAsync<SonarrQueueResponse>(_jsonOptions, cancellationToken);
+            return queueResponse ?? new SonarrQueueResponse();
         }
         catch (Exception ex)
         {
@@ -158,11 +182,10 @@ public class SonarrClient : ISonarrClient
     {
         try
         {
-            var response = await _httpClient.DeleteAsync(
-                $"/api/v3/series/{id}?deleteFiles={deleteFiles}",
-                cancellationToken);
-
+            var request = await CreateRequestAsync(HttpMethod.Delete, $"/api/v3/series/{id}?deleteFiles={deleteFiles}", cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
             response.EnsureSuccessStatusCode();
+            
             _logger.LogInformation("Series deleted from Sonarr: {Id}", id);
         }
         catch (Exception ex)
@@ -176,11 +199,11 @@ public class SonarrClient : ISonarrClient
     {
         try
         {
-            var folders = await _httpClient.GetFromJsonAsync<List<SonarrRootFolder>>(
-                "/api/v3/rootfolder",
-                _jsonOptions,
-                cancellationToken);
-
+            var request = await CreateRequestAsync(HttpMethod.Get, "/api/v3/rootfolder", cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            
+            var folders = await response.Content.ReadFromJsonAsync<List<SonarrRootFolder>>(_jsonOptions, cancellationToken);
             return folders ?? new List<SonarrRootFolder>();
         }
         catch (Exception ex)
@@ -194,11 +217,11 @@ public class SonarrClient : ISonarrClient
     {
         try
         {
-            var profiles = await _httpClient.GetFromJsonAsync<List<SonarrQualityProfile>>(
-                "/api/v3/qualityprofile",
-                _jsonOptions,
-                cancellationToken);
-
+            var request = await CreateRequestAsync(HttpMethod.Get, "/api/v3/qualityprofile", cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            
+            var profiles = await response.Content.ReadFromJsonAsync<List<SonarrQualityProfile>>(_jsonOptions, cancellationToken);
             return profiles ?? new List<SonarrQualityProfile>();
         }
         catch (Exception ex)
@@ -212,11 +235,11 @@ public class SonarrClient : ISonarrClient
     {
         try
         {
-            var episodes = await _httpClient.GetFromJsonAsync<List<SonarrEpisode>>(
-                $"/api/v3/episode?seriesId={seriesId}",
-                _jsonOptions,
-                cancellationToken);
-
+            var request = await CreateRequestAsync(HttpMethod.Get, $"/api/v3/episode?seriesId={seriesId}", cancellationToken);
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            
+            var episodes = await response.Content.ReadFromJsonAsync<List<SonarrEpisode>>(_jsonOptions, cancellationToken);
             return episodes ?? new List<SonarrEpisode>();
         }
         catch (Exception ex)
@@ -236,7 +259,10 @@ public class SonarrClient : ISonarrClient
                 episodeIds = new[] { episodeId }
             };
 
-            var response = await _httpClient.PostAsJsonAsync("/api/v3/command", payload, _jsonOptions, cancellationToken);
+            var httpRequest = await CreateRequestAsync(HttpMethod.Post, "/api/v3/command", cancellationToken);
+            httpRequest.Content = JsonContent.Create(payload, options: _jsonOptions);
+            
+            var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             _logger.LogInformation("Episode search triggered in Sonarr: {EpisodeId}", episodeId);
@@ -259,7 +285,10 @@ public class SonarrClient : ISonarrClient
                 seasonNumber
             };
 
-            var response = await _httpClient.PostAsJsonAsync("/api/v3/command", payload, _jsonOptions, cancellationToken);
+            var httpRequest = await CreateRequestAsync(HttpMethod.Post, "/api/v3/command", cancellationToken);
+            httpRequest.Content = JsonContent.Create(payload, options: _jsonOptions);
+            
+            var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             _logger.LogInformation("Season search triggered in Sonarr: Series={SeriesId}, Season={SeasonNumber}", seriesId, seasonNumber);
