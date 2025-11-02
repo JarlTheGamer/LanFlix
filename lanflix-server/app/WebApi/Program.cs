@@ -457,6 +457,73 @@ app.UseResponseCompression();
 // Serve static files from wwwroot (frontend build output)
 app.UseStaticFiles();
 
+// Serve cached images (posters and backdrops)
+var posterCachePath = builder.Configuration["Lanflix:MediaPaths:PosterCache"];
+var backdropCachePath = builder.Configuration["Lanflix:MediaPaths:BackdropCache"];
+
+if (!string.IsNullOrEmpty(posterCachePath) && Directory.Exists(posterCachePath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(posterCachePath),
+        RequestPath = "/images/posters",
+        ServeUnknownFileTypes = true,
+        DefaultContentType = "image/jpeg"
+    });
+    Log.Information("Serving poster images from: {Path}", posterCachePath);
+}
+
+if (!string.IsNullOrEmpty(backdropCachePath) && Directory.Exists(backdropCachePath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(backdropCachePath),
+        RequestPath = "/images/backdrops",
+        ServeUnknownFileTypes = true,
+        DefaultContentType = "image/jpeg"
+    });
+    Log.Information("Serving backdrop images from: {Path}", backdropCachePath);
+}
+
+// Serve media files directly from media folders
+var moviesPath = builder.Configuration["Lanflix:MediaPaths:Movies"];
+var seriesPath = builder.Configuration["Lanflix:MediaPaths:Series"];
+
+// Create a combined media root if either path is configured
+if (!string.IsNullOrEmpty(moviesPath) || !string.IsNullOrEmpty(seriesPath))
+{
+    // Find common parent directory or use the first available path
+    var mediaRoot = !string.IsNullOrEmpty(moviesPath) && Directory.Exists(moviesPath)
+        ? Path.GetDirectoryName(moviesPath) ?? moviesPath
+        : !string.IsNullOrEmpty(seriesPath) && Directory.Exists(seriesPath)
+            ? Path.GetDirectoryName(seriesPath) ?? seriesPath
+            : null;
+
+    if (!string.IsNullOrEmpty(mediaRoot) && Directory.Exists(mediaRoot))
+    {
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(mediaRoot),
+            RequestPath = "/media",
+            ServeUnknownFileTypes = true,
+            OnPrepareResponse = ctx =>
+            {
+                // Set appropriate content type for images
+                if (ctx.File.Name.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                    ctx.File.Name.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
+                {
+                    ctx.Context.Response.ContentType = "image/jpeg";
+                }
+                else if (ctx.File.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                {
+                    ctx.Context.Response.ContentType = "image/png";
+                }
+            }
+        });
+        Log.Information("Serving media files from: {Path}", mediaRoot);
+    }
+}
+
 app.UseCors();
 app.UseRateLimiter();
 app.UseOutputCache();
@@ -543,10 +610,10 @@ try
         var context = scope.ServiceProvider.GetRequiredService<Lanflix.Infrastructure.Persistence.ApplicationDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Lanflix.Infrastructure.Persistence.DatabaseSeeder>>();
         
-        // Apply any pending migrations automatically
-        Log.Information("Checking database migrations...");
-        await context.Database.MigrateAsync();
-        Log.Information("Database is up to date");
+        // Ensure database is created (creates tables if they don't exist)
+        Log.Information("Ensuring database exists...");
+        await context.Database.EnsureCreatedAsync();
+        Log.Information("Database is ready");
         
         // Seed initial data
         var seeder = new Lanflix.Infrastructure.Persistence.DatabaseSeeder(context, logger);

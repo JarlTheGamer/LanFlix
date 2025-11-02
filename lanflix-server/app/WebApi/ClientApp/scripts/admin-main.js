@@ -4,21 +4,28 @@ import apiClient from '../modules/api-client.js';
 async function loadSettings() {
   try {
     const response = await apiClient.getSettings();
-    const settings = response.settings || {};
+    console.log('Loaded settings:', response);
 
-    // Populate form fields
-    document.getElementById('movies-path').value = settings.moviesPath || '/media/movies';
-    document.getElementById('series-path').value = settings.seriesPath || '/media/series';
-    document.getElementById('tmdb-key').value = settings.tmdbApiKey || '';
-    document.getElementById('sonarr-url').value = settings.sonarrUrl || '';
-    document.getElementById('sonarr-key').value = settings.sonarrApiKey || '';
-    document.getElementById('radarr-url').value = settings.radarrUrl || '';
-    document.getElementById('radarr-key').value = settings.radarrApiKey || '';
-    document.getElementById('prowlarr-url').value = settings.prowlarrUrl || '';
-    document.getElementById('prowlarr-key').value = settings.prowlarrApiKey || '';
-    document.getElementById('auto-metadata').checked = settings.autoMetadata !== false;
-    document.getElementById('download-images').checked = settings.downloadImages !== false;
-    document.getElementById('metadata-language').value = settings.metadataLanguage || 'en';
+    // The response is the settings object directly (not nested in a settings property)
+    const settings = response;
+
+    // Populate form fields from nested structure
+    document.getElementById('movies-path').value = settings.mediaPaths?.movies || '';
+    document.getElementById('series-path').value = settings.mediaPaths?.series || '';
+    document.getElementById('tmdb-key').value = settings.externalApis?.tmdb?.apiKey || '';
+
+    // External services
+    document.getElementById('sonarr-url').value = settings.externalApis?.sonarr?.url || '';
+    document.getElementById('sonarr-key').value = settings.externalApis?.sonarr?.apiKey || '';
+    document.getElementById('radarr-url').value = settings.externalApis?.radarr?.url || '';
+    document.getElementById('radarr-key').value = settings.externalApis?.radarr?.apiKey || '';
+    document.getElementById('prowlarr-url').value = settings.externalApis?.prowlarr?.url || '';
+    document.getElementById('prowlarr-key').value = settings.externalApis?.prowlarr?.apiKey || '';
+
+    // Metadata settings (not stored in backend yet)
+    document.getElementById('auto-metadata').checked = true;
+    document.getElementById('download-images').checked = true;
+    document.getElementById('metadata-language').value = 'en';
   } catch (error) {
     console.error('Failed to load settings:', error);
     showStatus('Failed to load current settings', 'error');
@@ -32,21 +39,58 @@ async function saveSettings() {
   saveBtn.disabled = true;
 
   try {
+    // Build settings object with proper nested structure matching ServerSettingsDto
     const settings = {
-      moviesPath: document.getElementById('movies-path').value,
-      seriesPath: document.getElementById('series-path').value,
-      tmdbApiKey: document.getElementById('tmdb-key').value,
-      sonarrUrl: document.getElementById('sonarr-url').value,
-      sonarrApiKey: document.getElementById('sonarr-key').value,
-      radarrUrl: document.getElementById('radarr-url').value,
-      radarrApiKey: document.getElementById('radarr-key').value,
-      prowlarrUrl: document.getElementById('prowlarr-url').value,
-      prowlarrApiKey: document.getElementById('prowlarr-key').value,
-      autoMetadata: document.getElementById('auto-metadata').checked,
-      downloadImages: document.getElementById('download-images').checked,
-      metadataLanguage: document.getElementById('metadata-language').value
+      mediaPaths: {
+        movies: document.getElementById('movies-path').value || '',
+        series: document.getElementById('series-path').value || '',
+        posterCache: '',
+        backdropCache: ''
+      },
+      transcoding: {
+        enableHardwareAcceleration: true,
+        preferredHwAccel: 'auto',
+        maxConcurrentTranscodes: 2,
+        tempPath: '',
+        defaultBitrate: 8000000,
+        hlsSegmentDuration: 6
+      },
+      streaming: {
+        enableDirectPlay: true,
+        enableDirectStream: true,
+        chunkSize: 81920
+      },
+      cache: {
+        redis: {
+          enabled: false,
+          connectionString: '',
+          instanceName: 'lanflix:'
+        },
+        memory: {
+          sizeLimit: 512
+        }
+      },
+      externalApis: {
+        tmdb: {
+          apiKey: document.getElementById('tmdb-key').value || '',
+          baseUrl: 'https://api.themoviedb.org/3/'
+        },
+        sonarr: {
+          url: document.getElementById('sonarr-url').value || '',
+          apiKey: document.getElementById('sonarr-key').value || ''
+        },
+        radarr: {
+          url: document.getElementById('radarr-url').value || '',
+          apiKey: document.getElementById('radarr-key').value || ''
+        },
+        prowlarr: {
+          url: document.getElementById('prowlarr-url').value || '',
+          apiKey: document.getElementById('prowlarr-key').value || ''
+        }
+      }
     };
 
+    console.log('Saving settings:', settings);
     await apiClient.updateSettings(settings);
     showStatus('✅ Configuration saved successfully!', 'success');
     saveBtn.textContent = '💾 Save Configuration';

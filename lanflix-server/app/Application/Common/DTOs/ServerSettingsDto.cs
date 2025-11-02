@@ -55,10 +55,19 @@ public class MemoryCacheSettings
 public class ExternalApisSettings
 {
     public TmdbSettings Tmdb { get; set; } = new();
+    public ExternalServiceSettings Sonarr { get; set; } = new();
+    public ExternalServiceSettings Radarr { get; set; } = new();
+    public ExternalServiceSettings Prowlarr { get; set; } = new();
 }
 
 public class TmdbSettings
 {
     public string ApiKey { get; set; } = string.Empty;
     public string BaseUrl { get; set; } = string.Empty;
+}
+
+public class ExternalServiceSettings
+{
+    public string Url { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
 }

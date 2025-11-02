@@ -1,4 +1,3 @@
-import { HEROES, MOVIES } from './data.js';
 import stateManager from './data.js';
 import apiClient from './api-client.js';
 import ContentModal from './content-modal.js';
@@ -300,7 +299,10 @@ export class ContentDisplay {
       || item.posterUrl
       || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"%3E%3Crect fill="%23222" width="1920" height="1080"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="48" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
 
-    const genres = Array.isArray(item.genres) ? item.genres.join(' • ') : (item.genre || 'Unknown');
+    // Handle genres - they can be strings or objects with name property
+    const genres = Array.isArray(item.genres)
+      ? item.genres.map(g => typeof g === 'string' ? g : g.name || g.Name).filter(Boolean).join(' • ')
+      : (item.genre || 'Unknown');
     const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : (item.year || '');
     const duration = item.runtime ? `${Math.floor(item.runtime / 60)}h ${item.runtime % 60}m` : (item.duration || '');
     const rating = item.contentRating || item.rating || 'NR';
@@ -363,7 +365,10 @@ export class ContentDisplay {
       || item.posterUrl
       || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"%3E%3Crect fill="%23222" width="1920" height="1080"/%3E%3Ctext x="50%25" y="50%25" fill="%23666" font-size="48" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
 
-    const genres = Array.isArray(item.genres) && item.genres.length > 0 ? item.genres.join(' • ') : 'Trending';
+    // Handle genres - they can be strings or objects with name property
+    const genres = Array.isArray(item.genres) && item.genres.length > 0
+      ? item.genres.map(g => typeof g === 'string' ? g : g.name || g.Name).filter(Boolean).join(' • ')
+      : 'Trending';
     const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : '';
     const rating = item.voteAverage ? `★ ${item.voteAverage.toFixed(1)}` : '';
     const type = item.type === 'movie' ? 'Movie' : 'Series';
@@ -519,10 +524,10 @@ export class ContentDisplay {
     if (this.activeAmbilightLayer === 1) {
       // Set the background image on the inactive layer first
       this.ambilightLayer2.style.backgroundImage = backgroundImage;
-      
+
       // Force a reflow to ensure the background is set before transition
       void this.ambilightLayer2.offsetWidth;
-      
+
       // Now trigger the transition
       this.ambilightLayer2.classList.add('active');
       this.ambilightLayer1.classList.remove('active');
@@ -530,10 +535,10 @@ export class ContentDisplay {
     } else {
       // Set the background image on the inactive layer first
       this.ambilightLayer1.style.backgroundImage = backgroundImage;
-      
+
       // Force a reflow to ensure the background is set before transition
       void this.ambilightLayer1.offsetWidth;
-      
+
       // Now trigger the transition
       this.ambilightLayer1.classList.add('active');
       this.ambilightLayer2.classList.remove('active');
@@ -873,8 +878,9 @@ export class ContentDisplay {
       || item.expandedImage
       || posterUrl;
 
+    // Handle genres - they can be strings or objects with name property
     const genres = Array.isArray(item.genres) && item.genres.length > 0
-      ? item.genres.slice(0, 2).join(', ')
+      ? item.genres.slice(0, 2).map(g => typeof g === 'string' ? g : g.name || g.Name).filter(Boolean).join(', ')
       : (item.genre || '');
     const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : (item.year || '');
     const duration = item.runtime ? `${item.runtime}m` : (item.duration || '');

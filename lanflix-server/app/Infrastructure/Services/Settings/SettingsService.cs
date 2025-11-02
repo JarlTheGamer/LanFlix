@@ -25,29 +25,32 @@ public class SettingsService : ISettingsService
 
     public async Task<ServerSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
+        // Load all settings from database once
+        var dbSettings = await _context.ServerSettings
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        
+        var settingsDict = dbSettings.ToDictionary(s => s.Key, s => s.Value);
+
         // Helper to get setting from DB or config
         string GetSetting(string key, string defaultValue = "")
         {
-            var dbSetting = _context.ServerSettings
-                .FirstOrDefault(s => s.Key == key);
-            return dbSetting?.Value ?? _configuration[key] ?? defaultValue;
+            if (settingsDict.TryGetValue(key, out var value) && !string.IsNullOrEmpty(value))
+                return value;
+            return _configuration[key] ?? defaultValue;
         }
 
         int GetIntSetting(string key, int defaultValue)
         {
-            var dbSetting = _context.ServerSettings
-                .FirstOrDefault(s => s.Key == key);
-            if (dbSetting != null && int.TryParse(dbSetting.Value, out var value))
-                return value;
+            if (settingsDict.TryGetValue(key, out var value) && int.TryParse(value, out var intValue))
+                return intValue;
             return _configuration.GetValue<int>(key, defaultValue);
         }
 
         bool GetBoolSetting(string key, bool defaultValue)
         {
-            var dbSetting = _context.ServerSettings
-                .FirstOrDefault(s => s.Key == key);
-            if (dbSetting != null && bool.TryParse(dbSetting.Value, out var value))
-                return value;
+            if (settingsDict.TryGetValue(key, out var value) && bool.TryParse(value, out var boolValue))
+                return boolValue;
             return _configuration.GetValue<bool>(key, defaultValue);
         }
 
@@ -94,6 +97,21 @@ public class SettingsService : ISettingsService
                 {
                     ApiKey = GetSetting("Lanflix:ExternalApis:Tmdb:ApiKey"),
                     BaseUrl = GetSetting("Lanflix:ExternalApis:Tmdb:BaseUrl", "https://api.themoviedb.org/3/")
+                },
+                Sonarr = new ExternalServiceSettings
+                {
+                    Url = GetSetting("Lanflix:ExternalApis:Sonarr:Url"),
+                    ApiKey = GetSetting("Lanflix:ExternalApis:Sonarr:ApiKey")
+                },
+                Radarr = new ExternalServiceSettings
+                {
+                    Url = GetSetting("Lanflix:ExternalApis:Radarr:Url"),
+                    ApiKey = GetSetting("Lanflix:ExternalApis:Radarr:ApiKey")
+                },
+                Prowlarr = new ExternalServiceSettings
+                {
+                    Url = GetSetting("Lanflix:ExternalApis:Prowlarr:Url"),
+                    ApiKey = GetSetting("Lanflix:ExternalApis:Prowlarr:ApiKey")
                 }
             }
         };
@@ -155,6 +173,15 @@ public class SettingsService : ISettingsService
 
             await UpsertSetting("Lanflix:ExternalApis:Tmdb:ApiKey", settings.ExternalApis.Tmdb.ApiKey);
             await UpsertSetting("Lanflix:ExternalApis:Tmdb:BaseUrl", settings.ExternalApis.Tmdb.BaseUrl);
+
+            await UpsertSetting("Lanflix:ExternalApis:Sonarr:Url", settings.ExternalApis.Sonarr.Url);
+            await UpsertSetting("Lanflix:ExternalApis:Sonarr:ApiKey", settings.ExternalApis.Sonarr.ApiKey);
+
+            await UpsertSetting("Lanflix:ExternalApis:Radarr:Url", settings.ExternalApis.Radarr.Url);
+            await UpsertSetting("Lanflix:ExternalApis:Radarr:ApiKey", settings.ExternalApis.Radarr.ApiKey);
+
+            await UpsertSetting("Lanflix:ExternalApis:Prowlarr:Url", settings.ExternalApis.Prowlarr.Url);
+            await UpsertSetting("Lanflix:ExternalApis:Prowlarr:ApiKey", settings.ExternalApis.Prowlarr.ApiKey);
 
             await _context.SaveChangesAsync(cancellationToken);
 

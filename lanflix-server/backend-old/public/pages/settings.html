@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="app-version" content="1.2.6" />
+    <title>Settings - Lanflix</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+  <script type="module" crossorigin src="/assets/settings-C2ZMd5AO.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/api-client-7IhkegDa.js">
+  <link rel="modulepreload" crossorigin href="/assets/tv-navigation-BRt9J30j.js">
+  <link rel="modulepreload" crossorigin href="/assets/data-DddsZ_ae.js">
+  <link rel="stylesheet" crossorigin href="/assets/settings-mQHocUNL.css">
+  <link rel="stylesheet" crossorigin href="/assets/main-C7ViIW5t.css">
+</head>
+
+<body>
+    <header class="top-nav is-solid">
+        <div class="nav-inner">
+            <div class="left-section">
+                <button class="back-btn" aria-label="Back" onclick="window.location.href='index.html'">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+                    </svg>
+                </button>
+            </div>
+            <div class="brand">
+                <button class="notifications-btn" aria-label="Notifications"
+                    onclick="window.location.href='notifications.html'">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                            d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z" />
+                    </svg>
+                    <span class="notification-badge" id="notification-badge"></span>
+                </button>
+                <span class="brand-name">Lanflix Settings</span>
+            </div>
+            <div class="right-section"></div>
+        </div>
+    </header>
+
+    <main class="settings-main">
+        <div class="settings-container">
+            <aside class="settings-sidebar">
+                <nav class="settings-nav">
+                    <button class="settings-nav-item active" data-section="general">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
+                        </svg>
+                        <span>General</span>
+                    </button>
+                    <button class="settings-nav-item" data-section="playback">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                        </svg>
+                        <span>Playback</span>
+                    </button>
+                    <button class="settings-nav-item" data-section="display">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" />
+                        </svg>
+                        <span>Display</span>
+                    </button>
+                    <button class="settings-nav-item" data-section="profiles">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                        </svg>
+                        <span>Profiles</span>
+                    </button>
+                    <button class="settings-nav-item" data-section="network">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
+                        </svg>
+                        <span>Network</span>
+                    </button>
+                    <button class="settings-nav-item" data-section="devices">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z" />
+                        </svg>
+                        <span>Devices</span>
+                    </button>
+                    <button class="settings-nav-item" data-section="about">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+                        </svg>
+                        <span>About</span>
+                    </button>
+                    <div style="margin: 20px 0; border-top: 1px solid rgba(255,255,255,0.1);"></div>
+                    <button class="settings-nav-item" onclick="window.location.href='admin.html'"
+                        style="background: linear-gradient(135deg, #e50914 0%, #b20710 100%); margin-top: 10px;">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+                        </svg>
+                        <span>Admin Dashboard</span>
+                    </button>
+                </nav>
+            </aside>
+
+            <div class="settings-content">
+                <!-- General Section -->
+                <section class="settings-section active" id="general">
+                    <h1 class="settings-title">General</h1>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Language & Region</h2>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label for="language">Display Language</label>
+                                <p class="settings-item-description">Choose your preferred language</p>
+                            </div>
+                            <select id="language" class="settings-select">
+                                <option value="en">English</option>
+                                <option value="es">Español</option>
+                                <option value="fr">Français</option>
+                                <option value="de">Deutsch</option>
+                                <option value="ja">日本語</option>
+                            </select>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label for="timezone">Timezone</label>
+                                <p class="settings-item-description">Set your local timezone</p>
+                            </div>
+                            <select id="timezone" class="settings-select">
+                                <option value="utc">UTC</option>
+                                <option value="est">Eastern Time</option>
+                                <option value="pst">Pacific Time</option>
+                                <option value="cet">Central European Time</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Preferences</h2>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Auto-play next episode</label>
+                                <p class="settings-item-description">Automatically play the next episode when one
+                                    finishes</p>
+                            </div>
+                            <label class="settings-toggle">
+                                <input type="checkbox" checked />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Skip intro</label>
+                                <p class="settings-item-description">Automatically skip intro sequences</p>
+                            </div>
+                            <label class="settings-toggle">
+                                <input type="checkbox" checked />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Playback Section -->
+                <section class="settings-section" id="playback">
+                    <h1 class="settings-title">Playback</h1>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Video Quality</h2>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label for="quality">Preferred Quality</label>
+                                <p class="settings-item-description">Select default video quality</p>
+                            </div>
+                            <select id="quality" class="settings-select">
+                                <option value="auto">Auto</option>
+                                <option value="4k">4K Ultra HD</option>
+                                <option value="1080p">1080p Full HD</option>
+                                <option value="720p">720p HD</option>
+                                <option value="480p">480p SD</option>
+                            </select>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Data Saver</label>
+                                <p class="settings-item-description">Reduce video quality to save bandwidth</p>
+                            </div>
+                            <label class="settings-toggle">
+                                <input type="checkbox" />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Audio</h2>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label for="audio-lang">Audio Language</label>
+                                <p class="settings-item-description">Preferred audio language</p>
+                            </div>
+                            <select id="audio-lang" class="settings-select">
+                                <option value="en">English</option>
+                                <option value="es">Spanish</option>
+                                <option value="fr">French</option>
+                                <option value="ja">Japanese</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Transcoding</h2>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label for="transcoding-mode">Playback Mode</label>
+                                <p class="settings-item-description">How to handle media playback (Jellyfin-style)</p>
+                            </div>
+                            <select id="transcoding-mode" class="settings-select">
+                                <option value="auto" selected>Auto - Detect what's needed (Recommended)</option>
+                                <option value="direct-play">Direct Play - No transcoding (fastest)</option>
+                                <option value="direct-stream">Direct Stream - Audio transcode only</option>
+                                <option value="transcode">Transcode - Full video+audio transcoding</option>
+                                <option value="custom">Custom - Manual audio/video control</option>
+                            </select>
+                        </div>
+                        <div class="settings-info-box" id="custom-mode-warning"
+                            style="display: none; background: #ff9800; border-left: 4px solid #f57c00;">
+                            <svg viewBox="0 0 24 24" width="20" height="20">
+                                <path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+                            </svg>
+                            <div>
+                                <strong>⚠️ Warning: Custom Mode</strong>
+                                <p>Custom mode may not work with all footage. Some codec combinations can cause playback
+                                    issues or seeking problems. Use Auto mode for best compatibility.</p>
+                            </div>
+                        </div>
+                        <div class="settings-item" id="audio-transcoding-item">
+                            <div class="settings-item-info">
+                                <label>Audio Transcoding</label>
+                                <p class="settings-item-description">Convert incompatible audio codecs to AAC (Custom
+                                    mode only)</p>
+                            </div>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="audio-transcoding" checked disabled />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-item" id="video-transcoding-item">
+                            <div class="settings-item-info">
+                                <label>Video Transcoding</label>
+                                <p class="settings-item-description">Convert incompatible video codecs to H.264 (Custom
+                                    mode only)</p>
+                            </div>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="video-transcoding" checked disabled />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Hardware Acceleration</label>
+                                <p class="settings-item-description">Use GPU (NVIDIA NVENC) for faster transcoding</p>
+                            </div>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="use-hardware-accel" checked />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label for="transcode-preset">Encoding Preset</label>
+                                <p class="settings-item-description">Balance between speed and quality (p1=fastest,
+                                    p7=best quality)</p>
+                            </div>
+                            <select id="transcode-preset" class="settings-select">
+                                <option value="p1">P1 - Fastest (Low Quality)</option>
+                                <option value="p2">P2 - Very Fast</option>
+                                <option value="p3">P3 - Fast</option>
+                                <option value="p4" selected>P4 - Balanced (Recommended)</option>
+                                <option value="p5">P5 - Quality</option>
+                                <option value="p6">P6 - High Quality</option>
+                                <option value="p7">P7 - Best Quality (Slowest)</option>
+                            </select>
+                        </div>
+                        <div class="settings-info-box">
+                            <svg viewBox="0 0 24 24" width="20" height="20">
+                                <path fill="currentColor"
+                                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+                            </svg>
+                            <div>
+                                <strong>Playback Modes (Jellyfin-style):</strong>
+                                <p><strong>Auto:</strong> Automatically detects what's needed - Direct Play, Remux
+                                    (container change), Direct Stream (audio only), or Transcode (full).<br>
+                                    <strong>Direct Play:</strong> Stream files as-is (fastest, no transcoding, requires
+                                    compatible codecs).<br>
+                                    <strong>Direct Stream:</strong> Transcode audio only, copy video (for incompatible
+                                    audio like DTS/AC3).<br>
+                                    <strong>Transcode:</strong> Full video+audio transcoding (slowest, works with
+                                    everything).<br>
+                                    Seeking works in all modes. Hardware acceleration uses GPU for 10-20x faster
+                                    encoding.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Display Section -->
+                <section class="settings-section" id="display">
+                    <h1 class="settings-title">Display</h1>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Appearance</h2>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label for="theme">Theme</label>
+                                <p class="settings-item-description">Choose your interface theme</p>
+                            </div>
+                            <select id="theme" class="settings-select">
+                                <option value="dark">Dark</option>
+                                <option value="light">Light</option>
+                                <option value="auto">Auto</option>
+                            </select>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Show backdrop effects</label>
+                                <p class="settings-item-description">Display animated backgrounds and blur effects</p>
+                            </div>
+                            <label class="settings-toggle">
+                                <input type="checkbox" checked />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Profiles Section -->
+                <section class="settings-section" id="profiles">
+                    <h1 class="settings-title">Profiles</h1>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Manage Profiles</h2>
+                        <div class="profiles-grid">
+                            <div class="profile-card">
+                                <div class="profile-card-avatar"
+                                    style="background: linear-gradient(135deg, #ff6b6b, #ee5a24)"></div>
+                                <div class="profile-card-name">Alex</div>
+                                <button class="profile-card-btn">Edit</button>
+                            </div>
+                            <div class="profile-card">
+                                <div class="profile-card-avatar"
+                                    style="background: linear-gradient(135deg, #4ecdc4, #26d0ce)"></div>
+                                <div class="profile-card-name">Sarah</div>
+                                <button class="profile-card-btn">Edit</button>
+                            </div>
+                            <div class="profile-card">
+                                <div class="profile-card-avatar"
+                                    style="background: linear-gradient(135deg, #a55eea, #8854d0)"></div>
+                                <div class="profile-card-name">Marcus</div>
+                                <button class="profile-card-btn">Edit</button>
+                            </div>
+                            <div class="profile-card">
+                                <div class="profile-card-avatar"
+                                    style="background: linear-gradient(135deg, #ffa726, #ff9800)"></div>
+                                <div class="profile-card-name">Kids</div>
+                                <button class="profile-card-btn">Edit</button>
+                            </div>
+                            <div class="profile-card add-profile">
+                                <div class="profile-card-avatar">
+                                    <svg viewBox="0 0 24 24">
+                                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                                    </svg>
+                                </div>
+                                <div class="profile-card-name">Add Profile</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Network Section -->
+                <section class="settings-section" id="network">
+                    <h1 class="settings-title">Network</h1>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Connection</h2>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Connection Status</label>
+                                <p class="settings-item-description">Connected to high-speed network</p>
+                            </div>
+                            <span class="status-badge status-online">Online</span>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Download Speed</label>
+                                <p class="settings-item-description">Current network speed</p>
+                            </div>
+                            <span class="settings-value">125 Mbps</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Devices Section -->
+                <section class="settings-section" id="devices">
+                    <h1 class="settings-title">Devices</h1>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Active Devices</h2>
+                        <div class="device-list">
+                            <div class="device-item">
+                                <div class="device-icon">
+                                    <svg viewBox="0 0 24 24">
+                                        <path
+                                            d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" />
+                                    </svg>
+                                </div>
+                                <div class="device-info">
+                                    <div class="device-name">Chrome - Windows PC</div>
+                                    <div class="device-meta">Last active: Now</div>
+                                </div>
+                                <button class="device-remove">Remove</button>
+                            </div>
+                            <div class="device-item">
+                                <div class="device-icon">
+                                    <svg viewBox="0 0 24 24">
+                                        <path
+                                            d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z" />
+                                    </svg>
+                                </div>
+                                <div class="device-info">
+                                    <div class="device-name">iPhone 14 Pro</div>
+                                    <div class="device-meta">Last active: 2 hours ago</div>
+                                </div>
+                                <button class="device-remove">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- About Section -->
+                <section class="settings-section" id="about">
+                    <h1 class="settings-title">About</h1>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Application Info</h2>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Version</label>
+                                <p class="settings-item-description">Current application version</p>
+                            </div>
+                            <span class="settings-value" id="app-version">1.0.0</span>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Build</label>
+                                <p class="settings-item-description">Build number</p>
+                            </div>
+                            <span class="settings-value">2024.10.28</span>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Updates</h2>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Check for Updates</label>
+                                <p class="settings-item-description">Get the latest features and improvements</p>
+                            </div>
+                            <button class="settings-btn" id="check-updates-btn">
+                                <svg viewBox="0 0 24 24" width="20" height="20" style="margin-right: 8px;">
+                                    <path fill="currentColor"
+                                        d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
+                                </svg>
+                                Check Now
+                            </button>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-info">
+                                <label>Auto-update</label>
+                                <p class="settings-item-description">Automatically check for updates daily</p>
+                            </div>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="auto-update-toggle" checked />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">Legal</h2>
+                        <div class="settings-item">
+                            <button class="settings-link-btn">Terms of Service</button>
+                        </div>
+                        <div class="settings-item">
+                            <button class="settings-link-btn">Privacy Policy</button>
+                        </div>
+                        <div class="settings-item">
+                            <button class="settings-link-btn"
+                                onclick="window.open('https://github.com/YOUR_USERNAME/lanflix', '_blank')">
+                                View on GitHub
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- Edit Profile Modal -->
+    <div class="modal-overlay" id="edit-profile-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Edit Profile</h2>
+                <button class="modal-close" aria-label="Close">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-field">
+                    <label for="profile-name">Profile Name</label>
+                    <input type="text" id="profile-name" class="modal-input" placeholder="Enter profile name" />
+                </div>
+                <div class="modal-field">
+                    <label>Avatar Color</label>
+                    <div class="color-picker">
+                        <button class="color-option" data-color="#ff6b6b,#ee5a24"
+                            style="background: linear-gradient(135deg, #ff6b6b, #ee5a24)"></button>
+                        <button class="color-option" data-color="#4ecdc4,#26d0ce"
+                            style="background: linear-gradient(135deg, #4ecdc4, #26d0ce)"></button>
+                        <button class="color-option" data-color="#a55eea,#8854d0"
+                            style="background: linear-gradient(135deg, #a55eea, #8854d0)"></button>
+                        <button class="color-option" data-color="#ffa726,#ff9800"
+                            style="background: linear-gradient(135deg, #ffa726, #ff9800)"></button>
+                        <button class="color-option" data-color="#26de81,#20bf6b"
+                            style="background: linear-gradient(135deg, #26de81, #20bf6b)"></button>
+                        <button class="color-option" data-color="#fd79a8,#e84393"
+                            style="background: linear-gradient(135deg, #fd79a8, #e84393)"></button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary" id="cancel-profile">Cancel</button>
+                <button class="modal-btn modal-btn-primary" id="save-profile">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Profile Modal -->
+    <div class="modal-overlay" id="add-profile-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Add New Profile</h2>
+                <button class="modal-close" aria-label="Close">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-field">
+                    <label for="new-profile-name">Profile Name</label>
+                    <input type="text" id="new-profile-name" class="modal-input" placeholder="Enter profile name" />
+                </div>
+                <div class="modal-field">
+                    <label>Avatar Color</label>
+                    <div class="color-picker">
+                        <button class="color-option" data-color="#ff6b6b,#ee5a24"
+                            style="background: linear-gradient(135deg, #ff6b6b, #ee5a24)"></button>
+                        <button class="color-option" data-color="#4ecdc4,#26d0ce"
+                            style="background: linear-gradient(135deg, #4ecdc4, #26d0ce)"></button>
+                        <button class="color-option" data-color="#a55eea,#8854d0"
+                            style="background: linear-gradient(135deg, #a55eea, #8854d0)"></button>
+                        <button class="color-option" data-color="#ffa726,#ff9800"
+                            style="background: linear-gradient(135deg, #ffa726, #ff9800)"></button>
+                        <button class="color-option" data-color="#26de81,#20bf6b"
+                            style="background: linear-gradient(135deg, #26de81, #20bf6b)"></button>
+                        <button class="color-option" data-color="#fd79a8,#e84393"
+                            style="background: linear-gradient(135deg, #fd79a8, #e84393)"></button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary" id="cancel-add-profile">Cancel</button>
+                <button class="modal-btn modal-btn-primary" id="create-profile">Create Profile</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

@@ -118,14 +118,77 @@ public static class DependencyInjection
         })
         .SetHandlerLifetime(TimeSpan.FromMinutes(30)); // Handler lifetime for connection pool rotation
 
+        // Radarr HTTP Client
+        var radarrUrl = configuration["Lanflix:ExternalApis:Radarr:Url"];
+        if (!string.IsNullOrEmpty(radarrUrl))
+        {
+            services.AddHttpClient<IRadarrClient, Infrastructure.Services.ExternalApis.RadarrClient>(client =>
+            {
+                client.BaseAddress = new Uri(radarrUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+                client.DefaultRequestHeaders.Add("Accept", "application/json");
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+                MaxConnectionsPerServer = 5,
+                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
+                ConnectTimeout = TimeSpan.FromSeconds(10)
+            })
+            .SetHandlerLifetime(TimeSpan.FromMinutes(30));
+        }
+
+        // Sonarr HTTP Client
+        var sonarrUrl = configuration["Lanflix:ExternalApis:Sonarr:Url"];
+        if (!string.IsNullOrEmpty(sonarrUrl))
+        {
+            services.AddHttpClient<ISonarrClient, Infrastructure.Services.ExternalApis.SonarrClient>(client =>
+            {
+                client.BaseAddress = new Uri(sonarrUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+                client.DefaultRequestHeaders.Add("Accept", "application/json");
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+                MaxConnectionsPerServer = 5,
+                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
+                ConnectTimeout = TimeSpan.FromSeconds(10)
+            })
+            .SetHandlerLifetime(TimeSpan.FromMinutes(30));
+        }
+
+        // Prowlarr HTTP Client
+        var prowlarrUrl = configuration["Lanflix:ExternalApis:Prowlarr:Url"];
+        if (!string.IsNullOrEmpty(prowlarrUrl))
+        {
+            services.AddHttpClient<IProwlarrClient, Infrastructure.Services.ExternalApis.ProwlarrClient>(client =>
+            {
+                client.BaseAddress = new Uri(prowlarrUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+                client.DefaultRequestHeaders.Add("Accept", "application/json");
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+                MaxConnectionsPerServer = 5,
+                AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
+                ConnectTimeout = TimeSpan.FromSeconds(10)
+            })
+            .SetHandlerLifetime(TimeSpan.FromMinutes(30));
+        }
+
         // Authentication Services
         services.AddScoped<ITokenService, TokenService>();
 
         // App Update Service
         services.AddSingleton<IAppUpdateService, Infrastructure.Services.AppUpdate.AppUpdateService>();
 
-        // Settings Service
-        services.AddSingleton<ISettingsService, Infrastructure.Services.Settings.SettingsService>();
+        // Settings Service (Scoped because it uses IApplicationDbContext)
+        services.AddScoped<ISettingsService, Infrastructure.Services.Settings.SettingsService>();
 
         // FFmpeg Services
         services.AddSingleton<IMediaAnalyzer, MediaAnalyzer>();

@@ -31,4 +31,19 @@ public interface ITmdbClient
     /// Get TV season details
     /// </summary>
     Task<TmdbSeasonDetails?> GetSeasonDetailsAsync(int seriesId, int seasonNumber, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get trending content (movies or TV)
+    /// </summary>
+    Task<TmdbSearchResult> GetTrendingAsync(string mediaType = "all", string timeWindow = "week", CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get popular movies
+    /// </summary>
+    Task<TmdbSearchResult> GetPopularMoviesAsync(int page = 1, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get popular TV series
+    /// </summary>
+    Task<TmdbSearchResult> GetPopularTvSeriesAsync(int page = 1, CancellationToken cancellationToken = default);
 }

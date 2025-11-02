@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My List - Lanflix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://unpkg.com/video.js@8.23.4/dist/video-js.min.css" rel="stylesheet" />
+  <script type="module" crossorigin src="/assets/api-client-7IhkegDa.js"></script>
+  <script type="module" crossorigin src="/assets/data-DddsZ_ae.js"></script>
+  <script type="module" crossorigin src="/assets/profile-manager-BH47FVgT.js"></script>
+  <script type="module" crossorigin src="/assets/tv-navigation-BRt9J30j.js"></script>
+  <script type="module" crossorigin src="/assets/main-BIrJBI9k.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-D3s5-R5A.css">
+  <link rel="stylesheet" crossorigin href="/assets/main-C7ViIW5t.css">
+  <link rel="stylesheet" crossorigin href="/assets/page-layouts-BNjS3EKE.css">
+</head>
+<body>
+  <header class="top-nav">
+    <div class="nav-inner">
+      <div class="left-section">
+        <button class="profile" aria-label="Profile">
+          <div class="profile-avatar"></div>
+          <svg class="profile-arrow" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.98l3.71-3.75a.75.75 0 0 1 1.07 1.05l-4.24 4.28a.75.75 0 0 1-1.07 0L5.21 8.28a.75.75 0 0 1 .02-1.07z" />
+          </svg>
+        </button>
+      </div>
+      <nav class="menu">
+        <button class="menu-item search-home" data-page="search" aria-label="Search">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15.5 14h-.79l-.28-.27a6.471 6.471 0 0 0 1.57-4.23 6.5 6.5 0 1 0-6.5 6.5 6.47 6.47 0 0 0 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zM6.5 10a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z" />
+          </svg>
+        </button>
+        <button class="menu-item" data-page="home">Home</button>
+        <button class="menu-item" data-page="discover">Discover</button>
+        <button class="menu-item" data-page="series">Series</button>
+        <button class="menu-item" data-page="movies">Films</button>
+        <button class="menu-item active" data-page="my-list">My List</button>
+      </nav>
+      <div class="brand" aria-label="Lanflix">
+        <button class="notifications-btn" aria-label="Notifications" onclick="window.location.href='notifications.html'">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z" />
+          </svg>
+          <span class="notification-badge" id="notification-badge"></span>
+        </button>
+        <button class="settings-btn" aria-label="Settings" onclick="window.location.href='settings.html'">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+          </svg>
+        </button>
+        <span class="brand-name">Lanflix</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero-stage">
+      <div class="hero-ambilight" id="hero-ambilight" aria-hidden="true">
+        <div class="hero-ambilight-layer" id="ambilight-layer-1"></div>
+        <div class="hero-ambilight-layer" id="ambilight-layer-2"></div>
+      </div>
+      <div class="hero-carousel-wrapper">
+        <div class="hero-carousel-track" id="hero-carousel-track"></div>
+      </div>
+    </div>
+
+    <div class="content-shell">
+      <section class="spotlight">
+        <div class="spotlight-header">
+          <h2>My List</h2>
+        </div>
+        <div class="spotlight-row" id="spotlight-row"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/video.js@8.23.4/dist/video.min.js"></script>
+</body>
+</html>

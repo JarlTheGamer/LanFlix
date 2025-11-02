@@ -18,6 +18,16 @@ export class ContentModal {
      */
     async show(contentId, contentType, isDiscovery = false) {
         try {
+            // Validate parameters
+            if (!contentId) {
+                throw new Error('Content ID is required');
+            }
+            if (!contentType || contentType === 'undefined') {
+                throw new Error('Content type is required (must be "movie" or "series")');
+            }
+
+            console.log('ContentModal.show:', { contentId, contentType, isDiscovery });
+
             // Fetch content details
             const profileId = this.profileManager.selectedProfileId;
             const content = isDiscovery
@@ -55,7 +65,19 @@ export class ContentModal {
             this.setupCloseHandlers();
         } catch (error) {
             console.error('Failed to load content details:', error);
-            alert('Failed to load content details.');
+
+            // Show detailed error message
+            let errorMessage = 'Failed to load content details.';
+            if (error.code === 'MISSING_TYPE_PARAMETER') {
+                errorMessage = `Error: Content type is missing or invalid.\n\nDetails: ${error.details?.hint || 'Unknown error'}`;
+            } else if (error.message) {
+                errorMessage = `Error: ${error.message}`;
+                if (error.details) {
+                    errorMessage += `\n\nDetails: ${JSON.stringify(error.details, null, 2)}`;
+                }
+            }
+
+            alert(errorMessage);
         }
     }
 
@@ -72,7 +94,10 @@ export class ContentModal {
 
         const backdropUrl = content.backdropUrl || content.posterUrl || '';
         const posterUrl = content.posterUrl || '';
-        const genres = Array.isArray(content.genres) ? content.genres.join(', ') : '';
+        // Handle genres - they can be strings or objects with name property
+        const genres = Array.isArray(content.genres)
+            ? content.genres.map(g => typeof g === 'string' ? g : g.name || g.Name).filter(Boolean).join(', ')
+            : '';
         const year = content.releaseDate ? new Date(content.releaseDate).getFullYear() : '';
         const rating = content.voteAverage ? `★ ${content.voteAverage.toFixed(1)}` : '';
 
@@ -255,6 +280,7 @@ export class ContentModal {
 
     /**
      * Load all seasons progressively (one at a time to avoid rate limits)
+     * TMDB rate limit: 40 requests per 10 seconds
      */
     async loadAllSeasonsProgressively(seasonNumbers, isDiscovery) {
         // For library content, load all at once since episodes are already available
@@ -269,15 +295,13 @@ export class ContentModal {
             return;
         }
 
-        // For discovery content, load progressively to avoid rate limits
-        for (const seasonNum of seasonNumbers) {
+        // For discovery content, load only the first season initially
+        // Other seasons will be loaded on-demand when user clicks the tab
+        if (seasonNumbers.length > 0) {
             try {
-                await this.loadSeasonEpisodes(seasonNum, isDiscovery);
-                // Small delay between seasons to be nice to the API
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await this.loadSeasonEpisodes(seasonNumbers[0], isDiscovery);
             } catch (error) {
-                console.error(`Failed to load season ${seasonNum}:`, error);
-                // Continue with next season even if one fails
+                console.error(`Failed to load season ${seasonNumbers[0]}:`, error);
             }
         }
     }
@@ -303,7 +327,8 @@ export class ContentModal {
             // For discovery content, fetch from API
             if (isDiscovery && this.currentContent.tmdbId) {
                 const seasonData = await apiClient.getSeasonEpisodes(this.currentContent.tmdbId, parseInt(seasonNum));
-                seasonEpisodes = seasonData.season.episodes;
+                // API returns TmdbSeasonDetails directly with Episodes property
+                seasonEpisodes = seasonData.episodes || seasonData.Episodes || [];
             } else {
                 // For library content, use existing episodes
                 const seasonNumInt = parseInt(seasonNum);
@@ -323,7 +348,7 @@ export class ContentModal {
 
             // Check if there are any unavailable episodes (for library content)
             const hasUnavailableEpisodes = !isDiscovery && seasonEpisodes.some(ep => !ep.available);
-            
+
             // Show/hide download button based on content type and availability
             const seasonDownloadBtn = document.querySelector(`.season-download-btn[data-season="${seasonNum}"]`);
             if (seasonDownloadBtn) {
@@ -349,15 +374,15 @@ export class ContentModal {
         const episodeCard = document.createElement('div');
         const isAvailable = episode.available !== false; // Default to true for discovery content
         const isLibraryContent = !isDiscovery;
-        
+
         episodeCard.className = `episode-card-horizontal ${!isAvailable && isLibraryContent ? 'unavailable' : ''}`;
         episodeCard.dataset.episodeId = episode.id;
         episodeCard.dataset.seasonNumber = episode.seasonNumber;
         episodeCard.dataset.episodeNumber = episode.episodeNumber;
 
-        // Use still path - backend handles local vs TMDB URLs
-        const stillUrl = episode.stillPath || this.currentContent.backdropUrl || '';
-        
+        // Use still URL - backend provides full URL
+        const stillUrl = episode.stillUrl || episode.StillUrl || this.currentContent.backdropUrl || '';
+
         const watched = episode.watched || false;
         const runtime = episode.runtime ? `${episode.runtime}m` : '';
 
@@ -376,7 +401,7 @@ export class ContentModal {
             <div class="episode-header-row">
               <div class="episode-number-title">
                 <span class="episode-number">${episode.episodeNumber}.</span>
-                <span class="episode-title">${episode.title || `Episode ${episode.episodeNumber}`}</span>
+                <span class="episode-title">${episode.title || episode.name || episode.Name || `Episode ${episode.episodeNumber}`}</span>
               </div>
               ${runtime ? `<span class="episode-runtime">${runtime}</span>` : ''}
             </div>
@@ -423,7 +448,7 @@ export class ContentModal {
                 // For series, find the first available episode to play
                 const episodes = content.episodes || [];
                 const firstAvailableEpisode = episodes.find(ep => ep.available);
-                
+
                 if (firstAvailableEpisode) {
                     this.playEpisode(firstAvailableEpisode.id);
                 } else {

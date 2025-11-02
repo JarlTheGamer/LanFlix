@@ -91,10 +91,20 @@ class ApiClient {
       // Handle non-OK responses
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const error = new Error(errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`);
+        const errorMessage = errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+        const error = new Error(errorMessage);
         error.statusCode = response.status;
         error.code = errorData.error?.code || 'HTTP_ERROR';
         error.details = errorData.error?.details;
+        
+        // Log detailed error information for debugging
+        console.error(`API Error [${endpoint}]:`, {
+          status: response.status,
+          message: errorMessage,
+          code: error.code,
+          details: error.details
+        });
+        
         throw error;
       }
 
@@ -575,7 +585,7 @@ class ApiClient {
   async updateSettings(settings) {
     return this.request('/settings', {
       method: 'PUT',
-      body: JSON.stringify({ settings })
+      body: JSON.stringify(settings)
     });
   }
 

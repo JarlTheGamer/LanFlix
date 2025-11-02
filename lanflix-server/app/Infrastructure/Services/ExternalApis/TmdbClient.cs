@@ -15,18 +15,17 @@ public class TmdbClient : ITmdbClient
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<TmdbClient> _logger;
-    private readonly string _apiKey;
+    private readonly ISettingsService _settingsService;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public TmdbClient(
         HttpClient httpClient,
-        IConfiguration configuration,
+        ISettingsService settingsService,
         ILogger<TmdbClient> logger)
     {
         _httpClient = httpClient;
+        _settingsService = settingsService;
         _logger = logger;
-        _apiKey = configuration["Lanflix:ExternalApis:Tmdb:ApiKey"]
-            ?? throw new InvalidOperationException("TMDB API key not configured");
 
         // Configure JSON serialization options
         _jsonOptions = new JsonSerializerOptions
@@ -37,13 +36,27 @@ public class TmdbClient : ITmdbClient
         };
     }
 
+    private async Task<string> GetApiKeyAsync(CancellationToken cancellationToken = default)
+    {
+        var settings = await _settingsService.GetSettingsAsync(cancellationToken);
+        return settings.ExternalApis.Tmdb.ApiKey;
+    }
+
     public async Task<TmdbSearchResult> SearchMoviesAsync(
         string query,
         CancellationToken cancellationToken = default)
     {
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            _logger.LogWarning("TMDB API key not configured. Cannot search movies.");
+            return new TmdbSearchResult();
+        }
+
         _logger.LogDebug("Searching TMDB for movies: {Query}", query);
 
-        var url = $"search/movie?api_key={_apiKey}&query={Uri.EscapeDataString(query)}";
+        var url = $"search/movie?api_key={apiKey}&query={Uri.EscapeDataString(query)}";
 
         try
         {
@@ -75,9 +88,17 @@ public class TmdbClient : ITmdbClient
         string query,
         CancellationToken cancellationToken = default)
     {
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            _logger.LogWarning("TMDB API key not configured. Cannot search TV series.");
+            return new TmdbSearchResult();
+        }
+
         _logger.LogDebug("Searching TMDB for TV series: {Query}", query);
 
-        var url = $"search/tv?api_key={_apiKey}&query={Uri.EscapeDataString(query)}";
+        var url = $"search/tv?api_key={apiKey}&query={Uri.EscapeDataString(query)}";
 
         try
         {
@@ -109,9 +130,17 @@ public class TmdbClient : ITmdbClient
         int tmdbId,
         CancellationToken cancellationToken = default)
     {
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            _logger.LogWarning("TMDB API key not configured. Cannot get movie details.");
+            return null;
+        }
+
         _logger.LogDebug("Getting TMDB movie details: {TmdbId}", tmdbId);
 
-        var url = $"movie/{tmdbId}?api_key={_apiKey}";
+        var url = $"movie/{tmdbId}?api_key={apiKey}";
 
         try
         {
@@ -146,9 +175,17 @@ public class TmdbClient : ITmdbClient
         int tmdbId,
         CancellationToken cancellationToken = default)
     {
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            _logger.LogWarning("TMDB API key not configured. Cannot get TV series details.");
+            return null;
+        }
+
         _logger.LogDebug("Getting TMDB TV series details: {TmdbId}", tmdbId);
 
-        var url = $"tv/{tmdbId}?api_key={_apiKey}";
+        var url = $"tv/{tmdbId}?api_key={apiKey}";
 
         try
         {
@@ -184,10 +221,18 @@ public class TmdbClient : ITmdbClient
         int seasonNumber,
         CancellationToken cancellationToken = default)
     {
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            _logger.LogWarning("TMDB API key not configured. Cannot get season details.");
+            return null;
+        }
+
         _logger.LogDebug("Getting TMDB season details: Series={SeriesId}, Season={SeasonNumber}",
             seriesId, seasonNumber);
 
-        var url = $"tv/{seriesId}/season/{seasonNumber}?api_key={_apiKey}";
+        var url = $"tv/{seriesId}/season/{seasonNumber}?api_key={apiKey}";
 
         try
         {
@@ -218,6 +263,131 @@ public class TmdbClient : ITmdbClient
         {
             _logger.LogError(ex, "JSON deserialization error for TMDB season details: Series={SeriesId}, Season={SeasonNumber}",
                 seriesId, seasonNumber);
+            throw;
+        }
+    }
+
+    public async Task<TmdbSearchResult> GetTrendingAsync(
+        string mediaType = "all",
+        string timeWindow = "week",
+        CancellationToken cancellationToken = default)
+    {
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            _logger.LogWarning("TMDB API key not configured. Cannot get trending content.");
+            return new TmdbSearchResult();
+        }
+
+        _logger.LogDebug("Getting TMDB trending content: MediaType={MediaType}, TimeWindow={TimeWindow}",
+            mediaType, timeWindow);
+
+        var url = $"trending/{mediaType}/{timeWindow}?api_key={apiKey}";
+
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<TmdbSearchResult>(
+                url,
+                _jsonOptions,
+                cancellationToken);
+
+            _logger.LogInformation(
+                "TMDB trending content retrieved: MediaType={MediaType}, Results={Count}",
+                mediaType, result?.Results.Count ?? 0);
+
+            return result ?? new TmdbSearchResult();
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP error getting TMDB trending content: MediaType={MediaType}", mediaType);
+            throw;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "JSON deserialization error for TMDB trending content: MediaType={MediaType}", mediaType);
+            throw;
+        }
+    }
+
+    public async Task<TmdbSearchResult> GetPopularMoviesAsync(
+        int page = 1,
+        CancellationToken cancellationToken = default)
+    {
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            _logger.LogWarning("TMDB API key not configured. Cannot get popular movies.");
+            return new TmdbSearchResult();
+        }
+
+        _logger.LogDebug("Getting TMDB popular movies: Page={Page}", page);
+
+        var url = $"movie/popular?api_key={apiKey}&page={page}";
+
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<TmdbSearchResult>(
+                url,
+                _jsonOptions,
+                cancellationToken);
+
+            _logger.LogInformation(
+                "TMDB popular movies retrieved: Page={Page}, Results={Count}",
+                page, result?.Results.Count ?? 0);
+
+            return result ?? new TmdbSearchResult();
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP error getting TMDB popular movies: Page={Page}", page);
+            throw;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "JSON deserialization error for TMDB popular movies: Page={Page}", page);
+            throw;
+        }
+    }
+
+    public async Task<TmdbSearchResult> GetPopularTvSeriesAsync(
+        int page = 1,
+        CancellationToken cancellationToken = default)
+    {
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            _logger.LogWarning("TMDB API key not configured. Cannot get popular TV series.");
+            return new TmdbSearchResult();
+        }
+
+        _logger.LogDebug("Getting TMDB popular TV series: Page={Page}", page);
+
+        var url = $"tv/popular?api_key={apiKey}&page={page}";
+
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<TmdbSearchResult>(
+                url,
+                _jsonOptions,
+                cancellationToken);
+
+            _logger.LogInformation(
+                "TMDB popular TV series retrieved: Page={Page}, Results={Count}",
+                page, result?.Results.Count ?? 0);
+
+            return result ?? new TmdbSearchResult();
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP error getting TMDB popular TV series: Page={Page}", page);
+            throw;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "JSON deserialization error for TMDB popular TV series: Page={Page}", page);
             throw;
         }
     }

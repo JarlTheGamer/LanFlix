@@ -44,6 +44,7 @@ public class LibraryController : ControllerBase
     /// Get detailed information about a specific content item
     /// </summary>
     [HttpGet("items/{id:int}")]
+    [HttpGet("{id:int}")] // Compatibility route for old frontend
     [OutputCache(PolicyName = "content-details")]
     [ProducesResponseType(typeof(ContentDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -141,60 +142,4 @@ public class LibraryController : ControllerBase
         return Ok(result.Items);
     }
 
-    /// <summary>
-    /// Get popular content (stub - returns recently added for now)
-    /// </summary>
-    [HttpGet("/api/content/popular")]
-    [OutputCache(PolicyName = "library")]
-    [ProducesResponseType(typeof(List<ContentDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<List<ContentDto>>> GetPopularContent(
-        [FromQuery] string? type = null,
-        [FromQuery] int page = 1,
-        [FromQuery] int? profileId = null,
-        CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Getting popular content (type={Type}, page={Page})", type, page);
-
-        var query = new GetLibraryItemsQuery
-        {
-            Type = type?.ToLower() switch
-            {
-                "movie" => Domain.Enums.ContentType.Movie,
-                "series" => Domain.Enums.ContentType.Series,
-                _ => null
-            },
-            PageNumber = page,
-            PageSize = 20,
-            SortBy = "Rating",
-            SortDescending = true
-        };
-
-        var result = await _mediator.Send(query, cancellationToken);
-        return Ok(result.Items);
-    }
-
-    /// <summary>
-    /// Get discover content (stub - returns all content for now)
-    /// </summary>
-    [HttpGet("/api/content/discover")]
-    [OutputCache(PolicyName = "library")]
-    [ProducesResponseType(typeof(List<ContentDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<List<ContentDto>>> GetDiscoverContent(
-        [FromQuery] int? profileId = null,
-        [FromQuery] int page = 1,
-        CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Getting discover content (page={Page})", page);
-
-        var query = new GetLibraryItemsQuery
-        {
-            PageNumber = page,
-            PageSize = 20,
-            SortBy = "AddedAt",
-            SortDescending = true
-        };
-
-        var result = await _mediator.Send(query, cancellationToken);
-        return Ok(result.Items);
-    }
 }

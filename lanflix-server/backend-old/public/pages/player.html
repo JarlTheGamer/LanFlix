@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player - Flix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Google Cast SDK -->
+  <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+  <script type="module" crossorigin src="/assets/player-CFjWa44p.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/api-client-7IhkegDa.js">
+  <link rel="modulepreload" crossorigin href="/assets/data-DddsZ_ae.js">
+  <link rel="modulepreload" crossorigin href="/assets/tv-navigation-BRt9J30j.js">
+  <link rel="stylesheet" crossorigin href="/assets/player-LfOXidU3.css">
+</head>
+<body>
+  <div class="player-container">
+    <video 
+      id="video-player" 
+      class="video-element"
+      playsinline
+      webkit-playsinline
+      preload="auto"
+      crossorigin="anonymous"
+    ></video>
+    <div id="player-controls" class="player-controls"></div>
+    <button id="back-button" class="back-button" title="Back">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+
+</body>
+</html>
