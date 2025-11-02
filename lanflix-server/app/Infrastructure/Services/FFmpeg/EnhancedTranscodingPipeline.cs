@@ -224,11 +224,18 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         // General options
         args.Append("-avoid_negative_ts make_zero ");
         args.Append("-fflags +genpts ");
-        args.Append("-f ");
         
         // Determine output format
         var outputFormat = GetOutputFormat(request.OutputFormat);
-        args.Append($"{outputFormat} ");
+        
+        // Add format-specific options for streaming
+        if (outputFormat == "mp4")
+        {
+            // Critical MP4 streaming options
+            args.Append("-movflags frag_keyframe+empty_moov+faststart ");
+        }
+        
+        args.Append($"-f {outputFormat} ");
 
         // Output to stdout
         args.Append("pipe:1");
@@ -553,13 +560,13 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
     {
         return container.ToLowerInvariant() switch
         {
-            "mp4" => "mpegts", // Use mpegts for streaming instead of mp4
-            "mkv" => "matroska",
+            "mp4" => "mp4",
+            "mkv" => "matroska", 
             "webm" => "webm",
             "ts" or "mpegts" => "mpegts",
             "hls" or "m3u8" => "hls",
             "dash" or "mpd" => "dash",
-            _ => "mpegts"
+            _ => "mp4" // Default to mp4 for browser compatibility
         };
     }
 

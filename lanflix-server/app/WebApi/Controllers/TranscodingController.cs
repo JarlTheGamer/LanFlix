@@ -84,7 +84,7 @@ public class TranscodingController : ControllerBase
             // Handle HEAD requests - return headers without streaming
             if (Request.Method == "HEAD")
             {
-                Response.ContentType = "video/mp2t"; // MPEGTS content type
+                Response.ContentType = "video/mp4";
                 Response.Headers.Add("Accept-Ranges", "bytes");
                 Response.Headers.Add("Cache-Control", "no-cache");
                 return Ok();
