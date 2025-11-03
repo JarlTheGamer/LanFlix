@@ -29,16 +29,10 @@ interface LanflixApiService {
     
     // Content
     @GET("api/content/movies")
-    suspend fun getMovies(
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
-    ): Response<ContentResponse>
+    suspend fun getMovies(): Response<ContentResponse>
     
     @GET("api/content/series")
-    suspend fun getSeries(
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
-    ): Response<ContentResponse>
+    suspend fun getSeries(): Response<ContentResponse>
     
     @GET("api/content/{id}")
     suspend fun getContentDetails(@Path("id") contentId: String): Response<Content>

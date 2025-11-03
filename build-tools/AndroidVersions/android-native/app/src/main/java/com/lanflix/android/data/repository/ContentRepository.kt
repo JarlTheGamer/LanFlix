@@ -11,8 +11,8 @@ class ContentRepository @Inject constructor(
     private val apiService: LanflixApiService
 ) {
     
-    suspend fun getMovies(page: Int = 1, limit: Int = 20): List<Content> {
-        val response = apiService.getMovies(page, limit)
+    suspend fun getMovies(): List<Content> {
+        val response = apiService.getMovies()
         if (response.isSuccessful) {
             return response.body()?.items ?: emptyList()
         } else {
@@ -20,8 +20,8 @@ class ContentRepository @Inject constructor(
         }
     }
     
-    suspend fun getSeries(page: Int = 1, limit: Int = 20): List<Content> {
-        val response = apiService.getSeries(page, limit)
+    suspend fun getSeries(): List<Content> {
+        val response = apiService.getSeries()
         if (response.isSuccessful) {
             return response.body()?.items ?: emptyList()
         } else {

@@ -25,17 +25,25 @@ class HomeViewModel @Inject constructor(
             
             try {
                 println("HomeViewModel: Starting to load content...")
-                
-                // Load recently added content for hero carousel
-                val recentlyAdded = try {
-                    println("HomeViewModel: Loading movies and series...")
-                    val movies = contentRepository.getMovies(1, 5)
-                    val series = contentRepository.getSeries(1, 5)
-                    movies + series
+
+                // Load movies and series once
+                val movies = try {
+                    println("HomeViewModel: Loading movies...")
+                    contentRepository.getMovies()
                 } catch (e: Exception) {
-                    println("HomeViewModel: Failed to load movies/series: ${e.message}")
+                    println("HomeViewModel: Failed to load movies: ${e.message}")
                     throw e
                 }
+
+                val series = try {
+                    println("HomeViewModel: Loading series...")
+                    contentRepository.getSeries()
+                } catch (e: Exception) {
+                    println("HomeViewModel: Failed to load series: ${e.message}")
+                    throw e
+                }
+
+                val allContent = movies + series
                 
                 // Load discover preview (if available)
                 val discoverPreview = try {
@@ -46,19 +54,10 @@ class HomeViewModel @Inject constructor(
                     emptyList()
                 }
                 
-                // Load all recently added for content section
-                val allRecentlyAdded = try {
-                    println("HomeViewModel: Loading all recently added content...")
-                    contentRepository.getMovies(1, 20) + contentRepository.getSeries(1, 20)
-                } catch (e: Exception) {
-                    println("HomeViewModel: Failed to load all recently added: ${e.message}")
-                    recentlyAdded // Use the smaller set if this fails
-                }
-                
                 println("HomeViewModel: Successfully loaded content")
                 _uiState.value = _uiState.value.copy(
-                    heroContent = recentlyAdded.take(5),
-                    recentlyAdded = allRecentlyAdded,
+                    heroContent = allContent.take(5),
+                    recentlyAdded = allContent,
                     discoverPreview = discoverPreview,
                     isLoading = false,
                     error = null
