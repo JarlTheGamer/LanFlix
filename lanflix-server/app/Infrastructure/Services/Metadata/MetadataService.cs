@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
+using Lanflix.Domain.Entities;
 using Lanflix.Domain.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
@@ -357,6 +358,180 @@ public class MetadataService : IMetadataService
         
         _logger.LogWarning("No TMDB match found for movie folder: {FolderName} (tried {Count} variations)", folderName, searchQueries.Count);
         return null;
+    }
+
+    /// <summary>
+    /// Fetch season details with episodes from TMDB
+    /// Matches the old backend's fetchSeasonDetails function
+    /// </summary>
+    public async Task<TmdbSeasonDetails?> FetchSeasonDetailsAsync(
+        int tmdbId,
+        int seasonNumber,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Fetching season {Season} details from TMDB: {TmdbId}", seasonNumber, tmdbId);
+
+            var seasonDetails = await _tmdbClient.GetSeasonDetailsAsync(tmdbId, seasonNumber, cancellationToken);
+            if (seasonDetails == null)
+            {
+                _logger.LogWarning("Season {Season} not found for series {TmdbId}", seasonNumber, tmdbId);
+                return null;
+            }
+
+            _logger.LogInformation("Fetched season {Season} with {EpisodeCount} episodes for series {TmdbId}", 
+                seasonNumber, seasonDetails.Episodes.Count, tmdbId);
+
+            return seasonDetails;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch season {Season} details for series {TmdbId}", seasonNumber, tmdbId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Fetch and store episode metadata for a series
+    /// Based on the old backend's fetchAndStoreEpisodeMetadata function
+    /// </summary>
+    public async Task FetchAndStoreEpisodeMetadataAsync(
+        int contentId,
+        int tmdbId,
+        string seriesFolder,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Fetching episode metadata for series {TmdbId}", tmdbId);
+
+            // Get TV details to know how many seasons
+            var tvDetails = await _tmdbClient.GetTvSeriesDetailsAsync(tmdbId, cancellationToken);
+            if (tvDetails == null)
+            {
+                _logger.LogError("Could not fetch TV series details for {TmdbId}", tmdbId);
+                return;
+            }
+
+            // Fetch all seasons (excluding specials - season 0)
+            foreach (var season in tvDetails.Seasons.Where(s => s.SeasonNumber > 0))
+            {
+                try
+                {
+                    var seasonDetails = await FetchSeasonDetailsAsync(tmdbId, season.SeasonNumber, cancellationToken);
+                    if (seasonDetails == null) continue;
+
+                    // Create season folder path for episode stills
+                    var seasonFolder = Path.Combine(seriesFolder, $"Season {season.SeasonNumber}");
+
+                    // Store each episode
+                    foreach (var episode in seasonDetails.Episodes)
+                    {
+                        // Check if episode already exists
+                        var existingEpisode = await _dbContext.Episodes
+                            .FirstOrDefaultAsync(e => e.ContentId == contentId && 
+                                               e.SeasonNumber == episode.SeasonNumber && 
+                                               e.EpisodeNumber == episode.EpisodeNumber, cancellationToken);
+
+                        if (existingEpisode == null)
+                        {
+                            // Download episode still image if available
+                            string? localStillPath = null;
+                            if (!string.IsNullOrEmpty(episode.StillPath))
+                            {
+                                localStillPath = await DownloadEpisodeStillAsync(
+                                    episode.StillPath, 
+                                    seasonFolder, 
+                                    episode.SeasonNumber, 
+                                    episode.EpisodeNumber, 
+                                    cancellationToken);
+                            }
+
+                            // Create new episode
+                            var newEpisode = new Episode
+                            {
+                                ContentId = contentId,
+                                TmdbId = episode.Id,
+                                SeasonNumber = episode.SeasonNumber,
+                                EpisodeNumber = episode.EpisodeNumber,
+                                Title = episode.Name,
+                                Overview = episode.Overview,
+                                AirDate = episode.AirDate,
+                                StillPath = localStillPath ?? episode.StillPath,
+                                AddedAt = DateTime.UtcNow
+                            };
+
+                            _dbContext.Episodes.Add(newEpisode);
+                        }
+                        else
+                        {
+                            // Update metadata if episode exists but metadata is missing
+                            bool needsUpdate = false;
+
+                            if (string.IsNullOrEmpty(existingEpisode.Title) && !string.IsNullOrEmpty(episode.Name))
+                            {
+                                existingEpisode.Title = episode.Name;
+                                needsUpdate = true;
+                            }
+
+                            if (string.IsNullOrEmpty(existingEpisode.Overview) && !string.IsNullOrEmpty(episode.Overview))
+                            {
+                                existingEpisode.Overview = episode.Overview;
+                                needsUpdate = true;
+                            }
+
+                            if (existingEpisode.AirDate == null && episode.AirDate != null)
+                            {
+                                existingEpisode.AirDate = episode.AirDate;
+                                needsUpdate = true;
+                            }
+
+                            // Download episode still if missing or if it's still a TMDB path
+                            if (!string.IsNullOrEmpty(episode.StillPath) && 
+                                (string.IsNullOrEmpty(existingEpisode.StillPath) || existingEpisode.StillPath.StartsWith("/")))
+                            {
+                                var localStillPath = await DownloadEpisodeStillAsync(
+                                    episode.StillPath, 
+                                    seasonFolder, 
+                                    episode.SeasonNumber, 
+                                    episode.EpisodeNumber, 
+                                    cancellationToken);
+
+                                if (!string.IsNullOrEmpty(localStillPath))
+                                {
+                                    existingEpisode.StillPath = localStillPath;
+                                    needsUpdate = true;
+                                }
+                            }
+
+                            if (needsUpdate)
+                            {
+                                // Update will be saved with SaveChangesAsync below
+                            }
+                        }
+                    }
+
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    _logger.LogInformation("Stored metadata for Season {Season} ({EpisodeCount} episodes)", 
+                        season.SeasonNumber, seasonDetails.Episodes.Count);
+
+                    // Small delay to avoid rate limiting (like the old backend)
+                    await Task.Delay(100, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to fetch season {Season} for series {TmdbId}", season.SeasonNumber, tmdbId);
+                }
+            }
+
+            _logger.LogInformation("Episode metadata stored for series {TmdbId}", tmdbId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch episode metadata for series {TmdbId}", tmdbId);
+            // Don't throw - allow content to be added even if episode metadata fails
+        }
     }
 
     /// <summary>

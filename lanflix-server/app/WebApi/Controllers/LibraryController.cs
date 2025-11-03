@@ -276,8 +276,11 @@ public class LibraryController : ControllerBase
                 originalLanguage = enhancedMetadata?.OriginalLanguage,
                 productionCompanies = enhancedMetadata?.ProductionCompanies,
                 
-                // For series, include episode information if available
-                episodes = content.Type == ContentType.Series ? await GetSeriesEpisodes(content.Id, cancellationToken) : null
+                // For series, include episode and season information
+                episodes = content.Type == ContentType.Series ? await GetSeriesEpisodes(content.Id, cancellationToken) : null,
+                seasons = content.Type == ContentType.Series ? await GetSeriesSeasons(content.Id, cancellationToken) : null,
+                numberOfSeasons = content.Type == ContentType.Series ? (await GetSeriesSeasons(content.Id, cancellationToken)).Length : (int?)null,
+                numberOfEpisodes = content.Type == ContentType.Series ? (await GetSeriesEpisodes(content.Id, cancellationToken)).Length : (int?)null
             };
 
             return Ok(result);
@@ -326,19 +329,140 @@ public class LibraryController : ControllerBase
     }
 
     /// <summary>
-    /// Get episodes for a series
+    /// Get episodes for a series with complete TMDB metadata
     /// </summary>
     private async Task<object[]> GetSeriesEpisodes(int seriesId, CancellationToken cancellationToken)
     {
         try
         {
-            // For now, return empty array - episodes will be implemented later
-            // This matches the expected structure from the frontend
-            return new object[0];
+            // Get the series to get its TMDB ID
+            var series = await _context.Contents
+                .FirstOrDefaultAsync(c => c.Id == seriesId && c.Type == ContentType.Series, cancellationToken);
+
+            if (series == null)
+            {
+                return new object[0];
+            }
+
+            // Get episodes from database (these are the ones we have files for or metadata stored)
+            var dbEpisodes = await _context.Episodes
+                .Where(e => e.ContentId == seriesId)
+                .OrderBy(e => e.SeasonNumber)
+                .ThenBy(e => e.EpisodeNumber)
+                .ToListAsync(cancellationToken);
+
+            // Create a map of existing episodes for quick lookup
+            var dbEpisodeMap = dbEpisodes.ToDictionary(e => $"{e.SeasonNumber}x{e.EpisodeNumber}", e => e);
+
+            // Always fetch complete episode metadata from TMDB (like old backend)
+            var allEpisodes = new List<object>();
+
+            try
+            {
+                // Get TMDB client from DI
+                var tmdbClient = HttpContext.RequestServices.GetRequiredService<ITmdbClient>();
+                var tvDetails = await tmdbClient.GetTvSeriesDetailsAsync(series.TmdbId, cancellationToken);
+
+                foreach (var season in tvDetails.Seasons.Where(s => s.SeasonNumber > 0)) // Skip specials
+                {
+                    try
+                    {
+                        var seasonDetails = await tmdbClient.GetSeasonDetailsAsync(series.TmdbId, season.SeasonNumber, cancellationToken);
+
+                        foreach (var episode in seasonDetails.Episodes)
+                        {
+                            var episodeKey = $"{episode.SeasonNumber}x{episode.EpisodeNumber}";
+                            var dbEpisode = dbEpisodeMap.GetValueOrDefault(episodeKey);
+
+                            var episodeData = new
+                            {
+                                id = dbEpisode?.Id ?? 0,
+                                tmdbId = episode.Id,
+                                seasonNumber = episode.SeasonNumber,
+                                episodeNumber = episode.EpisodeNumber,
+                                title = episode.Name,
+                                overview = episode.Overview,
+                                airDate = episode.AirDate,
+                                stillPath = episode.StillPath,
+                                stillUrl = !string.IsNullOrEmpty(episode.StillPath) ? $"https://image.tmdb.org/t/p/w300{episode.StillPath}" : null,
+                                filePath = dbEpisode?.FilePath,
+                                hasFile = !string.IsNullOrEmpty(dbEpisode?.FilePath) && System.IO.File.Exists(dbEpisode.FilePath),
+                                available = !string.IsNullOrEmpty(dbEpisode?.FilePath), // Episode is available if we have a file
+                                watched = false, // TODO: Add watch progress if profileId is provided
+                                addedAt = dbEpisode?.AddedAt
+                            };
+
+                            allEpisodes.Add(episodeData);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to fetch season {Season} details for series {TmdbId}", season.SeasonNumber, series.TmdbId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch TMDB metadata for series {TmdbId}, falling back to database episodes only", series.TmdbId);
+                
+                // Fallback to database episodes only if TMDB fetch fails
+                allEpisodes = dbEpisodes.Select(e => new
+                {
+                    id = e.Id,
+                    tmdbId = e.TmdbId,
+                    seasonNumber = e.SeasonNumber,
+                    episodeNumber = e.EpisodeNumber,
+                    title = e.Title,
+                    overview = e.Overview,
+                    airDate = e.AirDate,
+                    stillPath = e.StillPath,
+                    stillUrl = !string.IsNullOrEmpty(e.StillPath) ? $"https://image.tmdb.org/t/p/w300{e.StillPath}" : null,
+                    filePath = e.FilePath,
+                    hasFile = !string.IsNullOrEmpty(e.FilePath) && System.IO.File.Exists(e.FilePath),
+                    available = !string.IsNullOrEmpty(e.FilePath),
+                    watched = false,
+                    addedAt = e.AddedAt
+                }).Cast<object>().ToList();
+            }
+
+            return allEpisodes.ToArray();
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get episodes for series: {SeriesId}", seriesId);
+            return new object[0];
+        }
+    }
+
+    /// <summary>
+    /// Get seasons for a series with episode counts
+    /// </summary>
+    private async Task<object[]> GetSeriesSeasons(int seriesId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Get all episodes for the series
+            var episodes = await GetSeriesEpisodes(seriesId, cancellationToken);
+            
+            // Group episodes by season
+            var seasons = episodes
+                .Cast<dynamic>()
+                .GroupBy(e => (int)e.seasonNumber)
+                .Select(g => new
+                {
+                    seasonNumber = g.Key,
+                    episodeCount = g.Count(),
+                    episodes = g.ToList()
+                })
+                .OrderBy(s => s.seasonNumber)
+                .Cast<object>()
+                .ToArray();
+
+            return seasons;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get seasons for series: {SeriesId}", seriesId);
             return new object[0];
         }
     }

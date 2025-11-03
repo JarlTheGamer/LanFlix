@@ -11,8 +11,12 @@ public class ContentConfiguration : IEntityTypeConfiguration<Content>
         builder.HasKey(c => c.Id);
 
         // Indexes for performance
-        builder.HasIndex(c => c.TmdbId)
+        // UNIQUE constraint on TmdbId + Type combination (like old backend)
+        // This allows the same TMDB ID for both movie and series if they exist
+        builder.HasIndex(c => new { c.TmdbId, c.Type })
             .IsUnique();
+
+        builder.HasIndex(c => c.TmdbId);
 
         builder.HasIndex(c => c.Type);
 

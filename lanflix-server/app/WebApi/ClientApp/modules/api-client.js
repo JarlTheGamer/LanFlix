@@ -378,6 +378,22 @@ class ApiClient {
   }
 
   /**
+   * GET /api/series/:id/seasons/:seasonNumber/episodes
+   * Get episodes for a specific season of a library series
+   */
+  async getLibrarySeasonEpisodes(seriesId, seasonNumber) {
+    return this.request(`/series/${seriesId}/seasons/${seasonNumber}/episodes`);
+  }
+
+  /**
+   * GET /api/series/:id/seasons
+   * Get all seasons for a library series
+   */
+  async getLibrarySeriesSeasons(seriesId) {
+    return this.request(`/series/${seriesId}/seasons`);
+  }
+
+  /**
    * POST /api/content/:id/queue
    * Add content to download queue
    */

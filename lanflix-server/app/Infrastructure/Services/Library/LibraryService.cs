@@ -190,6 +190,19 @@ public class LibraryService : ILibraryService
                 }
             }
 
+            // Also cleanup missing episodes
+            var episodes = await _context.Episodes.ToListAsync(cancellationToken);
+            foreach (var episode in episodes)
+            {
+                if (!string.IsNullOrEmpty(episode.FilePath) && !File.Exists(episode.FilePath))
+                {
+                    _logger.LogInformation("Removing missing episode: S{Season}E{Episode} at {Path}", 
+                        episode.SeasonNumber, episode.EpisodeNumber, episode.FilePath);
+                    _context.Episodes.Remove(episode);
+                    stats.Removed++;
+                }
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -376,18 +389,25 @@ public class LibraryService : ILibraryService
         } // End of else block for when metadata == null
     }
 
+
+
     private async Task ScanSingleSeriesFolderAsync(string seriesFolder, LibraryScanResult stats, CancellationToken cancellationToken)
     {
         var folderName = Path.GetFileName(seriesFolder);
         
-        // Check if series already exists in database
-        var existing = await _context.Contents
+        // Check if series already exists in database by file path
+        var existingByPath = await _context.Contents
             .FirstOrDefaultAsync(c => c.FilePath == seriesFolder && c.Type == ContentType.Series, cancellationToken);
 
-        if (existing != null)
+        if (existingByPath != null)
         {
-            _logger.LogDebug("Series already exists in database: {Title}", existing.Title);
-            // TODO: Scan for new episodes
+            _logger.LogInformation("Series already exists in database by path: {Title} (ID: {Id}, TMDB: {TmdbId})", existingByPath.Title, existingByPath.Id, existingByPath.TmdbId);
+            
+            // Fetch and store episode metadata using MetadataService (like old backend)
+            await _metadataService.FetchAndStoreEpisodeMetadataAsync(existingByPath.Id, existingByPath.TmdbId, seriesFolder, cancellationToken);
+            
+            // Scan for new episodes
+            await ScanSeriesEpisodesAsync(existingByPath.Id, seriesFolder, cancellationToken);
             return;
         }
 
@@ -509,25 +529,47 @@ public class LibraryService : ILibraryService
     {
         try
         {
-            // Check if already exists
+            // Use the same approach as the old backend - simple check and upsert pattern
+            _logger.LogInformation("TMDB TV series search completed: {SeriesName}, Results: 1", Path.GetFileName(seriesFolder));
+            _logger.LogInformation("Found TMDB match for series {SeriesName}: {TmdbId}", Path.GetFileName(seriesFolder), tmdbId);
+            
+            // Check if already exists by TMDB ID and type (like old backend)
             var existing = await _context.Contents
                 .FirstOrDefaultAsync(c => c.TmdbId == tmdbId && c.Type == ContentType.Series, cancellationToken);
 
             if (existing != null)
             {
-                _logger.LogDebug("Series already exists in library: {Title}", existing.Title);
+                _logger.LogInformation("Series already exists in library: {Title} (ID: {Id})", existing.Title, existing.Id);
+                
+                // Update file path if different (like old backend)
+                if (existing.FilePath != seriesFolder)
+                {
+                    _logger.LogInformation("Updating existing series file path from {OldPath} to {NewPath}", existing.FilePath, seriesFolder);
+                    existing.FilePath = seriesFolder;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync(cancellationToken);
+                    stats.Updated++;
+                }
+                
+                // Always refresh episode metadata during scan (like old backend)
+                await _metadataService.FetchAndStoreEpisodeMetadataAsync(existing.Id, tmdbId, seriesFolder, cancellationToken);
+                await ScanSeriesEpisodesAsync(existing.Id, seriesFolder, cancellationToken);
                 return;
             }
 
+            _logger.LogInformation("No existing series found with TMDB ID {TmdbId}. Adding new series to library: Folder: {Folder}", tmdbId, seriesFolder);
+
             // Fetch metadata from TMDB
             var seriesDetails = await _tmdbClient.GetTvSeriesDetailsAsync(tmdbId, cancellationToken);
+            _logger.LogInformation("TMDB TV series details retrieved: {TmdbId}, Name: {Name}", tmdbId, seriesDetails.Name);
 
-            // Create content entry
+            // Create content entry (like old backend)
             var content = new Content
             {
                 TmdbId = tmdbId,
                 Type = ContentType.Series,
                 Title = seriesDetails.Name,
+                OriginalTitle = seriesDetails.OriginalName,
                 Overview = seriesDetails.Overview,
                 ReleaseDate = seriesDetails.FirstAirDate,
                 PosterPath = seriesDetails.PosterPath,
@@ -535,11 +577,15 @@ public class LibraryService : ILibraryService
                 Rating = seriesDetails.VoteAverage,
                 Genres = seriesDetails.Genres?.Select(g => g.Name).ToArray(),
                 FilePath = seriesFolder,
-                AddedAt = DateTime.UtcNow
+                AddedAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             };
 
             _context.Contents.Add(content);
+            
             await _context.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Successfully added series to database: {Title} (TMDB: {TmdbId})", content.Title, tmdbId);
 
             // Save metadata to media folder (like old backend)
             await _metadataService.SaveMetadataToMediaFolderAsync(content.Id, seriesFolder, cancellationToken);
@@ -547,12 +593,265 @@ public class LibraryService : ILibraryService
             stats.Added++;
             _logger.LogInformation("Added series to library: {Title} ({Year})", content.Title, content.ReleaseDate?.Year);
 
-            // TODO: Fetch and store episode metadata like the old backend
+            // Fetch and store episode metadata using MetadataService (like old backend)
+            await _metadataService.FetchAndStoreEpisodeMetadataAsync(content.Id, tmdbId, seriesFolder, cancellationToken);
+            
+            // Scan for episodes in the series folder
+            await ScanSeriesEpisodesAsync(content.Id, seriesFolder, cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message?.Contains("UNIQUE constraint failed: Contents.TmdbId") == true)
+        {
+            _logger.LogError(ex, "UNIQUE constraint violation for TMDB ID {TmdbId}. This indicates the database schema needs to be updated.", tmdbId);
+            stats.Errors.Add($"Database schema error for series {tmdbId}: UNIQUE constraint on TmdbId needs to be updated to include Type. Please recreate the database or run the migration helper.");
+            
+            // Don't throw - continue with other series
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to add series to library: {TmdbId}", tmdbId);
-            throw;
+            stats.Errors.Add($"Failed to add series {tmdbId}: {ex.Message}");
+            
+            // Don't throw - continue with other series to avoid stopping the entire scan
         }
     }
+
+    /// <summary>
+    /// Scan series folder for episodes and add them to the database
+    /// Based on the old backend's episode scanning logic
+    /// </summary>
+    private async Task ScanSeriesEpisodesAsync(int contentId, string seriesFolder, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Scanning episodes for series ID {ContentId} in folder: {Folder}", contentId, seriesFolder);
+
+            // Get series details from TMDB to know how many seasons/episodes exist
+            var content = await _context.Contents.FindAsync(new object[] { contentId }, cancellationToken);
+            if (content == null)
+            {
+                _logger.LogError("Content not found: {ContentId}", contentId);
+                return;
+            }
+
+            var seriesDetails = await _tmdbClient.GetTvSeriesDetailsAsync(content.TmdbId, cancellationToken);
+            if (seriesDetails == null)
+            {
+                _logger.LogError("Could not fetch series details from TMDB: {TmdbId}", content.TmdbId);
+                return;
+            }
+
+            // Scan each season folder
+            var seasonFolders = Directory.GetDirectories(seriesFolder)
+                .Where(d => Path.GetFileName(d).StartsWith("Season ", StringComparison.OrdinalIgnoreCase) ||
+                           System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(d), @"^S\d+", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                .ToList();
+
+            foreach (var seasonFolder in seasonFolders)
+            {
+                await ScanSeasonFolderAsync(contentId, seasonFolder, seriesDetails, cancellationToken);
+            }
+
+            // Also check for episodes directly in the series folder (flat structure)
+            var episodeFiles = Directory.GetFiles(seriesFolder)
+                .Where(f => _videoExtensions.Any(ext => f.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            if (episodeFiles.Any())
+            {
+                await ScanFlatSeriesStructureAsync(contentId, seriesFolder, episodeFiles, seriesDetails, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to scan episodes for series {ContentId}", contentId);
+        }
+    }
+
+    /// <summary>
+    /// Scan a season folder for episodes
+    /// </summary>
+    private async Task ScanSeasonFolderAsync(int contentId, string seasonFolder, TmdbTvSeriesDetails seriesDetails, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var seasonFolderName = Path.GetFileName(seasonFolder);
+            
+            // Parse season number from folder name
+            var seasonMatch = System.Text.RegularExpressions.Regex.Match(seasonFolderName, @"(?:Season\s+)?(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!seasonMatch.Success || !int.TryParse(seasonMatch.Groups[1].Value, out var seasonNumber))
+            {
+                _logger.LogWarning("Could not parse season number from folder: {Folder}", seasonFolderName);
+                return;
+            }
+
+            _logger.LogDebug("Scanning season {Season} in folder: {Folder}", seasonNumber, seasonFolder);
+
+            // Get episode files
+            var episodeFiles = Directory.GetFiles(seasonFolder)
+                .Where(f => _videoExtensions.Any(ext => f.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(f => f)
+                .ToList();
+
+            // Fetch season details from TMDB to get episode metadata
+            TmdbSeasonDetails? seasonDetails = null;
+            try
+            {
+                seasonDetails = await _tmdbClient.GetSeasonDetailsAsync(seriesDetails.Id, seasonNumber, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not fetch season {Season} details from TMDB for series {TmdbId}", seasonNumber, seriesDetails.Id);
+            }
+
+            foreach (var episodeFile in episodeFiles)
+            {
+                await ScanEpisodeFileAsync(contentId, episodeFile, seasonNumber, seasonDetails, seasonFolder, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to scan season folder: {Folder}", seasonFolder);
+        }
+    }
+
+    /// <summary>
+    /// Scan series with flat structure (episodes directly in series folder)
+    /// </summary>
+    private async Task ScanFlatSeriesStructureAsync(int contentId, string seriesFolder, List<string> episodeFiles, TmdbTvSeriesDetails seriesDetails, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogDebug("Scanning flat series structure with {Count} episode files", episodeFiles.Count);
+
+            foreach (var episodeFile in episodeFiles)
+            {
+                // Try to parse season and episode from filename
+                var fileName = Path.GetFileNameWithoutExtension(episodeFile);
+                var episodeMatch = System.Text.RegularExpressions.Regex.Match(fileName, @"S(\d+)E(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                
+                if (episodeMatch.Success && 
+                    int.TryParse(episodeMatch.Groups[1].Value, out var seasonNumber) &&
+                    int.TryParse(episodeMatch.Groups[2].Value, out var episodeNumber))
+                {
+                    // Fetch season details if needed
+                    TmdbSeasonDetails? seasonDetails = null;
+                    try
+                    {
+                        seasonDetails = await _tmdbClient.GetSeasonDetailsAsync(seriesDetails.Id, seasonNumber, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Could not fetch season {Season} details from TMDB for series {TmdbId}", seasonNumber, seriesDetails.Id);
+                    }
+
+                    await ScanEpisodeFileAsync(contentId, episodeFile, seasonNumber, seasonDetails, seriesFolder, cancellationToken);
+                }
+                else
+                {
+                    _logger.LogWarning("Could not parse season/episode from filename: {FileName}", fileName);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to scan flat series structure: {Folder}", seriesFolder);
+        }
+    }
+
+    /// <summary>
+    /// Scan individual episode file and add to database
+    /// </summary>
+    private async Task ScanEpisodeFileAsync(int contentId, string episodeFile, int seasonNumber, TmdbSeasonDetails? seasonDetails, string seasonFolder, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var fileName = Path.GetFileNameWithoutExtension(episodeFile);
+            
+            // Try to parse episode number from filename
+            var episodeMatch = System.Text.RegularExpressions.Regex.Match(fileName, @"E(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!episodeMatch.Success || !int.TryParse(episodeMatch.Groups[1].Value, out var episodeNumber))
+            {
+                // Try alternative patterns
+                episodeMatch = System.Text.RegularExpressions.Regex.Match(fileName, @"(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (!episodeMatch.Success || !int.TryParse(episodeMatch.Groups[1].Value, out episodeNumber))
+                {
+                    _logger.LogWarning("Could not parse episode number from filename: {FileName}", fileName);
+                    return;
+                }
+            }
+
+            // Check if episode already exists
+            var existingEpisode = await _context.Episodes
+                .FirstOrDefaultAsync(e => e.ContentId == contentId && 
+                                        e.SeasonNumber == seasonNumber && 
+                                        e.EpisodeNumber == episodeNumber, cancellationToken);
+
+            if (existingEpisode != null)
+            {
+                // Update file path if it changed
+                if (existingEpisode.FilePath != episodeFile)
+                {
+                    existingEpisode.FilePath = episodeFile;
+                    await _context.SaveChangesAsync(cancellationToken);
+                    _logger.LogDebug("Updated episode file path: S{Season}E{Episode}", seasonNumber, episodeNumber);
+                }
+                return;
+            }
+
+            // Get episode metadata from TMDB season details
+            TmdbEpisode? episodeDetails = null;
+            if (seasonDetails != null)
+            {
+                episodeDetails = seasonDetails.Episodes.FirstOrDefault(e => e.EpisodeNumber == episodeNumber);
+            }
+
+            // Analyze media file
+            var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(episodeFile, cancellationToken);
+
+            // Create episode entry
+            var episode = new Episode
+            {
+                ContentId = contentId,
+                TmdbId = episodeDetails?.Id,
+                SeasonNumber = seasonNumber,
+                EpisodeNumber = episodeNumber,
+                Title = episodeDetails?.Name ?? $"Episode {episodeNumber}",
+                Overview = episodeDetails?.Overview,
+                AirDate = episodeDetails?.AirDate,
+                StillPath = episodeDetails?.StillPath,
+                FilePath = episodeFile,
+                MediaInfo = mediaInfo,
+                AddedAt = DateTime.UtcNow
+            };
+
+            _context.Episodes.Add(episode);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            // Download episode still image if available
+            if (!string.IsNullOrEmpty(episodeDetails?.StillPath))
+            {
+                try
+                {
+                    await _metadataService.DownloadEpisodeStillAsync(
+                        episodeDetails.StillPath, 
+                        seasonFolder, 
+                        seasonNumber, 
+                        episodeNumber, 
+                        cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to download episode still for S{Season}E{Episode}", seasonNumber, episodeNumber);
+                }
+            }
+
+            _logger.LogInformation("Added episode to library: S{Season}E{Episode} - {Title}", seasonNumber, episodeNumber, episode.Title);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to scan episode file: {File}", episodeFile);
+        }
+    }
+
+
 }
