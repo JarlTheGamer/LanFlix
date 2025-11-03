@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Lanflix" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+    <style name="Theme.Lanflix" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">#E50914</item>
         <item name="colorPrimaryDark">#B20710</item>
         <item name="colorAccent">#E50914</item>
