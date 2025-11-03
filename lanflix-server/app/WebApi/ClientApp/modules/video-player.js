@@ -145,7 +145,7 @@ export class VideoPlayer {
     try {
       // Get stream URL
       const streamUrl = this.getStreamUrl(startPosition);
-      console.log('🔗 Stream URL:', streamUrl);
+      console.log('🔗 Initial stream URL:', streamUrl);
 
       // Test stream availability and get playback mode
       await this.detectPlaybackMode(streamUrl);
@@ -227,9 +227,8 @@ export class VideoPlayer {
       params.append('episodeId', this.episodeId.toString());
     }
 
-    if (startTime > 0) {
-      params.append('startTime', startTime.toString());
-    }
+    // Always include startTime parameter for consistent server behavior
+    params.append('startTime', startTime.toString());
 
     return `${apiClient.baseURL}/transcoding/stream/${this.contentId}?${params.toString()}`;
   }
@@ -276,6 +275,8 @@ export class VideoPlayer {
       this.isPlaying = true;
       this.startProgressTracking();
       this.updatePlayPauseButton();
+      // Start auto-hiding controls when playing
+      this.showControls();
       console.log('▶️ Video playing');
     });
 
@@ -283,6 +284,8 @@ export class VideoPlayer {
       this.isPlaying = false;
       this.stopProgressTracking();
       this.updatePlayPauseButton();
+      // Show controls when paused (and keep them visible)
+      this.showControls();
       console.log('⏸️ Video paused');
     });
 
@@ -294,7 +297,13 @@ export class VideoPlayer {
 
         // Only consider it ended if we're at least 95% through
         if (actualProgress < 95) {
-          console.log(`⚠️ Ignoring premature 'ended' event for transcoded stream`);
+          console.log(`⚠️ Premature 'ended' event detected - attempting stream reload to continue playback`);
+          
+          // Try to reload the stream at the current position to continue playback
+          this.reloadStreamAtTime(this.currentTime).catch(error => {
+            console.error('❌ Failed to reload stream after premature end:', error);
+            this.showNotification('Video ended unexpectedly - try seeking to continue');
+          });
           return;
         }
       }
@@ -537,44 +546,78 @@ export class VideoPlayer {
    */
   setupMouseControls() {
     const playerContainer = document.querySelector('.player-container');
-    const controls = document.querySelector('.player-controls');
-    const backButton = document.querySelector('.back-button');
 
-    if (!playerContainer || !controls) return;
+    if (!playerContainer) return;
 
-    const showControls = () => {
-      controls.classList.add('visible');
-      if (backButton) backButton.style.opacity = '1';
-      playerContainer.classList.add('show-cursor');
-      this.controlsVisible = true;
-
-      // Clear existing timeout
-      if (this.controlsTimeout) {
-        clearTimeout(this.controlsTimeout);
-      }
-
-      // Hide controls after 3 seconds if playing
-      if (this.isPlaying) {
-        this.controlsTimeout = setTimeout(() => {
-          this.hideControls();
-        }, 3000);
-      }
-    };
-
-    const hideControls = () => {
-      if (!this.isPlaying) return; // Don't hide when paused
-
-      controls.classList.remove('visible');
-      if (backButton) backButton.style.opacity = '0';
-      playerContainer.classList.remove('show-cursor');
-      this.controlsVisible = false;
-    };
-
-    playerContainer.addEventListener('mousemove', showControls);
-    playerContainer.addEventListener('mouseleave', hideControls);
+    playerContainer.addEventListener('mousemove', () => this.showControls());
+    playerContainer.addEventListener('mouseleave', () => this.hideControls());
 
     // Show controls initially
-    showControls();
+    this.showControls();
+  }
+
+  /**
+   * Show player controls
+   */
+  showControls() {
+    const controls = document.querySelector('.player-controls');
+    const backButton = document.querySelector('.back-button');
+    const playerContainer = document.querySelector('.player-container');
+
+    if (controls) {
+      controls.classList.add('visible');
+    }
+    if (backButton) {
+      backButton.style.opacity = '1';
+    }
+    if (playerContainer) {
+      playerContainer.classList.add('show-cursor');
+    }
+
+    this.controlsVisible = true;
+
+    // Clear existing timeout
+    if (this.controlsTimeout) {
+      clearTimeout(this.controlsTimeout);
+      this.controlsTimeout = null;
+    }
+
+    // Hide controls after 3 seconds if playing
+    if (this.isPlaying) {
+      this.controlsTimeout = setTimeout(() => {
+        this.hideControls();
+      }, 3000);
+    }
+  }
+
+  /**
+   * Hide player controls
+   */
+  hideControls() {
+    // Don't hide when paused or not initialized
+    if (!this.isPlaying || !this.isInitialized) return;
+
+    const controls = document.querySelector('.player-controls');
+    const backButton = document.querySelector('.back-button');
+    const playerContainer = document.querySelector('.player-container');
+
+    if (controls) {
+      controls.classList.remove('visible');
+    }
+    if (backButton) {
+      backButton.style.opacity = '0';
+    }
+    if (playerContainer) {
+      playerContainer.classList.remove('show-cursor');
+    }
+
+    this.controlsVisible = false;
+
+    // Clear timeout
+    if (this.controlsTimeout) {
+      clearTimeout(this.controlsTimeout);
+      this.controlsTimeout = null;
+    }
   }
 
   // ==================== PLAYBACK CONTROLS ====================
@@ -656,7 +699,7 @@ export class VideoPlayer {
 
       // Get new stream URL with start time
       const newStreamUrl = this.getStreamUrl(time);
-      console.log('🔗 New stream URL:', newStreamUrl);
+      console.log('🔗 Seek stream URL:', newStreamUrl);
 
       // Load new source
       this.videoElement.src = newStreamUrl;
