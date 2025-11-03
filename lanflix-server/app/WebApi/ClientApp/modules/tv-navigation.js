@@ -102,7 +102,7 @@ export class TVNavigation {
    * Handle remote control input
    */
   handleRemoteControl(e) {
-    // Fire TV specific key mappings
+    // Fire TV specific key mappings - handle both key codes and key names
     const fireTVKeyMap = {
       // Fire TV remote specific codes
       'KEYCODE_DPAD_UP': 'ArrowUp',
@@ -110,6 +110,7 @@ export class TVNavigation {
       'KEYCODE_DPAD_LEFT': 'ArrowLeft',
       'KEYCODE_DPAD_RIGHT': 'ArrowRight',
       'KEYCODE_DPAD_CENTER': 'Enter',
+      'KEYCODE_ENTER': 'Enter',
       'KEYCODE_BACK': 'Escape',
       'KEYCODE_MENU': 'm',
       'KEYCODE_MEDIA_PLAY': ' ',
@@ -117,7 +118,11 @@ export class TVNavigation {
       'KEYCODE_MEDIA_PLAY_PAUSE': ' ',
       'KEYCODE_MEDIA_STOP': 'Escape',
       'KEYCODE_MEDIA_FAST_FORWARD': 'ArrowRight',
-      'KEYCODE_MEDIA_REWIND': 'ArrowLeft'
+      'KEYCODE_MEDIA_REWIND': 'ArrowLeft',
+      // Additional Fire TV mappings
+      'DpadCenter': 'Enter',
+      'Select': 'Enter',
+      'OK': 'Enter'
     };
 
     // Standard remote control mappings
@@ -182,10 +187,48 @@ export class TVNavigation {
 
       console.log(`🎮 Remote control: ${e.key}/${e.code} -> ${mappedKey}`);
 
+      // Special handling for Enter/OK button on profile page
+      if (mappedKey === 'Enter' && window.location.pathname.includes('profiles')) {
+        console.log('🎮 Fire TV: Enter pressed on profiles page');
+        
+        // Try to click the focused profile directly
+        const focusedProfile = document.querySelector('.profile-item.focused');
+        if (focusedProfile) {
+          console.log('🎮 Fire TV: Clicking focused profile');
+          focusedProfile.click();
+          return;
+        }
+        
+        // Fallback: trigger profile manager keyboard handler
+        if (window.debugProfileManager && window.debugProfileManager.handleKeyboard) {
+          const enterEvent = new KeyboardEvent('keydown', {
+            key: 'Enter',
+            keyCode: 13,
+            which: 13,
+            bubbles: true,
+            cancelable: true
+          });
+          window.debugProfileManager.handleKeyboard(enterEvent);
+          return;
+        }
+      }
+
       // Create a synthetic keyboard event that the existing navigation will handle
       const syntheticEvent = new KeyboardEvent('keydown', {
         key: mappedKey,
         code: mappedKey,
+        keyCode: mappedKey === 'Enter' ? 13 : 
+                 mappedKey === 'ArrowUp' ? 38 :
+                 mappedKey === 'ArrowDown' ? 40 :
+                 mappedKey === 'ArrowLeft' ? 37 :
+                 mappedKey === 'ArrowRight' ? 39 :
+                 mappedKey === 'Escape' ? 27 : 0,
+        which: mappedKey === 'Enter' ? 13 : 
+               mappedKey === 'ArrowUp' ? 38 :
+               mappedKey === 'ArrowDown' ? 40 :
+               mappedKey === 'ArrowLeft' ? 37 :
+               mappedKey === 'ArrowRight' ? 39 :
+               mappedKey === 'Escape' ? 27 : 0,
         bubbles: true,
         cancelable: true,
         composed: true

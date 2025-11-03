@@ -203,21 +203,43 @@ export class ProfileManager {
   handleKeyboard(e) {
     if (!this.profileSelectionActive) return;
 
-    if (e.key === 'ArrowUp') {
+    console.log('🎮 ProfileManager keyboard event:', e.key, e.keyCode, e.which);
+
+    // Handle navigation keys
+    if (e.key === 'ArrowUp' || e.keyCode === 38) {
       e.preventDefault();
       this.focusedProfileIndex = this.focusedProfileIndex > 0 ? this.focusedProfileIndex - 1 : this.profiles.length - 1;
       this.updateFocus();
-    } else if (e.key === 'ArrowDown') {
+      console.log('🎮 Profile focus moved up to index:', this.focusedProfileIndex);
+    } else if (e.key === 'ArrowDown' || e.keyCode === 40) {
       e.preventDefault();
       this.focusedProfileIndex = this.focusedProfileIndex < this.profiles.length - 1 ? this.focusedProfileIndex + 1 : 0;
       this.updateFocus();
-    } else if (e.key === 'Enter') {
+      console.log('🎮 Profile focus moved down to index:', this.focusedProfileIndex);
+    } else if (e.key === 'ArrowLeft' || e.keyCode === 37) {
       e.preventDefault();
+      this.focusedProfileIndex = this.focusedProfileIndex > 0 ? this.focusedProfileIndex - 1 : this.profiles.length - 1;
+      this.updateFocus();
+      console.log('🎮 Profile focus moved left to index:', this.focusedProfileIndex);
+    } else if (e.key === 'ArrowRight' || e.keyCode === 39) {
+      e.preventDefault();
+      this.focusedProfileIndex = this.focusedProfileIndex < this.profiles.length - 1 ? this.focusedProfileIndex + 1 : 0;
+      this.updateFocus();
+      console.log('🎮 Profile focus moved right to index:', this.focusedProfileIndex);
+    } 
+    // Handle selection keys - multiple ways to detect Enter/OK
+    else if (e.key === 'Enter' || e.keyCode === 13 || e.which === 13 || 
+             e.key === 'Select' || e.key === 'OK' || e.code === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
       const selectedProfile = this.profiles[this.focusedProfileIndex];
       if (selectedProfile) {
+        console.log('🎮 Profile selected via keyboard:', selectedProfile.name, selectedProfile.id);
         this.selectProfile(selectedProfile.id);
       }
-    } else if (e.key === 'Escape') {
+    } 
+    // Handle back/escape keys
+    else if (e.key === 'Escape' || e.keyCode === 27 || e.key === 'Back' || e.key === 'Backspace') {
       e.preventDefault();
       this.hide();
     }

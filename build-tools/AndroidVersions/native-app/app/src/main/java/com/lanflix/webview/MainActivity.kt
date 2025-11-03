@@ -162,6 +162,17 @@ class MainActivity : AppCompatActivity() {
         if (packageManager.hasSystemFeature("android.software.leanback")) {
             swipeRefresh.isEnabled = false
         }
+        
+        // Ensure proper scrolling behavior for mobile devices
+        if (!packageManager.hasSystemFeature("android.software.leanback")) {
+            // This is a mobile device - ensure scrolling works
+            webView.isVerticalScrollBarEnabled = true
+            webView.isHorizontalScrollBarEnabled = true
+            webView.scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
+            
+            // Enable nested scrolling for better touch behavior
+            webView.isNestedScrollingEnabled = true
+        }
     }
     
     private fun setupSwipeRefresh() {
@@ -200,7 +211,32 @@ class MainActivity : AppCompatActivity() {
             // TV remote control support - Enter/OK button
             KeyEvent.KEYCODE_DPAD_CENTER,
             KeyEvent.KEYCODE_ENTER -> {
-                webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown', {keyCode: 13, which: 13}));", null)
+                // Send both Enter key and click event for better compatibility
+                webView.evaluateJavascript("""
+                    console.log('🎮 Android: Center/OK button pressed');
+                    
+                    // Try multiple approaches to trigger profile selection
+                    var activeElement = document.activeElement;
+                    var focusedProfile = document.querySelector('.profile-item.focused');
+                    
+                    if (focusedProfile) {
+                        console.log('🎮 Clicking focused profile');
+                        focusedProfile.click();
+                    } else if (activeElement && activeElement.classList.contains('profile-item')) {
+                        console.log('🎮 Clicking active element');
+                        activeElement.click();
+                    } else {
+                        // Fallback: dispatch Enter key event
+                        console.log('🎮 Dispatching Enter key event');
+                        document.dispatchEvent(new KeyboardEvent('keydown', {
+                            key: 'Enter', 
+                            keyCode: 13, 
+                            which: 13, 
+                            bubbles: true, 
+                            cancelable: true
+                        }));
+                    }
+                """.trimIndent(), null)
                 return true
             }
             
@@ -276,25 +312,38 @@ class MainActivity : AppCompatActivity() {
                         min-height: 100vh !important;
                     }
                     
-                    /* Remove ALL focus outlines - no ugly blue borders */
-                    * {
-                        outline: none !important;
+                    /* Remove blue tap highlights on mobile only */
+                    * { 
                         -webkit-tap-highlight-color: transparent !important;
+                        -webkit-touch-callout: none !important;
                     }
                     
-                    /* Mobile devices - NO focus styles at all */
-                    .mobile-mode *:focus {
-                        outline: none !important;
-                        box-shadow: none !important;
-                        background-color: transparent !important;
-                        transform: none !important;
-                    }
-                    
-                    /* Mobile devices - ensure normal scrolling */
-                    .mobile-mode body {
+                    /* Mobile devices - ensure normal scrolling and NO focus outlines */
+                    .mobile-mode {
                         overflow: auto !important;
                         height: auto !important;
                         -webkit-overflow-scrolling: touch !important;
+                    }
+                    
+                    .mobile-mode *, 
+                    .mobile-mode *:focus, 
+                    .mobile-mode *:active, 
+                    .mobile-mode *:hover {
+                        outline: none !important;
+                        -webkit-tap-highlight-color: transparent !important;
+                        -webkit-focus-ring-color: transparent !important;
+                        box-shadow: none !important;
+                        border: none !important;
+                    }
+                    
+                    .mobile-mode input, 
+                    .mobile-mode button, 
+                    .mobile-mode select, 
+                    .mobile-mode textarea, 
+                    .mobile-mode a {
+                        outline: none !important;
+                        -webkit-tap-highlight-color: transparent !important;
+                        -webkit-focus-ring-color: transparent !important;
                     }
                     
                     /* Only show subtle focus for actual TV navigation */
@@ -334,17 +383,20 @@ class MainActivity : AppCompatActivity() {
                 var isActualTV = false;
                 var userAgent = navigator.userAgent.toLowerCase();
                 
-                // Check for actual TV indicators
-                if (userAgent.includes('tv') || 
+                // Check for actual TV indicators - be more specific
+                if ((userAgent.includes('tv') && !userAgent.includes('mobile')) || 
                     userAgent.includes('aftm') || 
                     userAgent.includes('aftb') ||
-                    window.innerWidth > 1280) {
+                    userAgent.includes('firetv') ||
+                    (window.innerWidth > 1280 && window.innerHeight > 720 && !('ontouchstart' in window))) {
                     isActualTV = true;
                     document.body.classList.add('tv-mode');
-                    console.log('📺 TV device detected');
+                    console.log('📺 TV device detected - User Agent:', userAgent);
                 } else {
                     document.body.classList.add('mobile-mode');
-                    console.log('📱 Mobile device detected');
+                    console.log('📱 Mobile device detected - User Agent:', userAgent);
+                    console.log('📱 Screen size:', window.innerWidth + 'x' + window.innerHeight);
+                    console.log('📱 Touch support:', 'ontouchstart' in window);
                 }
                 
                 // Force body to use full viewport
@@ -356,8 +408,18 @@ class MainActivity : AppCompatActivity() {
                 // Only disable scrolling on actual TV devices
                 if (isActualTV) {
                     document.body.style.overflow = 'hidden';
+                    document.body.style.height = '100vh';
                 } else {
+                    // Mobile devices need proper scrolling
                     document.body.style.overflow = 'auto';
+                    document.body.style.height = 'auto';
+                    document.body.style.minHeight = '100vh';
+                    document.documentElement.style.overflow = 'auto';
+                    document.documentElement.style.height = 'auto';
+                    
+                    // Enable touch scrolling
+                    document.body.style.webkitOverflowScrolling = 'touch';
+                    document.body.style.overflowScrolling = 'touch';
                 }
                 
                 // Make all clickable elements focusable and add TV navigation
