@@ -218,6 +218,95 @@ export class VideoPlayer {
   }
 
   /**
+   * Setup stream with retry logic for Fire TV
+   */
+  async setupStreamWithRetry(startPosition = 0, maxRetries = 3) {
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔧 Stream setup attempt ${attempt}/${maxRetries}`);
+        await this.setupStream(startPosition);
+        return; // Success
+      } catch (error) {
+        lastError = error;
+        console.warn(`⚠️ Stream setup attempt ${attempt} failed:`, error.message);
+        
+        if (attempt < maxRetries) {
+          // Wait before retry, with exponential backoff
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          console.log(`⏳ Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    throw lastError;
+  }
+
+  /**
+   * Fire TV specific initialization fallback
+   */
+  async initializeFireTVFallback(startPosition = 0) {
+    console.log('🔥 Attempting Fire TV fallback initialization...');
+    
+    try {
+      // Simplified Fire TV initialization
+      const streamUrl = this.getStreamUrl(startPosition);
+      console.log('🔗 Fire TV fallback stream URL:', streamUrl);
+      
+      // Skip playback mode detection for Fire TV
+      this.playbackMode = 'unknown';
+      this.isTranscoding = true; // Assume transcoding for safety
+      
+      // Set video source directly
+      this.videoElement.src = streamUrl;
+      
+      // Simplified ready check for Fire TV
+      await this.waitForVideoReadyFireTV();
+      
+      this.isInitialized = true;
+      console.log('✅ Fire TV fallback initialization successful');
+      
+    } catch (error) {
+      console.error('❌ Fire TV fallback initialization failed:', error);
+      this.showNotification('Failed to initialize video player on Fire TV. Please check your network connection.');
+      throw error;
+    }
+  }
+
+  /**
+   * Fire TV specific video ready check
+   */
+  async waitForVideoReadyFireTV() {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Fire TV video loading timeout'));
+      }, 45000); // Longer timeout for Fire TV
+
+      const checkReady = () => {
+        // More lenient ready check for Fire TV
+        if (this.videoElement.readyState >= 2) { // HAVE_CURRENT_DATA
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          setTimeout(checkReady, 500);
+        }
+      };
+
+      const onError = (event) => {
+        clearTimeout(timeout);
+        reject(new Error(`Fire TV video loading error: ${this.videoElement.error?.message || 'Unknown error'}`));
+      };
+
+      this.videoElement.addEventListener('error', onError, { once: true });
+      
+      // Start checking
+      checkReady();
+    });
+  }
+
+  /**
    * Detect playback mode from server headers
    */
   async detectPlaybackMode(streamUrl) {
