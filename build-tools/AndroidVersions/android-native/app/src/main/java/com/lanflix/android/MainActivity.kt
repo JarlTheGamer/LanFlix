@@ -31,6 +31,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         
+        println("MainActivity: Starting Lanflix app...")
+        
         setContent {
             LanflixTheme {
                 LanflixApp()

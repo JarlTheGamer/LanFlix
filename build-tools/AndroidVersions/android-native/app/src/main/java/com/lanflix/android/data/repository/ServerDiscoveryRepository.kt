@@ -56,7 +56,24 @@ class ServerDiscoveryRepository @Inject constructor(
         // Lanflix server ports - prioritize 5037
         val lanflixPorts = listOf(5037, 8080, 3000, 5000, 8000, 5001)
         
-        // Scan broader IP range for better discovery
+        // First, try the known server IP from logs
+        val knownServerIps = listOf("192.168.178.13")
+        for (knownIp in knownServerIps) {
+            for (port in lanflixPorts) {
+                try {
+                    val testUrl = "http://$knownIp:$port"
+                    println("Testing known server: $testUrl")
+                    val serverInfo = testConnection(testUrl)
+                    servers.add(serverInfo)
+                    println("Successfully found known server: $testUrl")
+                    return // Found the server, no need to scan further
+                } catch (e: Exception) {
+                    println("Known server test failed for $knownIp:$port - ${e.message}")
+                }
+            }
+        }
+        
+        // If known server not found, scan broader IP range
         val ipRanges = listOf(
             1..50,   // Common router DHCP range
             100..150, // Extended DHCP range
@@ -67,8 +84,8 @@ class ServerDiscoveryRepository @Inject constructor(
             for (i in range) {
                 val testIp = "$networkPrefix.$i"
                 
-                // Skip our own IP
-                if (testIp == localIp) continue
+                // Skip our own IP and already tested known IPs
+                if (testIp == localIp || knownServerIps.contains(testIp)) continue
                 
                 for (port in lanflixPorts) {
                     try {

@@ -65,6 +65,13 @@ fun HomeScreen(
         viewModel.loadContent()
     }
     
+    // Show error if there's a connection issue
+    uiState.error?.let { error ->
+        LaunchedEffect(error) {
+            println("HomeScreen: Error occurred: $error")
+        }
+    }
+    
     // Auto-advance hero carousel
     LaunchedEffect(uiState.heroContent) {
         if (uiState.heroContent.isNotEmpty()) {
@@ -105,13 +112,78 @@ fun HomeScreen(
                 }
                 
                 item {
-                    // Content sections - EXACT replica
-                    ContentSections(
-                        recentlyAdded = uiState.recentlyAdded,
-                        discoverPreview = uiState.discoverPreview,
-                        onContentClick = onContentClick,
-                        modifier = Modifier.padding(horizontal = 72.dp, vertical = 80.dp) // content-shell padding
-                    )
+                    // Loading state
+                    if (uiState.isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    color = Color(0xFFe50914),
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Text(
+                                    text = "Connecting to server...",
+                                    color = Color(0x99FFFFFF),
+                                    fontSize = 16.sp
+                                )
+                            }
+                        }
+                    } else if (uiState.error != null) {
+                        // Error state
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(20.dp)
+                            ) {
+                                Text(
+                                    text = "Connection Error",
+                                    color = Color(0xFFe50914),
+                                    fontSize = 32.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = uiState.error ?: "Unknown error",
+                                    color = Color(0x99FFFFFF),
+                                    fontSize = 16.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 32.dp)
+                                )
+                                Button(
+                                    onClick = { viewModel.refreshContent() },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFe50914)
+                                    ),
+                                    shape = RoundedCornerShape(999.dp)
+                                ) {
+                                    Text(
+                                        text = "Retry Connection",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // Content sections - EXACT replica
+                        ContentSections(
+                            recentlyAdded = uiState.recentlyAdded,
+                            discoverPreview = uiState.discoverPreview,
+                            onContentClick = onContentClick,
+                            modifier = Modifier.padding(horizontal = 72.dp, vertical = 80.dp) // content-shell padding
+                        )
+                    }
                 }
             }
             

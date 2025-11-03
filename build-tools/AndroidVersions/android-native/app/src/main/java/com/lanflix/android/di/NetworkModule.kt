@@ -31,8 +31,21 @@ object NetworkModule {
         
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                val request = chain.request()
+                println("Making request to: ${request.url}")
+                try {
+                    val response = chain.proceed(request)
+                    println("Response: ${response.code} for ${request.url}")
+                    response
+                } catch (e: Exception) {
+                    println("Request failed for ${request.url}: ${e.message}")
+                    throw e
+                }
+            }
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS) // Increased timeout
             .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .build()
     }
     
@@ -47,12 +60,13 @@ object NetworkModule {
             try {
                 val url = serverPreferences.getServerUrl()
                 if (url.isBlank()) {
-                    "http://localhost:5037/" // Temporary fallback for development
+                    // Try common server addresses first
+                    "http://192.168.178.13:5037/" // Use the actual server IP from logs
                 } else {
                     url
                 }
             } catch (e: Exception) {
-                "http://localhost:5037/" // Temporary fallback for development
+                "http://192.168.178.13:5037/" // Use the actual server IP from logs
             }
         }
         

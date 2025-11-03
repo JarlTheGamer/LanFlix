@@ -24,19 +24,38 @@ class HomeViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             
             try {
+                println("HomeViewModel: Starting to load content...")
+                
                 // Load recently added content for hero carousel
-                val recentlyAdded = contentRepository.getMovies(1, 5) + contentRepository.getSeries(1, 5)
+                val recentlyAdded = try {
+                    println("HomeViewModel: Loading movies and series...")
+                    val movies = contentRepository.getMovies(1, 5)
+                    val series = contentRepository.getSeries(1, 5)
+                    movies + series
+                } catch (e: Exception) {
+                    println("HomeViewModel: Failed to load movies/series: ${e.message}")
+                    throw e
+                }
                 
                 // Load discover preview (if available)
                 val discoverPreview = try {
+                    println("HomeViewModel: Loading discover preview...")
                     contentRepository.searchContent("trending", null).take(10)
                 } catch (e: Exception) {
+                    println("HomeViewModel: Failed to load discover preview: ${e.message}")
                     emptyList()
                 }
                 
                 // Load all recently added for content section
-                val allRecentlyAdded = contentRepository.getMovies(1, 20) + contentRepository.getSeries(1, 20)
+                val allRecentlyAdded = try {
+                    println("HomeViewModel: Loading all recently added content...")
+                    contentRepository.getMovies(1, 20) + contentRepository.getSeries(1, 20)
+                } catch (e: Exception) {
+                    println("HomeViewModel: Failed to load all recently added: ${e.message}")
+                    recentlyAdded // Use the smaller set if this fails
+                }
                 
+                println("HomeViewModel: Successfully loaded content")
                 _uiState.value = _uiState.value.copy(
                     heroContent = recentlyAdded.take(5),
                     recentlyAdded = allRecentlyAdded,
@@ -45,9 +64,17 @@ class HomeViewModel @Inject constructor(
                     error = null
                 )
             } catch (e: Exception) {
+                val errorMessage = when {
+                    e.message?.contains("ConnectException") == true -> "Cannot connect to server. Please check if the server is running and accessible."
+                    e.message?.contains("timeout") == true -> "Connection timeout. Server may be slow or unreachable."
+                    e.message?.contains("UnknownHostException") == true -> "Server not found. Please check the server address."
+                    else -> e.message ?: "Failed to load content"
+                }
+                
+                println("HomeViewModel: Error loading content: $errorMessage")
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message ?: "Failed to load content"
+                    error = errorMessage
                 )
             }
         }
