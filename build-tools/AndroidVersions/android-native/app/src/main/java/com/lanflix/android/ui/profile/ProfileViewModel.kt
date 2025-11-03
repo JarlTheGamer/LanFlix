@@ -21,16 +21,20 @@ class ProfileViewModel @Inject constructor(
     
     fun loadProfiles() {
         viewModelScope.launch {
+            println("ProfileViewModel: Loading profiles...")
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             
             try {
                 val profiles = profileRepository.getProfiles()
+                println("ProfileViewModel: Loaded ${profiles.size} profiles successfully")
                 _uiState.value = _uiState.value.copy(
                     profiles = profiles,
                     isLoading = false,
                     error = null
                 )
             } catch (e: Exception) {
+                println("ProfileViewModel: Error loading profiles: ${e.message}")
+                e.printStackTrace()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Unknown error occurred"
@@ -39,10 +43,10 @@ class ProfileViewModel @Inject constructor(
         }
     }
     
-    fun createProfile(name: String, primaryColor: String, secondaryColor: String) {
+    fun createProfile(name: String, isKidsProfile: Boolean = false) {
         viewModelScope.launch {
             try {
-                val newProfile = profileRepository.createProfile(name, primaryColor, secondaryColor)
+                val newProfile = profileRepository.createProfile(name, null, isKidsProfile, null)
                 val updatedProfiles = _uiState.value.profiles + newProfile
                 _uiState.value = _uiState.value.copy(profiles = updatedProfiles)
             } catch (e: Exception) {
@@ -53,10 +57,10 @@ class ProfileViewModel @Inject constructor(
         }
     }
     
-    fun updateProfile(profileId: String, name: String?, primaryColor: String?, secondaryColor: String?) {
+    fun updateProfile(profileId: Int, name: String?, isKidsProfile: Boolean? = null) {
         viewModelScope.launch {
             try {
-                val updatedProfile = profileRepository.updateProfile(profileId, name, primaryColor, secondaryColor)
+                val updatedProfile = profileRepository.updateProfile(profileId, name, null, isKidsProfile, null)
                 val updatedProfiles = _uiState.value.profiles.map { profile ->
                     if (profile.id == profileId) updatedProfile else profile
                 }
@@ -69,7 +73,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
     
-    fun deleteProfile(profileId: String) {
+    fun deleteProfile(profileId: Int) {
         viewModelScope.launch {
             try {
                 profileRepository.deleteProfile(profileId)

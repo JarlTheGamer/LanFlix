@@ -56,3 +56,62 @@ Based on the logs, your server is configured as:
 - API Base: `http://192.168.178.13:5037/api/`
 
 The app has been updated to use this configuration by default.
+## ✅ 
+Profile Data Structure Issues Fixed (Latest Update)
+
+### 🔧 **Root Cause Identified:**
+The app was crashing after connection because of a **data structure mismatch** between server and Android models:
+
+**Server Profile (C#):**
+- `Id`: `int` 
+- `Name`: `string`
+- `AvatarPath`: `string?` (optional)
+- `IsKidsProfile`: `bool`
+- `Preferences`: `UserPreferences?` (optional)
+
+**Android Profile (Kotlin - FIXED):**
+- `id`: `Int` (was `String` - FIXED)
+- `name`: `String`
+- `avatarPath`: `String?` (was missing - ADDED)
+- `isKidsProfile`: `Boolean` (was missing - ADDED)
+- `preferences`: `UserPreferences?` (was missing - ADDED)
+- `avatarColorPrimary/Secondary`: Generated from name for UI
+
+### 🔧 **API Request Structure Fixed:**
+**Server expects (CreateProfileCommand):**
+```json
+{
+  "name": "Profile Name",
+  "avatarPath": null,
+  "isKidsProfile": false,
+  "preferences": null
+}
+```
+
+**Android was sending (FIXED):**
+- ❌ Old: `{name, avatarColorPrimary, avatarColorSecondary}`
+- ✅ New: `{name, avatarPath, isKidsProfile, preferences}`
+
+### 🔧 **Changes Made:**
+1. **Profile Model**: Updated to match server structure exactly
+2. **API Requests**: Fixed CreateProfileRequest and UpdateProfileRequest
+3. **Repository**: Updated method signatures to use correct parameters
+4. **ViewModel**: Fixed to handle Int IDs instead of String IDs
+5. **Avatar Colors**: Now generated client-side from profile name
+6. **Debugging**: Added comprehensive logging for profile operations
+
+### 📱 **Expected Behavior Now:**
+1. **Connection**: App connects to server successfully ✅
+2. **Profile Loading**: Server returns profiles with correct structure ✅
+3. **JSON Parsing**: Android correctly deserializes profile data ✅
+4. **Navigation**: App proceeds to profile selection without crashing ✅
+5. **Profile Creation**: Uses correct API structure ✅
+
+### 🐛 **If Still Crashing:**
+Check Android Studio logcat for:
+- `ProfileRepository:` messages showing profile data
+- `ProfileViewModel:` messages showing loading status
+- JSON parsing errors or network exceptions
+- Any remaining type mismatches
+
+The app should now successfully load and display profiles from your server.

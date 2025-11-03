@@ -5,11 +5,49 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data class Profile(
-    val id: String,
+    val id: Int,
     val name: String,
-    val avatarColorPrimary: String,
-    val avatarColorSecondary: String,
-    val createdAt: String? = null
+    val avatarPath: String? = null,
+    val isKidsProfile: Boolean = false,
+    val preferences: UserPreferences? = null,
+    val createdAt: String? = null,
+    // Keep these for UI purposes, generate from name/id if not provided
+    val avatarColorPrimary: String = generateAvatarColor(name, true),
+    val avatarColorSecondary: String = generateAvatarColor(name, false)
+) : Parcelable {
+    companion object {
+        private fun generateAvatarColor(name: String, isPrimary: Boolean): String {
+            val colors = listOf(
+                "#ff6b6b" to "#ff8e8e", // Red
+                "#4ecdc4" to "#6ed5ce", // Teal
+                "#45b7d1" to "#6bc5d8", // Blue
+                "#96ceb4" to "#a8d4c0", // Green
+                "#feca57" to "#fed976", // Yellow
+                "#ff9ff3" to "#ffb3f5", // Pink
+                "#54a0ff" to "#6bb0ff", // Light Blue
+                "#5f27cd" to "#7c4ddb"  // Purple
+            )
+            val colorPair = colors[name.hashCode().absoluteValue % colors.size]
+            return if (isPrimary) colorPair.first else colorPair.second
+        }
+        
+        private val Int.absoluteValue: Int
+            get() = if (this < 0) -this else this
+    }
+}
+
+@Parcelize
+data class UserPreferences(
+    val preferredAudioLanguage: String? = null,
+    val preferredSubtitleLanguage: String? = null,
+    val subtitlesEnabled: Boolean = false,
+    val preferredBitrate: Long? = null,
+    val autoSkipIntro: Boolean = false,
+    val autoPlayNextEpisode: Boolean = true,
+    val maxResolution: String? = null,
+    val allowHardwareAcceleration: Boolean = true,
+    val forceTranscode: Boolean = false,
+    val theme: String = "dark"
 ) : Parcelable
 
 @Parcelize

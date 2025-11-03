@@ -3,6 +3,7 @@ package com.lanflix.android.data.api
 import com.lanflix.android.domain.model.Profile
 import com.lanflix.android.domain.model.Content
 import com.lanflix.android.domain.model.StreamInfo
+import com.lanflix.android.domain.model.UserPreferences
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -63,14 +64,16 @@ interface LanflixApiService {
 
 data class CreateProfileRequest(
     val name: String,
-    val avatarColorPrimary: String,
-    val avatarColorSecondary: String
+    val avatarPath: String? = null,
+    val isKidsProfile: Boolean = false,
+    val preferences: UserPreferences? = null
 )
 
 data class UpdateProfileRequest(
     val name: String? = null,
-    val avatarColorPrimary: String? = null,
-    val avatarColorSecondary: String? = null
+    val avatarPath: String? = null,
+    val isKidsProfile: Boolean? = null,
+    val preferences: UserPreferences? = null
 )
 
 data class ContentResponse(
