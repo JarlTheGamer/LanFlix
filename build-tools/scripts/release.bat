@@ -12,13 +12,6 @@ echo   Lanflix Automated Release
 echo ========================================
 echo.
 
-REM Check if we're in the right directory
-if not exist "server\backend\package.json" (
-    echo ERROR: Please run this script from the project root directory
-    pause
-    exit /b 1
-)
-
 if not exist "build-tools\android" (
     echo ERROR: Android build tools not found
     pause
@@ -82,20 +75,14 @@ if errorlevel 1 (
 )
 
 REM Get the actual version from package.json
-for /f "tokens=2 delims=:, " %%a in ('findstr /C:"\"version\"" server\frontend\package.json') do set VERSION=%%a
+for /f "tokens=2 delims=:, " %%a in ('findstr /C:"\"version\"" package.json') do set VERSION=%%a
 set VERSION=%VERSION:"=%
 echo ✓ Version bumped to %VERSION%
 echo.
 
-REM Step 2: Build server (frontend + backend)
-echo [2/7] Building server...
-call npm run build:server
-if errorlevel 1 (
-    echo ERROR: Failed to build server
-    pause
-    exit /b 1
-)
-echo ✓ Server built
+REM Step 2: Build server (optional - skip for Android-only releases)
+echo [2/7] Skipping server build (Android-only release)...
+echo ✓ Server build skipped
 echo.
 
 REM Step 3: Build Android APK
