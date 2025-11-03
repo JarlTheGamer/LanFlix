@@ -68,24 +68,29 @@ export class VideoPlayer {
       // Setup controls UI
       this.setupControls();
 
-      // Load media metadata first to get duration
-      await this.loadMediaMetadata();
+      // Load media metadata first to get duration (with Fire TV fallback)
+      await this.loadMediaMetadataWithFallback();
 
-      // Ensure we have a valid duration before proceeding
-      if (!this.duration || this.duration <= 0) {
-        console.warn('⚠️ No valid duration available, but continuing with stream setup');
-      }
-
-      // Detect playback mode and setup stream
-      await this.setupStream(startPosition);
+      // Detect playback mode and setup stream (with retries for Fire TV)
+      await this.setupStreamWithRetry(startPosition);
 
       this.isInitialized = true;
       console.log('✅ Video player initialized successfully');
 
     } catch (error) {
       console.error('❌ Failed to initialize video player:', error);
-      this.showNotification('Failed to initialize video player');
-      throw error;
+      
+      // Fire TV specific error handling
+      const userAgent = navigator.userAgent.toLowerCase();
+      const isFireTV = userAgent.includes('aftm') || userAgent.includes('aftb') || userAgent.includes('afts');
+      
+      if (isFireTV) {
+        console.log('🔥 Fire TV initialization failed, trying fallback method...');
+        await this.initializeFireTVFallback(startPosition);
+      } else {
+        this.showNotification('Failed to initialize video player: ' + error.message);
+        throw error;
+      }
     }
   }
 
@@ -93,17 +98,40 @@ export class VideoPlayer {
    * Setup video element attributes
    */
   setupVideoElement() {
+    // Detect Fire TV and other TV platforms
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isFireTV = userAgent.includes('aftm') || userAgent.includes('aftb') || userAgent.includes('afts');
+    const isTV = isFireTV || userAgent.includes('tv') || userAgent.includes('androidtv');
+
+    console.log('🔍 Platform detection:', { userAgent, isFireTV, isTV });
+
     // Essential video attributes
     this.videoElement.setAttribute('playsinline', '');
     this.videoElement.setAttribute('webkit-playsinline', '');
-    this.videoElement.setAttribute('preload', 'auto');
-    this.videoElement.setAttribute('crossorigin', 'anonymous');
+    
+    // Fire TV specific settings
+    if (isFireTV) {
+      console.log('🔥 Fire TV detected - applying specific settings');
+      this.videoElement.setAttribute('preload', 'metadata'); // Less aggressive preloading
+      this.videoElement.removeAttribute('crossorigin'); // Remove CORS for Fire TV
+    } else {
+      this.videoElement.setAttribute('preload', 'auto');
+      this.videoElement.setAttribute('crossorigin', 'anonymous');
+    }
+
+    // TV-specific settings
+    if (isTV) {
+      // Disable picture-in-picture for TV platforms
+      this.videoElement.setAttribute('disablepictureinpicture', '');
+      // Ensure controls are disabled (we handle them ourselves)
+      this.videoElement.removeAttribute('controls');
+    }
 
     // Ensure audio is enabled
     this.videoElement.muted = false;
     this.videoElement.volume = 1.0;
 
-    console.log('📺 Video element configured');
+    console.log('📺 Video element configured for platform:', isFireTV ? 'Fire TV' : isTV ? 'TV' : 'Web');
   }
 
   /**
@@ -133,6 +161,30 @@ export class VideoPlayer {
       console.error('❌ Failed to load media metadata:', error);
       // Don't throw - we'll try to get duration from video element later
       this.showNotification('Could not load video duration - will try to detect from stream');
+    }
+  }
+
+  /**
+   * Load media metadata with Fire TV fallback
+   */
+  async loadMediaMetadataWithFallback() {
+    try {
+      await this.loadMediaMetadata();
+    } catch (error) {
+      console.warn('⚠️ Standard metadata loading failed, trying Fire TV fallback');
+      
+      // Fire TV fallback - try to get basic info from library
+      try {
+        const content = await apiClient.getLibraryItem(this.contentId, this.profileId);
+        if (content && content.runtime) {
+          this.duration = content.runtime * 60; // Convert minutes to seconds
+          console.log(`🔥 Fire TV fallback: Using runtime from library: ${this.duration}s`);
+          this.updateDurationDisplay();
+        }
+      } catch (fallbackError) {
+        console.warn('⚠️ Fire TV fallback also failed:', fallbackError);
+        // Continue without duration
+      }
     }
   }
 
