@@ -185,6 +185,75 @@ public class LibraryController : ControllerBase
     }
 
     /// <summary>
+    /// Search library content
+    /// </summary>
+    [HttpGet("search")]
+    public async Task<IActionResult> SearchLibrary(
+        [FromQuery] string q,
+        [FromQuery] string? type = null,
+        [FromQuery] int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Searching library: Query={Query}, Type={Type}, Limit={Limit}", q, type, limit);
+
+            if (string.IsNullOrWhiteSpace(q))
+            {
+                return BadRequest(new { error = "Search query is required" });
+            }
+
+            var query = _context.Contents.AsQueryable();
+
+            // Filter by type if specified
+            if (!string.IsNullOrEmpty(type))
+            {
+                if (type.ToLower() == "movie")
+                {
+                    query = query.Where(c => c.Type == ContentType.Movie);
+                }
+                else if (type.ToLower() == "series" || type.ToLower() == "tv")
+                {
+                    query = query.Where(c => c.Type == ContentType.Series);
+                }
+            }
+
+            // Search in title and overview
+            query = query.Where(c => 
+                c.Title.Contains(q) || 
+                (c.Overview != null && c.Overview.Contains(q)));
+
+            // Apply limit and get results (ordered by relevance/added date)
+            var results = await query
+                .OrderByDescending(c => c.AddedAt)
+                .Take(limit)
+                .Select(c => new
+                {
+                    id = c.Id,
+                    tmdbId = c.TmdbId,
+                    title = c.Title,
+                    overview = c.Overview,
+                    year = c.ReleaseDate != null ? c.ReleaseDate.Value.Year : (int?)null,
+                    posterUrl = !string.IsNullOrEmpty(c.PosterPath) ? $"https://image.tmdb.org/t/p/w500{c.PosterPath}" : null,
+                    backdropUrl = !string.IsNullOrEmpty(c.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}" : null,
+                    rating = c.Rating,
+                    genres = c.Genres ?? new string[0],
+                    filePath = c.FilePath,
+                    addedAt = c.AddedAt,
+                    type = c.Type == ContentType.Movie ? "movie" : "series"
+                })
+                .ToListAsync(cancellationToken);
+
+            return Ok(results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to search library");
+            return StatusCode(500, new { error = "Failed to search library", details = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Get recently added content
     /// </summary>
     [HttpGet("recent")]
