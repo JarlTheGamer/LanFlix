@@ -44,6 +44,7 @@ public class TranscodingController : ControllerBase
 
     /// <summary>
     /// Streams media content with optimal transcoding (replaces old streaming endpoint)
+    /// Supports Jellyfin-style seeking via startTime parameter
     /// </summary>
     [HttpGet("stream/{contentId}")]
     [HttpHead("stream/{contentId}")]
@@ -54,10 +55,12 @@ public class TranscodingController : ControllerBase
         [FromQuery] double? startTime = null,
         [FromQuery] int? profileId = null)
     {
+        var requestStart = DateTime.UtcNow;
+        
         try
         {
-            _logger.LogInformation("Stream request for content ID: {ContentId}, profileId: {ProfileId}, clientType: {ClientType}", 
-                contentId, profileId, clientType);
+            _logger.LogInformation("Stream request for content ID: {ContentId}, profileId: {ProfileId}, clientType: {ClientType}, startTime: {StartTime}s", 
+                contentId, profileId, clientType, startTime ?? 0);
 
             // Get content from database
             var content = await _context.Contents
@@ -88,13 +91,30 @@ public class TranscodingController : ControllerBase
             if (Request.Method == "HEAD")
             {
                 Response.ContentType = "video/mp4";
-                Response.Headers.Add("Accept-Ranges", "bytes");
-                Response.Headers.Add("Cache-Control", "no-cache");
+                Response.Headers["Accept-Ranges"] = "bytes";
+                Response.Headers["Cache-Control"] = "no-cache";
+                
+                // For HEAD requests, we need to determine playback mode to set headers
+                var headMediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
+                var headHwAccel = await _hwAccelDetector.DetectAsync();
+                var headClientProfiles = _streamingService.CreateDefaultProfiles(clientType);
+                var headSettings = await _settingsProvider.GetSettingsAsync(profileId);
+                var headDecision = _streamingService.GetTranscodingDecision(headMediaInfo, headClientProfiles, headHwAccel, headSettings);
+                SetPlaybackModeHeaders(headDecision);
+                
                 return Ok();
             }
 
-            // Create session key based on content and parameters
+            // Create session key based on content and parameters (Jellyfin-style seeking)
+            // Each seek position gets its own session to restart transcoding at that point
             var sessionKey = $"content_{contentId}_{clientType}_{profileId}_{startTime?.ToString("F3") ?? "0"}";
+            
+            // Log seeking behavior for debugging (Jellyfin-style)
+            if (startTime.HasValue && startTime.Value > 0)
+            {
+                _logger.LogInformation("Jellyfin-style seeking: Restarting transcoding at {StartTime}s for content {ContentId}, session: {SessionKey}", 
+                    startTime.Value, contentId, sessionKey);
+            }
 
             // Use session manager to get or create transcoding session
             var result = await _sessionManager.GetOrCreateSessionAsync(sessionKey, async (cancellationToken) =>
@@ -120,6 +140,14 @@ public class TranscodingController : ControllerBase
                 _logger.LogInformation("Audio track selection for session {SessionId}: Preferred language={PreferredLanguage}, Selected track={SelectedTrack}",
                     sessionId, preferredAudioLanguage ?? "none", selectedAudioTrack?.ToString() ?? "default");
 
+                // Validate seeking position
+                if (startTime.HasValue && startTime.Value > mediaInfo.Duration.TotalSeconds)
+                {
+                    _logger.LogWarning("Seek position {StartTime}s exceeds media duration {Duration}s for content {ContentId}", 
+                        startTime.Value, mediaInfo.Duration.TotalSeconds, contentId);
+                    startTime = null; // Reset to beginning if seek is beyond duration
+                }
+
                 // Create stream request
                 var request = new StreamRequest
                 {
@@ -134,7 +162,39 @@ public class TranscodingController : ControllerBase
                 };
 
                 // Stream the content
-                return await _streamingService.StreamAsync(request, clientProfiles, hwAccel, settings, cancellationToken);
+                var streamResult = await _streamingService.StreamAsync(request, clientProfiles, hwAccel, settings, cancellationToken);
+                
+                // Set playback mode headers for client detection
+                var playbackDecision = _streamingService.GetTranscodingDecision(mediaInfo, clientProfiles, hwAccel, settings);
+                HttpContext.Response.Headers["Access-Control-Expose-Headers"] = "Content-Type, X-Playback-Mode, X-Transcode-Mode, X-Direct-Play";
+                
+                switch (playbackDecision.PlaybackMethod)
+                {
+                    case PlaybackMethod.DirectPlay:
+                        HttpContext.Response.Headers["X-Direct-Play"] = "true";
+                        HttpContext.Response.Headers["X-Playback-Mode"] = "direct-play";
+                        break;
+                        
+                    case PlaybackMethod.DirectStream:
+                        HttpContext.Response.Headers["X-Direct-Play"] = "false";
+                        HttpContext.Response.Headers["X-Playback-Mode"] = "direct-stream";
+                        HttpContext.Response.Headers["X-Transcode-Mode"] = "direct-stream";
+                        break;
+                        
+                    case PlaybackMethod.Remux:
+                        HttpContext.Response.Headers["X-Direct-Play"] = "false";
+                        HttpContext.Response.Headers["X-Playback-Mode"] = "remux";
+                        HttpContext.Response.Headers["X-Transcode-Mode"] = "remux";
+                        break;
+                        
+                    case PlaybackMethod.Transcode:
+                        HttpContext.Response.Headers["X-Direct-Play"] = "false";
+                        HttpContext.Response.Headers["X-Playback-Mode"] = "transcode";
+                        HttpContext.Response.Headers["X-Transcode-Mode"] = "transcode";
+                        break;
+                }
+                
+                return streamResult;
             }, HttpContext.RequestAborted);
 
             // Set response headers
@@ -148,10 +208,13 @@ public class TranscodingController : ControllerBase
             if (result.SupportsRangeRequests && result.RangeStart.HasValue)
             {
                 Response.StatusCode = 206; // Partial Content
-                Response.Headers.Add("Accept-Ranges", "bytes");
-                Response.Headers.Add("Content-Range", 
-                    $"bytes {result.RangeStart.Value}-{result.RangeEnd ?? result.ContentLength - 1}/{result.ContentLength}");
+                Response.Headers["Accept-Ranges"] = "bytes";
+                Response.Headers["Content-Range"] = 
+                    $"bytes {result.RangeStart.Value}-{result.RangeEnd ?? result.ContentLength - 1}/{result.ContentLength}";
             }
+
+            // Log seeking performance metrics
+            LogSeekingMetrics(contentId, startTime, sessionKey, requestStart);
 
             // Set up cleanup when client disconnects
             HttpContext.RequestAborted.Register(() =>
@@ -328,6 +391,9 @@ public class TranscodingController : ControllerBase
             // Analyze media
             var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
 
+            _logger.LogInformation("Media info for content {ContentId}: Duration={Duration}s, Video={VideoCodec} {Width}x{Height}", 
+                contentId, mediaInfo.Duration.TotalSeconds, mediaInfo.Video.Codec, mediaInfo.Video.Width, mediaInfo.Video.Height);
+
             return Ok(new
             {
                 Duration = mediaInfo.Duration.TotalSeconds,
@@ -421,6 +487,64 @@ public class TranscodingController : ControllerBase
     }
 
     /// <summary>
+    /// Seeks to a specific position in transcoded content (Jellyfin-style)
+    /// Creates a new transcoding session starting at the specified time
+    /// </summary>
+    [HttpGet("stream/{contentId}/seek")]
+    public async Task<IActionResult> SeekContent(
+        int contentId,
+        [FromQuery] double startTime,
+        [FromQuery] string clientType = "web",
+        [FromQuery] int? profileId = null)
+    {
+        try
+        {
+            _logger.LogInformation("Seek request for content ID: {ContentId} to position {StartTime}s", 
+                contentId, startTime);
+
+            // Redirect to the main streaming endpoint with the start time
+            // This follows Jellyfin's approach of restarting transcoding at the seek position
+            return RedirectToAction(nameof(StreamContent), new 
+            { 
+                contentId = contentId, 
+                startTime = startTime, 
+                clientType = clientType, 
+                profileId = profileId,
+                sessionId = Guid.NewGuid().ToString() // Force new session for seek
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to seek content: {ContentId} to {StartTime}s", contentId, startTime);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Update watch progress for a content item
+    /// </summary>
+    [HttpPost("stream/{contentId}/progress")]
+    public async Task<IActionResult> UpdateWatchProgress(int contentId, [FromBody] UpdateProgressRequest request)
+    {
+        try
+        {
+            _logger.LogInformation("Updating watch progress for content {ContentId}: {Progress}s / {Duration}s", 
+                contentId, request.ProgressSeconds, request.DurationSeconds);
+
+            // Here you would typically save to database
+            // For now, just log and return success
+            // TODO: Implement actual progress saving to database
+
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update watch progress for content: {ContentId}", contentId);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
     /// Test endpoint to stream a file directly (for development)
     /// </summary>
     [HttpGet("stream-file")]
@@ -486,9 +610,9 @@ public class TranscodingController : ControllerBase
             if (result.SupportsRangeRequests && result.RangeStart.HasValue)
             {
                 Response.StatusCode = 206; // Partial Content
-                Response.Headers.Add("Accept-Ranges", "bytes");
-                Response.Headers.Add("Content-Range", 
-                    $"bytes {result.RangeStart.Value}-{result.RangeEnd ?? result.ContentLength - 1}/{result.ContentLength}");
+                Response.Headers["Accept-Ranges"] = "bytes";
+                Response.Headers["Content-Range"] = 
+                    $"bytes {result.RangeStart.Value}-{result.RangeEnd ?? result.ContentLength - 1}/{result.ContentLength}";
             }
 
             // Return the stream
@@ -502,6 +626,58 @@ public class TranscodingController : ControllerBase
             _logger.LogError(ex, "Failed to stream file: {FilePath}", filePath);
             return StatusCode(500, "Internal server error");
         }
+    }
+
+    /// <summary>
+    /// Logs seeking performance metrics (Jellyfin-style monitoring)
+    /// </summary>
+    private void LogSeekingMetrics(int contentId, double? startTime, string sessionKey, DateTime requestStart)
+    {
+        if (!startTime.HasValue || startTime.Value <= 0) return;
+
+        var seekSetupTime = DateTime.UtcNow - requestStart;
+        
+        _logger.LogInformation("Seeking Performance - Content: {ContentId}, Position: {StartTime}s, " +
+                             "Setup Time: {SetupTime}ms, Session: {SessionKey}",
+            contentId, startTime.Value, seekSetupTime.TotalMilliseconds, sessionKey);
+    }
+
+    /// <summary>
+    /// Sets playback mode headers for client detection
+    /// </summary>
+    private void SetPlaybackModeHeaders(TranscodingDecision decision)
+    {
+        // Set CORS headers to expose our custom headers
+        Response.Headers["Access-Control-Expose-Headers"] = "Content-Type, X-Playback-Mode, X-Transcode-Mode, X-Direct-Play";
+        
+        switch (decision.PlaybackMethod)
+        {
+            case PlaybackMethod.DirectPlay:
+                Response.Headers["X-Direct-Play"] = "true";
+                Response.Headers["X-Playback-Mode"] = "direct-play";
+                break;
+                
+            case PlaybackMethod.DirectStream:
+                Response.Headers["X-Direct-Play"] = "false";
+                Response.Headers["X-Playback-Mode"] = "direct-stream";
+                Response.Headers["X-Transcode-Mode"] = "direct-stream";
+                break;
+                
+            case PlaybackMethod.Remux:
+                Response.Headers["X-Direct-Play"] = "false";
+                Response.Headers["X-Playback-Mode"] = "remux";
+                Response.Headers["X-Transcode-Mode"] = "remux";
+                break;
+                
+            case PlaybackMethod.Transcode:
+                Response.Headers["X-Direct-Play"] = "false";
+                Response.Headers["X-Playback-Mode"] = "transcode";
+                Response.Headers["X-Transcode-Mode"] = "transcode";
+                break;
+        }
+        
+        _logger.LogInformation("Set playback mode headers: Method={Method}, DirectPlay={DirectPlay}", 
+            decision.PlaybackMethod, Response.Headers["X-Direct-Play"]);
     }
 
     /// <summary>
@@ -541,4 +717,12 @@ public class TranscodingDecisionRequest
 {
     public string FilePath { get; set; } = string.Empty;
     public string? ClientType { get; set; }
+}
+
+public class UpdateProgressRequest
+{
+    public int ProfileId { get; set; }
+    public int ProgressSeconds { get; set; }
+    public int? DurationSeconds { get; set; }
+    public int? EpisodeId { get; set; }
 }

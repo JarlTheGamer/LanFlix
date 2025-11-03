@@ -94,6 +94,21 @@ public record TranscodingSettings
     /// FFprobe path (null for auto-detect)
     /// </summary>
     public string? FFprobePath { get; init; }
+
+    /// <summary>
+    /// Whether to use Jellyfin-style seeking optimizations
+    /// </summary>
+    public bool EnableJellyfinStyleSeeking { get; init; } = true;
+
+    /// <summary>
+    /// Keyframe interval for seeking optimization (in frames)
+    /// </summary>
+    public int SeekingKeyframeInterval { get; init; } = 30;
+
+    /// <summary>
+    /// Whether to use MPEG-TS container for better seeking support
+    /// </summary>
+    public bool PreferMpegTsForSeeking { get; init; } = true;
 }
 
 /// <summary>

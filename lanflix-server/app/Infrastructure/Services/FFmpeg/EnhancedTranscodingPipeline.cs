@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
+using Lanflix.Domain.Enums;
 using Lanflix.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
 
@@ -192,10 +193,14 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             AddHardwareAccelerationArgs(args, request.HwAccelMethod);
         }
 
-        // Input file
+        // Input seeking (Jellyfin-style: -ss before input for fast seeking)
         if (request.StartPosition.HasValue && request.StartPosition.Value > 0)
         {
             args.Append($"-ss {request.StartPosition.Value:F3} ");
+            // Add noaccurate_seek for faster seeking (like Jellyfin)
+            args.Append("-noaccurate_seek ");
+            // Add additional seeking optimizations
+            args.Append("-seek2any 1 ");
         }
         
         args.Append($"-i \"{request.InputPath}\" ");
@@ -221,18 +226,45 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             args.Append($"-threads {_settings.ThreadCount} ");
         }
 
-        // General options
+        // General options for better seeking (Jellyfin-style)
         args.Append("-avoid_negative_ts make_zero ");
         args.Append("-fflags +genpts ");
         
-        // Determine output format
+        // Add keyframe settings for better seeking (Jellyfin-style)
+        if (request.Mode != StreamingMode.DirectPlay && _settings.EnableJellyfinStyleSeeking)
+        {
+            var keyframeInterval = _settings.SeekingKeyframeInterval;
+            args.Append($"-g {keyframeInterval} "); // Keyframe every N frames for better seeking
+            args.Append($"-keyint_min {keyframeInterval} "); // Minimum keyframe interval
+            args.Append("-sc_threshold 0 "); // Disable scene change detection to maintain regular keyframes
+            
+            // Additional seeking optimizations
+            if (request.StartPosition.HasValue && request.StartPosition.Value > 0)
+            {
+                // Force keyframe at start for better seeking accuracy
+                args.Append("-force_key_frames 0 ");
+            }
+        }
+        
+        // Determine output format - use MPEG-TS for better seeking like Jellyfin
         var outputFormat = GetOutputFormat(request.OutputFormat);
         
         // Add format-specific options for streaming
         if (outputFormat == "mp4")
         {
-            // Critical MP4 streaming options
-            args.Append("-movflags frag_keyframe+empty_moov+faststart ");
+            // MP4 streaming options optimized for duration metadata
+            // Use default_base_moof instead of empty_moov to include duration info
+            args.Append("-movflags frag_keyframe+default_base_moof+faststart ");
+            
+            // Add fragment duration settings for better streaming
+            args.Append("-min_frag_duration 1000000 "); // 1 second fragments
+            args.Append("-frag_duration 2000000 ");     // 2 second max fragments
+        }
+        else if (outputFormat == "mpegts")
+        {
+            // MPEG-TS options for better seeking support (Jellyfin-style)
+            args.Append("-mpegts_m2ts_mode 0 ");
+            args.Append("-mpegts_copyts 1 ");
         }
         
         args.Append($"-f {outputFormat} ");
@@ -662,7 +694,7 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             "ts" or "mpegts" => "mpegts",
             "hls" or "m3u8" => "hls",
             "dash" or "mpd" => "dash",
-            _ => "mp4" // Default to mp4 for browser compatibility
+            _ => _settings.PreferMpegTsForSeeking ? "mpegts" : "mp4" // Use MPEG-TS for better seeking if enabled
         };
     }
 

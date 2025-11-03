@@ -56,7 +56,7 @@ public class DirectStreamStrategy : IStreamingStrategy
             AudioStreamIndex = request.AudioStreamIndex,
             SubtitleStreamIndex = request.SubtitleStreamIndex,
             HwAccelMethod = HwAccelMethod.None, // No video transcoding
-            OutputFormat = decision.TargetContainer ?? "mp4",
+            OutputFormat = decision.TargetContainer ?? "mpegts", // Use MPEG-TS for better seeking (Jellyfin-style)
             SessionId = request.SessionId,
             TotalDuration = request.MediaInfo.Duration.TotalSeconds
         };
@@ -69,7 +69,7 @@ public class DirectStreamStrategy : IStreamingStrategy
             _logger,
             cancellationToken);
 
-        var mimeType = GetMimeType(decision.TargetContainer ?? "mp4");
+        var mimeType = GetMimeType(decision.TargetContainer ?? "mpegts");
 
         _logger.LogInformation("DirectStream prepared: Video -> copy, Audio: {SourceAudio} -> {TargetAudio}, Container: {Container}",
             string.Join(", ", request.MediaInfo.Audio.Select(a => a.Codec)), 
@@ -102,7 +102,7 @@ public class DirectStreamStrategy : IStreamingStrategy
             "ts" or "mpegts" => "video/mp2t",
             "m3u8" or "hls" => "application/vnd.apple.mpegurl",
             "mpd" or "dash" => "application/dash+xml",
-            _ => "application/octet-stream"
+            _ => "video/mp2t" // Default to MPEG-TS MIME type for better seeking
         };
     }
 
