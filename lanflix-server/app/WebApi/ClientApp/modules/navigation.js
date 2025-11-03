@@ -36,11 +36,28 @@ export class Navigation {
    */
   detectAndroidTV() {
     const userAgent = navigator.userAgent.toLowerCase();
-    return userAgent.includes('android') && 
-           (userAgent.includes('tv') || 
-            userAgent.includes('aftm') || // Fire TV
-            userAgent.includes('aftb') || // Fire TV Stick
-            userAgent.includes('wv')); // WebView (Android TV app)
+    
+    // Check for Fire TV specifically
+    const isFireTV = userAgent.includes('aftm') || 
+                     userAgent.includes('aftb') || 
+                     userAgent.includes('afts') ||
+                     userAgent.includes('firetv');
+    
+    // Check for Android TV or WebView in TV context
+    const isAndroidTV = userAgent.includes('android') && 
+                       (userAgent.includes('tv') || 
+                        userAgent.includes('wv')); // WebView (Android TV app)
+    
+    const result = isFireTV || isAndroidTV;
+    
+    console.log('🎮 TV Detection:', {
+      userAgent,
+      isFireTV,
+      isAndroidTV,
+      result
+    });
+    
+    return result;
   }
 
   initialize() {
@@ -66,13 +83,13 @@ export class Navigation {
     
     // Ensure we're in the right mode for TV navigation
     if (!this.isTouchDevice || this.isAndroidTV) {
-      // Set initial navigation state
-      this.focusedElement = 'menu';
-      this.focusedMenuIndex = 1; // Home button
+      // Set initial navigation state - start on profile button for Fire TV
+      this.focusedElement = 'profile';
+      this.focusedMenuIndex = 1; // Home button as backup
       
       // Ensure the active menu item is properly set
       const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
-      menuButtons.forEach((btn) => btn.classList.remove('active'));
+      menuButtons.forEach((btn) => btn.classList.remove('active', 'focused'));
       if (menuButtons[this.focusedMenuIndex]) {
         menuButtons[this.focusedMenuIndex].classList.add('active');
       }
@@ -86,6 +103,26 @@ export class Navigation {
       
       console.log('🎮 Navigation activated - ready for remote input');
       console.log('🎮 Current focus:', this.focusedElement, 'Menu index:', this.focusedMenuIndex);
+      
+      // Add global CSS to remove any remaining blue outlines
+      if (!document.getElementById('tv-navigation-styles')) {
+        const style = document.createElement('style');
+        style.id = 'tv-navigation-styles';
+        style.textContent = `
+          /* Global removal of blue outlines for TV navigation */
+          *, *:focus, *:active, *:hover {
+            -webkit-tap-highlight-color: transparent !important;
+            -webkit-focus-ring-color: transparent !important;
+            outline: none !important;
+          }
+          
+          /* Ensure TV focus styles work properly */
+          .tv-mode .focused {
+            /* Use custom focus styles instead of browser defaults */
+          }
+        `;
+        document.head.appendChild(style);
+      }
     }
   }
 
@@ -329,16 +366,40 @@ export class Navigation {
     // Disable focus styles on touch devices
     document.body.classList.add('touch-device');
     
-    // Add CSS to hide focus indicators on touch devices
+    // Add CSS to hide focus indicators and blue outlines on touch devices
     const style = document.createElement('style');
     style.textContent = `
+      /* Remove ALL blue outlines and focus rings on mobile */
+      .touch-device *, 
+      .touch-device *:focus, 
+      .touch-device *:active, 
+      .touch-device *:hover {
+        outline: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+        -webkit-focus-ring-color: transparent !important;
+        box-shadow: none !important;
+        transform: none !important;
+      }
+      
       .touch-device .focused {
         outline: none !important;
         box-shadow: none !important;
         transform: none !important;
       }
+      
       .touch-device .movie-card.expanded {
         transform: none !important;
+      }
+      
+      /* Specifically target common elements */
+      .touch-device input, 
+      .touch-device button, 
+      .touch-device select, 
+      .touch-device textarea, 
+      .touch-device a {
+        outline: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+        -webkit-focus-ring-color: transparent !important;
       }
     `;
     document.head.appendChild(style);

@@ -312,38 +312,38 @@ class MainActivity : AppCompatActivity() {
                         min-height: 100vh !important;
                     }
                     
-                    /* Remove blue tap highlights on mobile only */
-                    * { 
+                    /* Remove ALL blue tap highlights and focus outlines globally */
+                    *, *:focus, *:active, *:hover, *:visited {
                         -webkit-tap-highlight-color: transparent !important;
                         -webkit-touch-callout: none !important;
+                        -webkit-focus-ring-color: transparent !important;
+                        outline: none !important;
+                        outline-width: 0 !important;
+                        outline-style: none !important;
+                        outline-color: transparent !important;
                     }
                     
-                    /* Mobile devices - ensure normal scrolling and NO focus outlines */
-                    .mobile-mode {
-                        overflow: auto !important;
-                        height: auto !important;
-                        -webkit-overflow-scrolling: touch !important;
+                    /* Specifically target common elements that show blue outlines */
+                    input, button, select, textarea, a, div, span {
+                        -webkit-tap-highlight-color: transparent !important;
+                        -webkit-focus-ring-color: transparent !important;
+                        outline: none !important;
+                        box-shadow: none !important;
                     }
                     
-                    .mobile-mode *, 
-                    .mobile-mode *:focus, 
-                    .mobile-mode *:active, 
-                    .mobile-mode *:hover {
+                    /* Remove WebView default focus styles */
+                    input:focus, button:focus, select:focus, textarea:focus, a:focus {
                         outline: none !important;
                         -webkit-tap-highlight-color: transparent !important;
                         -webkit-focus-ring-color: transparent !important;
                         box-shadow: none !important;
-                        border: none !important;
                     }
                     
-                    .mobile-mode input, 
-                    .mobile-mode button, 
-                    .mobile-mode select, 
-                    .mobile-mode textarea, 
-                    .mobile-mode a {
-                        outline: none !important;
-                        -webkit-tap-highlight-color: transparent !important;
-                        -webkit-focus-ring-color: transparent !important;
+                    /* Mobile devices - ensure normal scrolling */
+                    .mobile-mode {
+                        overflow: auto !important;
+                        height: auto !important;
+                        -webkit-overflow-scrolling: touch !important;
                     }
                     
                     /* Only show subtle focus for actual TV navigation */
@@ -383,15 +383,24 @@ class MainActivity : AppCompatActivity() {
                 var isActualTV = false;
                 var userAgent = navigator.userAgent.toLowerCase();
                 
+                // Check for Fire TV specifically first
+                var isFireTV = userAgent.includes('aftm') || 
+                              userAgent.includes('aftb') || 
+                              userAgent.includes('afts') ||
+                              userAgent.includes('firetv');
+                
                 // Check for actual TV indicators - be more specific
-                if ((userAgent.includes('tv') && !userAgent.includes('mobile')) || 
-                    userAgent.includes('aftm') || 
-                    userAgent.includes('aftb') ||
-                    userAgent.includes('firetv') ||
+                if (isFireTV || 
+                    (userAgent.includes('tv') && !userAgent.includes('mobile')) || 
                     (window.innerWidth > 1280 && window.innerHeight > 720 && !('ontouchstart' in window))) {
                     isActualTV = true;
                     document.body.classList.add('tv-mode');
-                    console.log('📺 TV device detected - User Agent:', userAgent);
+                    if (isFireTV) {
+                        document.body.classList.add('fire-tv');
+                        console.log('🔥 Fire TV device detected - User Agent:', userAgent);
+                    } else {
+                        console.log('📺 TV device detected - User Agent:', userAgent);
+                    }
                 } else {
                     document.body.classList.add('mobile-mode');
                     console.log('📱 Mobile device detected - User Agent:', userAgent);
@@ -444,20 +453,30 @@ class MainActivity : AppCompatActivity() {
                         
                         // Initialize TV navigation if available
                         if (window.tvNavigation && typeof window.tvNavigation.initialize === 'function') {
+                            console.log('🎮 Initializing TV navigation module...');
                             window.tvNavigation.initialize();
                         }
                         
-                        // Activate main navigation if available
-                        if (window.navigation && typeof window.navigation.activateNavigation === 'function') {
-                            window.navigation.activateNavigation();
-                        }
+                        // Wait a bit then activate main navigation
+                        setTimeout(function() {
+                            if (window.navigation && typeof window.navigation.activateNavigation === 'function') {
+                                console.log('🎮 Activating main navigation...');
+                                window.navigation.activateNavigation();
+                            }
+                            
+                            // Ensure we start with proper focus
+                            var menuItems = document.querySelectorAll('.menu-item');
+                            if (menuItems.length > 0) {
+                                // Focus on Home button (index 1)
+                                if (menuItems[1]) {
+                                    menuItems[1].focus();
+                                    menuItems[1].classList.add('focused');
+                                }
+                            }
+                            
+                            console.log('🎮 Fire TV navigation fully initialized and ready');
+                        }, 500);
                         
-                        // Focus first focusable element
-                        if (focusableElements.length > 0) {
-                            focusableElements[0].focus();
-                        }
-                        
-                        console.log('🎮 Android TV navigation initialized and ready');
                     } else {
                         console.log('📱 Mobile device - TV navigation disabled');
                         // Remove any tabindex that might interfere with touch
