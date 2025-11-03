@@ -304,24 +304,42 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         var videoCodec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
         args.Append($"-c:v {videoCodec} ");
 
-        // Video bitrate - optimized for streaming speed
+        // Video bitrate - optimized for high quality
         if (request.TargetVideoBitrate.HasValue)
         {
             var bitrate = request.TargetVideoBitrate.Value;
             var targetCodec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
             
-            // For hardware encoding, use simpler bitrate control
+            // For hardware encoding, use high-quality bitrate control
             if (targetCodec.Contains("nvenc"))
             {
                 args.Append($"-b:v {bitrate} ");
-                args.Append($"-maxrate {bitrate} ");
-                args.Append($"-bufsize {bitrate / 2} "); // Smaller buffer for faster startup
+                args.Append($"-maxrate {bitrate * 1.1:F0} "); // Smaller maxrate buffer for consistent quality
+                args.Append($"-bufsize {bitrate} "); // Larger buffer for quality consistency
+                args.Append("-rc vbr_hq "); // High quality VBR mode for NVENC
+                args.Append("-spatial_aq 1 "); // Spatial adaptive quantization for better quality
+                args.Append("-temporal_aq 1 "); // Temporal adaptive quantization
+            }
+            else if (targetCodec.Contains("qsv"))
+            {
+                args.Append($"-b:v {bitrate} ");
+                args.Append($"-maxrate {bitrate * 1.1:F0} ");
+                args.Append($"-bufsize {bitrate} ");
+                args.Append("-look_ahead 1 "); // Enable look-ahead for better quality
+            }
+            else if (targetCodec.Contains("amf"))
+            {
+                args.Append($"-b:v {bitrate} ");
+                args.Append($"-maxrate {bitrate * 1.1:F0} ");
+                args.Append($"-bufsize {bitrate} ");
+                args.Append("-rc vbr_peak "); // Variable bitrate peak mode for quality
             }
             else
             {
+                // Software encoding - use higher quality settings
                 args.Append($"-b:v {bitrate} ");
-                args.Append($"-maxrate {bitrate * 1.2:F0} ");
-                args.Append($"-bufsize {bitrate * 2:F0} ");
+                args.Append($"-maxrate {bitrate * 1.05:F0} "); // Tighter maxrate for consistent quality
+                args.Append($"-bufsize {bitrate * 1.5:F0} "); // Larger buffer for quality
             }
         }
 
@@ -375,29 +393,85 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             args.Append($"-vf \"{string.Join(",", videoFilters)}\" ");
         }
 
+        // Set pixel format for optimal quality
+        var codec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
+        if (codec.Contains("nvenc"))
+        {
+            args.Append("-pix_fmt yuv420p "); // Standard pixel format for NVENC
+        }
+        else if (codec.Contains("x264") || codec.Contains("x265"))
+        {
+            args.Append("-pix_fmt yuv420p "); // Standard pixel format for software encoding
+        }
+
         // Encoding preset
         if (!string.IsNullOrEmpty(videoCodec))
         {
             AddEncodingPreset(args, videoCodec);
         }
 
-        // Simplified quality settings for streaming
-        var codec = GetOptimalVideoCodec(request.TargetVideoCodec, request.HwAccelMethod);
+        // High-quality settings for all encoders
+        // Note: codec variable already declared above for pixel format
         if (codec.Contains("nvenc"))
         {
-            // Simple NVENC settings for fast streaming
-            args.Append("-rc vbr ");
+            // High-quality NVENC settings
+            if (!request.TargetVideoBitrate.HasValue)
+            {
+                // Use CQ mode for quality when no bitrate specified
+                var cqValue = _settings.TargetQuality ?? 20; // Default to high quality
+                args.Append($"-cq {Math.Max(cqValue - 3, 15)} "); // Higher quality for NVENC CQ mode
+            }
+            
             if (_settings.EnableBFrames)
             {
-                args.Append("-bf 2 ");
+                args.Append("-bf 3 "); // More B-frames for better compression
+            }
+            args.Append("-refs 4 "); // More reference frames for quality
+        }
+        else if (codec.Contains("qsv"))
+        {
+            // High-quality QuickSync settings
+            if (!request.TargetVideoBitrate.HasValue && _settings.TargetQuality.HasValue)
+            {
+                args.Append($"-global_quality {_settings.TargetQuality.Value + 3} "); // QSV quality scale
+            }
+            if (_settings.EnableBFrames)
+            {
+                args.Append("-bf 3 ");
+            }
+        }
+        else if (codec.Contains("amf"))
+        {
+            // High-quality AMF settings
+            if (_settings.EnableBFrames)
+            {
+                args.Append("-bf 3 ");
             }
         }
         else if (_settings.TargetQuality.HasValue)
         {
-            // Only use CRF for software encoding
+            // Software encoding with CRF for highest quality
             if (codec.Contains("x264") || codec.Contains("x265"))
             {
                 args.Append($"-crf {_settings.TargetQuality.Value} ");
+                // Additional quality settings for software encoding
+                if (codec.Contains("x264"))
+                {
+                    args.Append("-profile:v high "); // High profile for better quality
+                    args.Append("-level 4.1 "); // Higher level for more features
+                    args.Append("-me_method umh "); // Better motion estimation
+                    args.Append("-subme 8 "); // Higher subpixel motion estimation
+                    args.Append("-trellis 2 "); // Trellis quantization for better quality
+                    args.Append("-mixed-refs 1 "); // Mixed references
+                }
+                else if (codec.Contains("x265"))
+                {
+                    args.Append("-profile:v main "); // Main profile for HEVC
+                    args.Append("-tier main "); // Main tier
+                    args.Append("-me 3 "); // Star motion estimation (highest quality)
+                    args.Append("-subme 4 "); // Higher subpixel refinement
+                    args.Append("-rd 4 "); // Rate-distortion optimization level
+                }
             }
         }
     }
@@ -457,65 +531,82 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         
         if (codec.Contains("x264") || codec.Contains("x265"))
         {
-            // Use faster presets for software encoding
-            var fastPreset = preset switch
+            // Use quality-focused presets for software encoding
+            var qualityPreset = preset switch
             {
-                "slow" or "slower" or "veryslow" => "medium",
-                _ => preset
+                "ultrafast" => "veryfast", // Upgrade ultrafast to veryfast for better quality
+                "superfast" => "faster",   // Upgrade superfast to faster
+                "veryfast" => "fast",      // Upgrade veryfast to fast
+                "faster" => "medium",      // Upgrade faster to medium
+                "fast" => "medium",        // Keep fast as medium
+                "medium" => "slow",        // Upgrade medium to slow for better quality
+                "slow" => "slow",          // Keep slow
+                "slower" => "slower",      // Keep slower
+                "veryslow" => "veryslow",  // Keep veryslow
+                _ => "slow"                // Default to slow for quality
             };
-            args.Append($"-preset {fastPreset} ");
+            args.Append($"-preset {qualityPreset} ");
+            
+            // Add tune for quality
+            if (codec.Contains("x264"))
+            {
+                args.Append("-tune film "); // Film tune for better quality on movies/shows
+            }
         }
         else if (codec.Contains("nvenc"))
         {
-            // Use faster NVENC presets for speed
+            // Use higher quality NVENC presets
             var nvencPreset = preset switch
             {
-                "ultrafast" => "p1",
-                "superfast" => "p2", 
-                "veryfast" => "p3",
-                "faster" => "p4",
-                "fast" => "p4",      // Use p4 for fast
-                "medium" => "p4",    // Use p4 for medium (faster)
-                "slow" => "p5",      // Use p5 for slow (still fast)
-                "slower" => "p5",    // Use p5 for slower
-                "veryslow" => "p6",  // Use p6 for veryslow
-                _ => "p4"            // Default to p4 (fast)
+                "ultrafast" => "p3",        // Upgrade from p1 to p3
+                "superfast" => "p4",        // Upgrade from p2 to p4
+                "veryfast" => "p5",         // Upgrade from p3 to p5
+                "faster" => "p6",           // Upgrade from p4 to p6
+                "fast" => "p6",             // Use p6 for fast (higher quality)
+                "medium" => "p7",           // Use p7 for medium (high quality)
+                "slow" => "p7",             // Use p7 for slow
+                "slower" => "p7",           // Use p7 for slower
+                "veryslow" => "p7",         // Use p7 for veryslow (highest quality)
+                _ => "p6"                   // Default to p6 (high quality)
             };
             args.Append($"-preset {nvencPreset} ");
+            
+            // Add multipass for better quality
+            args.Append("-multipass fullres "); // Full resolution multipass for quality
         }
         else if (codec.Contains("qsv"))
         {
-            // Intel QuickSync presets
+            // Intel QuickSync presets - favor quality
             var qsvPreset = preset switch
             {
-                "ultrafast" => "veryfast",
-                "superfast" => "veryfast",
-                "veryfast" => "veryfast", 
-                "faster" => "faster",
-                "fast" => "fast",
-                "medium" => "medium",
-                "slow" => "slow",
-                "slower" => "slower",
-                "veryslow" => "veryslow",
-                _ => "medium"
+                "ultrafast" => "fast",      // Upgrade ultrafast
+                "superfast" => "fast",      // Upgrade superfast
+                "veryfast" => "medium",     // Upgrade veryfast
+                "faster" => "medium",       // Upgrade faster
+                "fast" => "slow",           // Upgrade fast to slow for quality
+                "medium" => "slow",         // Upgrade medium to slow
+                "slow" => "slower",         // Upgrade slow to slower
+                "slower" => "veryslow",     // Upgrade slower to veryslow
+                "veryslow" => "veryslow",   // Keep veryslow
+                _ => "slow"                 // Default to slow for quality
             };
             args.Append($"-preset {qsvPreset} ");
         }
         else if (codec.Contains("amf"))
         {
-            // AMD AMF presets
+            // AMD AMF presets - favor quality
             var amfPreset = preset switch
             {
-                "ultrafast" => "speed",
-                "superfast" => "speed",
-                "veryfast" => "speed",
-                "faster" => "speed",
-                "fast" => "balanced",
-                "medium" => "balanced",
-                "slow" => "quality",
-                "slower" => "quality",
-                "veryslow" => "quality",
-                _ => "balanced"
+                "ultrafast" => "balanced",  // Upgrade from speed to balanced
+                "superfast" => "balanced",  // Upgrade from speed to balanced
+                "veryfast" => "balanced",   // Upgrade from speed to balanced
+                "faster" => "quality",      // Upgrade from speed to quality
+                "fast" => "quality",        // Use quality for fast
+                "medium" => "quality",      // Use quality for medium
+                "slow" => "quality",        // Keep quality
+                "slower" => "quality",      // Keep quality
+                "veryslow" => "quality",    // Keep quality
+                _ => "quality"              // Default to quality
             };
             args.Append($"-quality {amfPreset} ");
         }

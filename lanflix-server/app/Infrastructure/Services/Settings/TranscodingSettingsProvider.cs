@@ -60,7 +60,7 @@ public class TranscodingSettingsProvider
                 EnableLowPowerEncoding = false,
                 EncodingPreset = ParseEncodingPreset(userSettings.TranscodePreset),
                 EnableBFrames = true,
-                TargetQuality = userSettings.Quality == "auto" ? null : ParseQuality(userSettings.Quality),
+                TargetQuality = userSettings.Quality == "auto" ? 18 : ParseQuality(userSettings.Quality), // Default to high quality
                 EnableAdaptiveBitrate = streamingSettings.TranscodingMode == "auto",
                 SegmentDuration = 6,
                 PlaylistLength = 6,
@@ -140,9 +140,9 @@ public class TranscodingSettingsProvider
     {
         return quality?.ToLowerInvariant() switch
         {
-            "high" => 18,
-            "medium" => 23,
-            "low" => 28,
+            "high" => 15,      // Much higher quality (lower CRF = better quality)
+            "medium" => 18,    // Still high quality
+            "low" => 23,       // Reasonable quality
             _ => null
         };
     }
@@ -159,9 +159,9 @@ public class TranscodingSettingsProvider
             AllowSoftwareFallback = true,
             MaxConcurrentTranscodes = 2,
             EnableLowPowerEncoding = false,
-            EncodingPreset = EncodingPreset.Medium,
+            EncodingPreset = EncodingPreset.Slow, // Use slower preset for better quality by default
             EnableBFrames = true,
-            TargetQuality = null,
+            TargetQuality = 18, // Default to high quality (CRF 18)
             EnableAdaptiveBitrate = true,
             SegmentDuration = 6,
             PlaylistLength = 6,

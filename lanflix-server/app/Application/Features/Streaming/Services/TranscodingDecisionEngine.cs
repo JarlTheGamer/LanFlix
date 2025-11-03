@@ -362,49 +362,65 @@ public class TranscodingDecisionEngine
     }
 
     /// <summary>
-    /// Calculates target bitrate using advanced algorithms
+    /// Calculates target bitrate using high-quality algorithms
     /// Based on resolution, frame rate, input bitrate, and codec efficiency
+    /// Optimized for near-lossless quality with minimal artifacts
     /// </summary>
     private long CalculateTargetBitrate(int width, int height, double frameRate, TranscodingProfile profile)
     {
         var pixels = width * height;
         var fps = Math.Max(frameRate, 24); // Minimum 24 fps for calculation
 
-        // Base bitrate per pixel per frame (bits per pixel per second)
+        // High-quality bitrate per pixel per frame (bits per pixel per second)
+        // Significantly increased for near-lossless quality
         var baseRate = pixels switch
         {
-            <= 720 * 480 => 0.1,      // SD
-            <= 1280 * 720 => 0.08,    // 720p
-            <= 1920 * 1080 => 0.06,   // 1080p
-            <= 3840 * 2160 => 0.04,   // 4K
-            _ => 0.03                  // 8K+
+            <= 720 * 480 => 0.25,     // SD - 2.5x increase for high quality
+            <= 1280 * 720 => 0.20,    // 720p - 2.5x increase
+            <= 1920 * 1080 => 0.15,   // 1080p - 2.5x increase
+            <= 3840 * 2160 => 0.12,   // 4K - 3x increase for high quality 4K
+            _ => 0.10                  // 8K+ - higher quality for ultra-high res
         };
 
-        // Adjust for frame rate
+        // Adjust for frame rate with higher multiplier for smooth motion
         var frameRateMultiplier = fps / 24.0;
+        if (fps > 30) frameRateMultiplier *= 1.2; // Extra boost for high frame rates
         
         // Calculate target bitrate
         var targetBitrate = (long)(pixels * baseRate * frameRateMultiplier);
 
-        // Apply codec efficiency factors
+        // Apply codec efficiency factors (but maintain high quality)
         var codecMultiplier = GetCodecEfficiencyMultiplier(profile);
         targetBitrate = (long)(targetBitrate * codecMultiplier);
 
-        return Math.Max(targetBitrate, 500_000); // Minimum 500 kbps
+        // Higher minimum bitrates for quality
+        var minimumBitrate = pixels switch
+        {
+            <= 720 * 480 => 2_000_000,    // 2 Mbps minimum for SD
+            <= 1280 * 720 => 4_000_000,   // 4 Mbps minimum for 720p
+            <= 1920 * 1080 => 8_000_000,  // 8 Mbps minimum for 1080p
+            <= 3840 * 2160 => 25_000_000, // 25 Mbps minimum for 4K
+            _ => 50_000_000                // 50 Mbps minimum for 8K+
+        };
+
+        return Math.Max(targetBitrate, minimumBitrate);
     }
 
     private double GetCodecEfficiencyMultiplier(TranscodingProfile profile)
     {
-        // Check for HEVC/H.265 support (more efficient)
+        // For high quality, be more conservative with bitrate reductions
+        // Even efficient codecs need adequate bitrate for near-lossless quality
+        
+        // Check for HEVC/H.265 support (more efficient but maintain quality)
         if (profile.VideoCodecs.Any(vc => vc.Codec.Equals("hevc", StringComparison.OrdinalIgnoreCase) ||
                                          vc.Codec.Equals("h265", StringComparison.OrdinalIgnoreCase)))
-            return 0.7; // 30% more efficient than H.264
+            return 0.85; // Only 15% reduction for HEVC to maintain quality
 
-        // Check for AV1 support (most efficient)
+        // Check for AV1 support (most efficient but still need bitrate for quality)
         if (profile.VideoCodecs.Any(vc => vc.Codec.Equals("av1", StringComparison.OrdinalIgnoreCase)))
-            return 0.5; // 50% more efficient than H.264
+            return 0.75; // Only 25% reduction for AV1 to maintain quality
 
-        return 1.0; // H.264 baseline
+        return 1.0; // H.264 baseline - no reduction
     }
 
     private int GetMaxPixels(VideoResolution resolution)
