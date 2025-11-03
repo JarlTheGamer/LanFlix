@@ -41,6 +41,9 @@ public class TmdbSearchItem
     
     // Computed property for TMDB ID
     public int TmdbId => Id;
+    
+    // Computed property for normalized title (use Name for TV series, Title for movies)
+    public string? NormalizedTitle => !string.IsNullOrEmpty(Title) ? Title : Name;
 }
 
 /// <summary>
