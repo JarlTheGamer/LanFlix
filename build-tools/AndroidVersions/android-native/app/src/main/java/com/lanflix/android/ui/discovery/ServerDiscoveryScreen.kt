@@ -41,6 +41,14 @@ fun ServerDiscoveryScreen(
         viewModel.startDiscovery()
     }
     
+    // Handle manual server connection success
+    LaunchedEffect(uiState.manualServer) {
+        uiState.manualServer?.let { server ->
+            viewModel.saveServerConnection(server)
+            onServerSelected(server)
+        }
+    }
+    
     LanflixTheme {
         Box(
             modifier = Modifier
@@ -156,7 +164,10 @@ fun ServerDiscoveryScreen(
                                     items(uiState.discoveredServers) { server ->
                                         ServerItem(
                                             server = server,
-                                            onClick = { onServerSelected(server) }
+                                            onClick = { 
+                                                viewModel.saveServerConnection(server)
+                                                onServerSelected(server) 
+                                            }
                                         )
                                     }
                                 }

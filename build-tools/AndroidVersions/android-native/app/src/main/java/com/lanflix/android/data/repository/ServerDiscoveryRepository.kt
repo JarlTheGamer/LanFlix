@@ -36,6 +36,9 @@ class ServerDiscoveryRepository @Inject constructor(
         val servers = mutableListOf<ServerInfo>()
         
         try {
+            // Emit empty list first to show discovery started
+            emit(emptyList())
+            
             // Use IP scanning to find Lanflix servers
             scanCommonIpRanges(servers)
             emit(servers.toList())
@@ -50,20 +53,37 @@ class ServerDiscoveryRepository @Inject constructor(
         val localIp = getLocalIpAddress()?.hostAddress ?: return
         val networkPrefix = localIp.substringBeforeLast(".")
         
-        // Common Lanflix ports - prioritize 5037
-        val commonPorts = listOf(5037, 5037, 5037, 8080, 3000, 5000) // Try 5037 multiple times first
+        // Lanflix server ports - prioritize 5037
+        val lanflixPorts = listOf(5037, 8080, 3000, 5000, 8000, 5001)
         
-        // Scan local network range (last 20 IPs for performance)
-        for (i in 1..20) {
-            val testIp = "$networkPrefix.$i"
-            for (port in commonPorts) {
-                try {
-                    val testUrl = "http://$testIp:$port"
-                    val serverInfo = testConnection(testUrl)
-                    servers.add(serverInfo)
-                    break // Found server on this IP, no need to test other ports
-                } catch (e: Exception) {
-                    // Continue to next port/IP
+        // Scan broader IP range for better discovery
+        val ipRanges = listOf(
+            1..50,   // Common router DHCP range
+            100..150, // Extended DHCP range
+            200..254  // High range
+        )
+        
+        for (range in ipRanges) {
+            for (i in range) {
+                val testIp = "$networkPrefix.$i"
+                
+                // Skip our own IP
+                if (testIp == localIp) continue
+                
+                for (port in lanflixPorts) {
+                    try {
+                        val testUrl = "http://$testIp:$port"
+                        val serverInfo = testConnection(testUrl)
+                        
+                        // Check if this server is already found (different port same IP)
+                        val existingServer = servers.find { it.baseUrl.contains(testIp) }
+                        if (existingServer == null) {
+                            servers.add(serverInfo)
+                        }
+                        break // Found server on this IP, no need to test other ports
+                    } catch (e: Exception) {
+                        // Continue to next port/IP
+                    }
                 }
             }
         }
@@ -71,8 +91,8 @@ class ServerDiscoveryRepository @Inject constructor(
     
     suspend fun testConnection(url: String): ServerInfo {
         val client = OkHttpClient.Builder()
-            .connectTimeout(3, TimeUnit.SECONDS)
-            .readTimeout(5, TimeUnit.SECONDS)
+            .connectTimeout(2, TimeUnit.SECONDS) // Faster timeout for discovery
+            .readTimeout(3, TimeUnit.SECONDS)
             .build()
         
         val retrofit = Retrofit.Builder()
@@ -83,22 +103,37 @@ class ServerDiscoveryRepository @Inject constructor(
         
         val apiService = retrofit.create(LanflixApiService::class.java)
         
-        // Try to get server info (you might need to add this endpoint)
         return try {
-            // For now, just test if we can reach the profiles endpoint
-            val response = apiService.getProfiles()
-            if (response.isSuccessful) {
+            // Test multiple endpoints to confirm it's a Lanflix server
+            val profilesResponse = apiService.getProfiles()
+            
+            if (profilesResponse.isSuccessful) {
+                // Try to get server info if available
+                var serverName = "Lanflix Server"
+                var version = "Unknown"
+                
+                try {
+                    // You can add a server info endpoint later
+                    // val infoResponse = apiService.getServerInfo()
+                    // if (infoResponse.isSuccessful) {
+                    //     serverName = infoResponse.body()?.name ?: serverName
+                    //     version = infoResponse.body()?.version ?: version
+                    // }
+                } catch (e: Exception) {
+                    // Server info endpoint might not exist, that's ok
+                }
+                
                 ServerInfo(
                     baseUrl = url,
-                    name = "Lanflix Server",
-                    version = "Unknown",
+                    name = serverName,
+                    version = version,
                     isConnected = true
                 )
             } else {
-                throw Exception("Server responded with error: ${response.code()}")
+                throw Exception("Server responded with error: ${profilesResponse.code()}")
             }
         } catch (e: Exception) {
-            throw Exception("Cannot connect to server: ${e.message}")
+            throw Exception("Cannot connect to server at $url: ${e.message}")
         }
     }
     

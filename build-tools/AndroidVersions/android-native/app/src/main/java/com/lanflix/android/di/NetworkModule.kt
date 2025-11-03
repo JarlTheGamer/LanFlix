@@ -45,9 +45,14 @@ object NetworkModule {
         // Get the saved server URL or use default
         val serverUrl = runBlocking { 
             try {
-                serverPreferences.getServerUrl()
+                val url = serverPreferences.getServerUrl()
+                if (url.isBlank()) {
+                    "http://localhost:5037/" // Temporary fallback for development
+                } else {
+                    url
+                }
             } catch (e: Exception) {
-                "http://localhost:5037/"
+                "http://localhost:5037/" // Temporary fallback for development
             }
         }
         
