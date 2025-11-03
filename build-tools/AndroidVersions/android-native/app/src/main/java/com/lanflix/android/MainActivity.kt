@@ -55,8 +55,10 @@ fun LanflixApp() {
         composable("server_discovery") {
             ServerDiscoveryScreen(
                 onServerSelected = { server ->
+                    println("MainActivity: Server selected - ${server.baseUrl}")
                     selectedServer = server
                     // Server URL is automatically saved by ServerDiscoveryRepository
+                    println("MainActivity: Navigating to profile selection...")
                     navController.navigate("profile_selection") {
                         // Clear the server discovery from back stack
                         popUpTo("server_discovery") { inclusive = true }
@@ -68,7 +70,9 @@ fun LanflixApp() {
         composable("profile_selection") {
             ProfileSelectionScreen(
                 onProfileSelected = { profile ->
+                    println("MainActivity: Profile selected - ID: ${profile.id}, Name: ${profile.name}")
                     selectedProfile = profile
+                    println("MainActivity: Navigating to home screen...")
                     navController.navigate("home")
                 }
             )

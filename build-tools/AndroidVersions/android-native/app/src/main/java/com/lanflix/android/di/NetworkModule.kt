@@ -33,13 +33,21 @@ object NetworkModule {
             .addInterceptor(loggingInterceptor)
             .addInterceptor { chain ->
                 val request = chain.request()
-                println("Making request to: ${request.url}")
+                println("NetworkModule: Making request to: ${request.url}")
                 try {
                     val response = chain.proceed(request)
-                    println("Response: ${response.code} for ${request.url}")
+                    println("NetworkModule: Response: ${response.code} for ${request.url}")
+                    
+                    // Log response body for profile requests to debug JSON parsing
+                    if (request.url.toString().contains("/api/profiles")) {
+                        val responseBody = response.peekBody(Long.MAX_VALUE).string()
+                        println("NetworkModule: Profile response body: $responseBody")
+                    }
+                    
                     response
                 } catch (e: Exception) {
-                    println("Request failed for ${request.url}: ${e.message}")
+                    println("NetworkModule: Request failed for ${request.url}: ${e.message}")
+                    e.printStackTrace()
                     throw e
                 }
             }

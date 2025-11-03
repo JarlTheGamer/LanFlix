@@ -14,18 +14,36 @@ class ProfileRepository @Inject constructor(
 ) {
     
     suspend fun getProfiles(): List<Profile> {
-        println("ProfileRepository: Getting profiles...")
-        val response = apiService.getProfiles()
-        if (response.isSuccessful) {
-            val profiles = response.body() ?: emptyList()
-            println("ProfileRepository: Successfully loaded ${profiles.size} profiles")
-            profiles.forEach { profile ->
-                println("ProfileRepository: Profile - ID: ${profile.id}, Name: ${profile.name}, IsKids: ${profile.isKidsProfile}")
+        return try {
+            println("ProfileRepository: Getting profiles...")
+            val response = apiService.getProfiles()
+            
+            if (response.isSuccessful) {
+                println("ProfileRepository: Response successful, parsing body...")
+                val profiles = response.body()
+                
+                if (profiles == null) {
+                    println("ProfileRepository: Response body is null")
+                    return emptyList()
+                }
+                
+                println("ProfileRepository: Successfully loaded ${profiles.size} profiles")
+                profiles.forEach { profile ->
+                    println("ProfileRepository: Profile - ID: ${profile.id}, Name: '${profile.name}', IsKids: ${profile.isKidsProfile}, AvatarPath: ${profile.avatarPath}")
+                    println("ProfileRepository: Profile colors - Primary: ${profile.avatarColorPrimary}, Secondary: ${profile.avatarColorSecondary}")
+                }
+                
+                profiles
+            } else {
+                val errorBody = response.errorBody()?.string()
+                println("ProfileRepository: Failed to load profiles - ${response.code()}: ${response.message()}")
+                println("ProfileRepository: Error body: $errorBody")
+                throw Exception("Failed to load profiles: ${response.code()} ${response.message()}")
             }
-            return profiles
-        } else {
-            println("ProfileRepository: Failed to load profiles - ${response.code()}: ${response.message()}")
-            throw Exception("Failed to load profiles: ${response.message()}")
+        } catch (e: Exception) {
+            println("ProfileRepository: Exception occurred: ${e.javaClass.simpleName}: ${e.message}")
+            e.printStackTrace()
+            throw e
         }
     }
     

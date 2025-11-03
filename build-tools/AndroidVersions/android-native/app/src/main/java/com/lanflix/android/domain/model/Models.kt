@@ -10,11 +10,16 @@ data class Profile(
     val avatarPath: String? = null,
     val isKidsProfile: Boolean = false,
     val preferences: UserPreferences? = null,
-    val createdAt: String? = null,
-    // Keep these for UI purposes, generate from name/id if not provided
-    val avatarColorPrimary: String = generateAvatarColor(name, true),
-    val avatarColorSecondary: String = generateAvatarColor(name, false)
+    val createdAt: String? = null
 ) : Parcelable {
+    
+    // Computed properties for UI - not serialized
+    val avatarColorPrimary: String
+        get() = generateAvatarColor(name, true)
+    
+    val avatarColorSecondary: String
+        get() = generateAvatarColor(name, false)
+    
     companion object {
         private fun generateAvatarColor(name: String, isPrimary: Boolean): String {
             val colors = listOf(
