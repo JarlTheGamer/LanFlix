@@ -496,13 +496,18 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         // Video stream mapping (ensure video is included)
         args.Append("-map 0:v:0 ");
 
-        // Audio stream selection
+        // Audio stream selection with validation
         if (request.AudioStreamIndex.HasValue)
         {
-            args.Append($"-map 0:a:{request.AudioStreamIndex.Value} ");
+            var audioIndex = request.AudioStreamIndex.Value;
+            _logger.LogInformation("Using selected audio track {AudioIndex} for session {SessionId}", 
+                audioIndex, request.SessionId);
+            args.Append($"-map 0:a:{audioIndex} ");
         }
         else
         {
+            _logger.LogInformation("No specific audio track selected, using first available for session {SessionId}", 
+                request.SessionId);
             args.Append("-map 0:a:0 ");
         }
     }

@@ -67,6 +67,9 @@ public static class DependencyInjection
         services.AddScoped<IHardwareAccelerationDetector, EnhancedHardwareAccelerationDetector>();
         services.AddScoped<ITranscodingPipeline, EnhancedTranscodingPipeline>();
         services.AddScoped<IProgressBroadcaster, SimpleProgressBroadcaster>();
+        
+        // Audio Services
+        services.AddScoped<Lanflix.Infrastructure.Services.Audio.AudioTrackSelector>();
 
         return services;
     }

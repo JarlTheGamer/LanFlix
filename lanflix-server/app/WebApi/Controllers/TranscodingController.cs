@@ -19,6 +19,7 @@ public class TranscodingController : ControllerBase
     private readonly ITranscodingSessionManager _sessionManager;
     private readonly TranscodingSettingsProvider _settingsProvider;
     private readonly IApplicationDbContext _context;
+    private readonly Lanflix.Infrastructure.Services.Audio.AudioTrackSelector _audioTrackSelector;
     private readonly ILogger<TranscodingController> _logger;
 
     public TranscodingController(
@@ -28,6 +29,7 @@ public class TranscodingController : ControllerBase
         ITranscodingSessionManager sessionManager,
         TranscodingSettingsProvider settingsProvider,
         IApplicationDbContext context,
+        Lanflix.Infrastructure.Services.Audio.AudioTrackSelector audioTrackSelector,
         ILogger<TranscodingController> logger)
     {
         _streamingService = streamingService;
@@ -36,6 +38,7 @@ public class TranscodingController : ControllerBase
         _sessionManager = sessionManager;
         _settingsProvider = settingsProvider;
         _context = context;
+        _audioTrackSelector = audioTrackSelector;
         _logger = logger;
     }
 
@@ -108,6 +111,15 @@ public class TranscodingController : ControllerBase
                 // Create client profiles
                 var clientProfiles = _streamingService.CreateDefaultProfiles(clientType);
 
+                // Get user's preferred audio language and select best audio track
+                var userSettingsKey = profileId.HasValue ? $"userSettings_{profileId}" : "userSettings_1";
+                var userSettingsJson = await _settingsProvider.GetSettingAsync(userSettingsKey);
+                var preferredAudioLanguage = ExtractAudioLanguagePreference(userSettingsJson);
+                var selectedAudioTrack = _audioTrackSelector.SelectBestAudioTrack(mediaInfo.Audio.ToArray(), preferredAudioLanguage);
+
+                _logger.LogInformation("Audio track selection for session {SessionId}: Preferred language={PreferredLanguage}, Selected track={SelectedTrack}",
+                    sessionId, preferredAudioLanguage ?? "none", selectedAudioTrack?.ToString() ?? "default");
+
                 // Create stream request
                 var request = new StreamRequest
                 {
@@ -116,7 +128,7 @@ public class TranscodingController : ControllerBase
                     MediaInfo = mediaInfo,
                     UserPreferences = null,
                     StartPosition = startTime,
-                    AudioStreamIndex = null,
+                    AudioStreamIndex = selectedAudioTrack,
                     SubtitleStreamIndex = null,
                     RangeHeader = Request.Headers["Range"].FirstOrDefault()
                 };
@@ -436,6 +448,14 @@ public class TranscodingController : ControllerBase
             // Create client profiles
             var clientProfiles = _streamingService.CreateDefaultProfiles(clientType);
 
+            // Get user's preferred audio language and select best audio track (use default profile for test endpoint)
+            var userSettingsJson = await _settingsProvider.GetSettingAsync("userSettings_1");
+            var preferredAudioLanguage = ExtractAudioLanguagePreference(userSettingsJson);
+            var selectedAudioTrack = _audioTrackSelector.SelectBestAudioTrack(mediaInfo.Audio.ToArray(), preferredAudioLanguage);
+
+            _logger.LogInformation("Audio track selection for test stream {SessionId}: Preferred language={PreferredLanguage}, Selected track={SelectedTrack}",
+                sessionId, preferredAudioLanguage ?? "none", selectedAudioTrack?.ToString() ?? "default");
+
             // Create stream request
             var request = new StreamRequest
             {
@@ -444,7 +464,7 @@ public class TranscodingController : ControllerBase
                 MediaInfo = mediaInfo,
                 UserPreferences = null,
                 StartPosition = startTime,
-                AudioStreamIndex = null,
+                AudioStreamIndex = selectedAudioTrack,
                 SubtitleStreamIndex = null,
                 RangeHeader = Request.Headers["Range"].FirstOrDefault()
             };
@@ -482,6 +502,38 @@ public class TranscodingController : ControllerBase
             _logger.LogError(ex, "Failed to stream file: {FilePath}", filePath);
             return StatusCode(500, "Internal server error");
         }
+    }
+
+    /// <summary>
+    /// Extracts the audio language preference from user settings JSON
+    /// </summary>
+    private string? ExtractAudioLanguagePreference(string? userSettingsJson)
+    {
+        if (string.IsNullOrEmpty(userSettingsJson))
+            return null;
+
+        try
+        {
+            var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            using var document = System.Text.Json.JsonDocument.Parse(userSettingsJson);
+            
+            if (document.RootElement.TryGetProperty("audio-lang", out var audioLangElement))
+            {
+                return audioLangElement.GetString();
+            }
+            
+            // Fallback to "language" property if "audio-lang" not found
+            if (document.RootElement.TryGetProperty("language", out var languageElement))
+            {
+                return languageElement.GetString();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse user settings JSON for audio language preference");
+        }
+
+        return null;
     }
 }
 

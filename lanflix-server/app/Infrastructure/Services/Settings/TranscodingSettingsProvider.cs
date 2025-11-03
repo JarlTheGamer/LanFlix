@@ -23,6 +23,16 @@ public class TranscodingSettingsProvider
     }
 
     /// <summary>
+    /// Gets a specific setting value by key
+    /// </summary>
+    /// <param name="key">Setting key</param>
+    /// <returns>Setting value as JSON string</returns>
+    public async Task<string?> GetSettingAsync(string key)
+    {
+        return await _settingsService.GetSettingAsync(key);
+    }
+
+    /// <summary>
     /// Gets transcoding settings for a specific profile, combining user preferences with defaults
     /// </summary>
     /// <param name="profileId">User profile ID</param>
