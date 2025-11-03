@@ -276,24 +276,46 @@ class MainActivity : AppCompatActivity() {
                         min-height: 100vh !important;
                     }
                     
-                    /* Focus styles for TV navigation */
-                    button:focus, a:focus, input:focus, [tabindex]:focus, 
-                    .focusable:focus, [role="button"]:focus {
-                        outline: 4px solid #03DAC5 !important;
-                        outline-offset: 4px !important;
-                        background-color: rgba(3, 218, 197, 0.2) !important;
-                        transform: scale(1.05) !important;
-                        transition: all 0.2s ease !important;
-                        z-index: 9999 !important;
-                        position: relative !important;
+                    /* Remove ALL focus outlines - no ugly blue borders */
+                    * {
+                        outline: none !important;
+                        -webkit-tap-highlight-color: transparent !important;
                     }
                     
-                    /* Movie/content card focus */
-                    .movie-card:focus, .content-item:focus, [class*="card"]:focus {
-                        outline: 4px solid #03DAC5 !important;
+                    /* Mobile devices - NO focus styles at all */
+                    .mobile-mode *:focus {
+                        outline: none !important;
+                        box-shadow: none !important;
+                        background-color: transparent !important;
+                        transform: none !important;
+                    }
+                    
+                    /* Mobile devices - ensure normal scrolling */
+                    .mobile-mode body {
+                        overflow: auto !important;
+                        height: auto !important;
+                        -webkit-overflow-scrolling: touch !important;
+                    }
+                    
+                    /* Only show subtle focus for actual TV navigation */
+                    .tv-mode button:focus, 
+                    .tv-mode a:focus, 
+                    .tv-mode [tabindex]:focus,
+                    .tv-mode .focusable:focus, 
+                    .tv-mode [role="button"]:focus {
+                        outline: 2px solid rgba(3, 218, 197, 0.6) !important;
                         outline-offset: 2px !important;
-                        transform: scale(1.1) !important;
-                        z-index: 999 !important;
+                        background-color: rgba(3, 218, 197, 0.1) !important;
+                        transition: all 0.2s ease !important;
+                    }
+                    
+                    /* Movie/content card focus for TV only */
+                    .tv-mode .movie-card:focus, 
+                    .tv-mode .content-item:focus, 
+                    .tv-mode [class*="card"]:focus {
+                        outline: 2px solid rgba(3, 218, 197, 0.6) !important;
+                        outline-offset: 1px !important;
+                        transform: scale(1.05) !important;
                     }
                 `;
                 document.head.appendChild(style);
@@ -308,12 +330,35 @@ class MainActivity : AppCompatActivity() {
                 // Force landscape-friendly viewport for TV
                 viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
                 
+                // Detect if this is actually a TV device
+                var isActualTV = false;
+                var userAgent = navigator.userAgent.toLowerCase();
+                
+                // Check for actual TV indicators
+                if (userAgent.includes('tv') || 
+                    userAgent.includes('aftm') || 
+                    userAgent.includes('aftb') ||
+                    window.innerWidth > 1280) {
+                    isActualTV = true;
+                    document.body.classList.add('tv-mode');
+                    console.log('📺 TV device detected');
+                } else {
+                    document.body.classList.add('mobile-mode');
+                    console.log('📱 Mobile device detected');
+                }
+                
                 // Force body to use full viewport
                 document.body.style.width = '100vw';
                 document.body.style.height = '100vh';
                 document.body.style.margin = '0';
                 document.body.style.padding = '0';
-                document.body.style.overflow = 'hidden';
+                
+                // Only disable scrolling on actual TV devices
+                if (isActualTV) {
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    document.body.style.overflow = 'auto';
+                }
                 
                 // Make all clickable elements focusable and add TV navigation
                 var clickables = document.querySelectorAll('button, a, [onclick], .clickable, [role="button"], .movie-card, .content-item, [class*="card"]');
@@ -328,16 +373,35 @@ class MainActivity : AppCompatActivity() {
                 var currentFocusIndex = 0;
                 var focusableElements = Array.from(clickables);
                 
-                // Auto-focus first element and ensure navigation is ready
+                // Only activate TV navigation on actual TV devices
                 setTimeout(function() {
-                    if (focusableElements.length > 0) {
-                        focusableElements[0].focus();
-                        // Trigger a focus event to ensure navigation is active
+                    if (isActualTV) {
+                        // Make body focusable for remote navigation
+                        document.body.setAttribute('tabindex', '0');
                         document.body.focus();
-                        // Dispatch a synthetic key event to activate navigation
-                        document.dispatchEvent(new KeyboardEvent('keydown', {keyCode: 0, which: 0}));
+                        
+                        // Initialize TV navigation if available
+                        if (window.tvNavigation && typeof window.tvNavigation.initialize === 'function') {
+                            window.tvNavigation.initialize();
+                        }
+                        
+                        // Activate main navigation if available
+                        if (window.navigation && typeof window.navigation.activateNavigation === 'function') {
+                            window.navigation.activateNavigation();
+                        }
+                        
+                        // Focus first focusable element
+                        if (focusableElements.length > 0) {
+                            focusableElements[0].focus();
+                        }
+                        
+                        console.log('🎮 Android TV navigation initialized and ready');
+                    } else {
+                        console.log('📱 Mobile device - TV navigation disabled');
+                        // Remove any tabindex that might interfere with touch
+                        document.body.removeAttribute('tabindex');
                     }
-                }, 200);
+                }, 300);
                 
                 // Enhanced keyboard/remote navigation
                 document.addEventListener('keydown', function(e) {

@@ -42,8 +42,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     await contentDisplay.initialize();
     navigation.initialize();
     
+    // Make navigation globally accessible for Android TV app
+    window.navigation = navigation;
+    window.tvNavigation = tvNavigation;
+    
     // Initialize TV navigation with navigation reference
     tvNavigation.initialize(navigation.getTVNavigationReference());
+    
+    // Ensure navigation is immediately active for TV/remote devices
+    if (tvNavigation.isTV) {
+      setTimeout(() => {
+        navigation.activateNavigation();
+      }, 500);
+    }
     
     // Initialize search module
     searchModule.initialize();

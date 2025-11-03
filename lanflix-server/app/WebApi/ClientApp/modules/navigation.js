@@ -48,12 +48,57 @@ export class Navigation {
     this.setupTabs();
     this.setupKeyboardNavigation();
     this.setupServerStatusListener();
+    
+    // Ensure navigation is immediately active for TV/remote devices
+    if (!this.isTouchDevice || this.isAndroidTV) {
+      // Force focus and make navigation ready immediately
+      setTimeout(() => {
+        this.activateNavigation();
+      }, 100);
+    }
+  }
+  
+  /**
+   * Activate navigation immediately for TV/remote control devices
+   */
+  activateNavigation() {
+    console.log('🎮 Activating navigation for TV/remote control...');
+    
+    // Ensure we're in the right mode for TV navigation
+    if (!this.isTouchDevice || this.isAndroidTV) {
+      // Set initial navigation state
+      this.focusedElement = 'menu';
+      this.focusedMenuIndex = 1; // Home button
+      
+      // Ensure the active menu item is properly set
+      const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
+      menuButtons.forEach((btn) => btn.classList.remove('active'));
+      if (menuButtons[this.focusedMenuIndex]) {
+        menuButtons[this.focusedMenuIndex].classList.add('active');
+      }
+      
+      // Make document focusable
+      document.body.setAttribute('tabindex', '0');
+      document.body.focus();
+      
+      // Set initial focus state
+      this.updateFocus();
+      
+      console.log('🎮 Navigation activated - ready for remote input');
+      console.log('🎮 Current focus:', this.focusedElement, 'Menu index:', this.focusedMenuIndex);
+    }
   }
 
   /**
    * Get reference for TV navigation integration
    */
   getTVNavigationReference() {
+    // Ensure navigation is ready for TV remote input
+    if (!this.isTouchDevice || this.isAndroidTV) {
+      // Make sure we're in the right state for TV navigation
+      this.focusedElement = 'menu';
+      this.focusedMenuIndex = 1; // Start on Home
+    }
     return this;
   }
 

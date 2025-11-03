@@ -64,6 +64,27 @@ export class TVNavigation {
 
     // Setup gamepad support (some TV remotes register as gamepads)
     this.setupGamepadSupport();
+    
+    // Ensure navigation is immediately ready for remote input
+    this.activateRemoteNavigation();
+  }
+  
+  /**
+   * Activate remote navigation immediately
+   */
+  activateRemoteNavigation() {
+    // Make sure the page is focusable and ready for remote input
+    document.body.setAttribute('tabindex', '0');
+    document.body.focus();
+    
+    // Ensure the main navigation is active
+    if (this.navigation && typeof this.navigation.activateNavigation === 'function') {
+      setTimeout(() => {
+        this.navigation.activateNavigation();
+      }, 200);
+    }
+    
+    console.log('🎮 Remote navigation activated and ready for input');
   }
 
   /**
