@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -60,6 +61,26 @@ fun HomeScreen(
     var currentHeroIndex by remember { mutableIntStateOf(0) }
     var activeAmbilightLayer by remember { mutableIntStateOf(1) }
     var isScrolled by remember { mutableStateOf(false) }
+    
+    // Get screen configuration for responsive design
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
+    val screenHeight = configuration.screenHeightDp.dp
+    val isTablet = screenWidth >= 600.dp
+    val isLandscape = screenWidth > screenHeight
+    
+    // Responsive padding and sizing
+    val horizontalPadding = when {
+        isTablet -> 72.dp
+        isLandscape -> 48.dp
+        else -> 24.dp
+    }
+    
+    val heroHeight = when {
+        isTablet -> 640.dp
+        isLandscape -> (screenHeight * 0.7f)
+        else -> (screenHeight * 0.6f)
+    }
     
     LaunchedEffect(Unit) {
         viewModel.loadContent()
@@ -101,13 +122,15 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 item {
-                    // Hero stage - EXACT replica
+                    // Hero stage - Responsive
                     HeroStage(
                         heroContent = uiState.heroContent,
                         currentIndex = currentHeroIndex,
                         onIndexChange = { currentHeroIndex = it },
                         onContentClick = onContentClick,
-                        modifier = Modifier.padding(top = 96.dp) // main padding-top from CSS
+                        heroHeight = heroHeight,
+                        horizontalPadding = horizontalPadding,
+                        modifier = Modifier.padding(top = if (isTablet) 96.dp else 80.dp)
                     )
                 }
                 
@@ -176,18 +199,20 @@ fun HomeScreen(
                             }
                         }
                     } else {
-                        // Content sections - EXACT replica
+                        // Content sections - Responsive
                         ContentSections(
                             recentlyAdded = uiState.recentlyAdded,
                             discoverPreview = uiState.discoverPreview,
                             onContentClick = onContentClick,
-                            modifier = Modifier.padding(horizontal = 72.dp, vertical = 80.dp) // content-shell padding
+                            horizontalPadding = horizontalPadding,
+                            isTablet = isTablet,
+                            modifier = Modifier.padding(horizontal = horizontalPadding, vertical = if (isTablet) 80.dp else 40.dp)
                         )
                     }
                 }
             }
             
-            // Fixed top navigation - EXACT CSS positioning
+            // Fixed top navigation - Responsive
             TopNavigation(
                 selectedProfile = selectedProfile,
                 onProfileClick = onProfileClick,
@@ -196,9 +221,11 @@ fun HomeScreen(
                 onNotificationsClick = onNotificationsClick,
                 isScrolled = isScrolled,
                 heroBackgroundImage = uiState.heroContent.getOrNull(currentHeroIndex)?.backdropUrl,
+                isTablet = isTablet,
+                isLandscape = isLandscape,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .zIndex(20f) // CSS: z-index: 20
+                    .zIndex(20f)
             )
         }
     }
@@ -263,6 +290,8 @@ private fun TopNavigation(
     onNotificationsClick: () -> Unit,
     isScrolled: Boolean,
     heroBackgroundImage: String?,
+    isTablet: Boolean,
+    isLandscape: Boolean,
     modifier: Modifier = Modifier
 ) {
     // Fixed position top nav - EXACT CSS replica
@@ -310,11 +339,21 @@ private fun TopNavigation(
                 .zIndex(-1f)
         )
         
-        // Main navigation content
+        // Main navigation content - Responsive padding
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 56.dp, vertical = 22.dp) // CSS: padding: 22px 56px
+                .padding(
+                    horizontal = when {
+                        isTablet -> 56.dp
+                        isLandscape -> 32.dp
+                        else -> 16.dp
+                    },
+                    vertical = when {
+                        isTablet -> 22.dp
+                        else -> 16.dp
+                    }
+                )
         ) {
             // nav-inner container - EXACT CSS structure
             Row(
@@ -531,13 +570,15 @@ private fun HeroStage(
     currentIndex: Int,
     onIndexChange: (Int) -> Unit,
     onContentClick: (String, String) -> Unit,
+    heroHeight: Dp,
+    horizontalPadding: Dp,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(640.dp) // CSS: height: 640px
-            .padding(horizontal = 72.dp) // CSS: padding: 0 72px
+            .height(height = heroHeight)
+            .padding(horizontal = horizontalPadding)
     ) {
         if (heroContent.isNotEmpty()) {
             HeroCarousel(
@@ -817,18 +858,21 @@ private fun ContentSections(
     recentlyAdded: List<Content>,
     discoverPreview: List<Content>,
     onContentClick: (String, String) -> Unit,
+    horizontalPadding: Dp,
+    isTablet: Boolean,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(80.dp) // CSS: margin-top: 80px between sections
+        verticalArrangement = Arrangement.spacedBy(if (isTablet) 80.dp else 40.dp)
     ) {
         // Recently Added section
         if (recentlyAdded.isNotEmpty()) {
             ContentSection(
                 title = "Recently Added",
                 content = recentlyAdded,
-                onContentClick = onContentClick
+                onContentClick = onContentClick,
+                isTablet = isTablet
             )
         }
         
@@ -838,7 +882,8 @@ private fun ContentSections(
                 title = "Discover New Content",
                 content = discoverPreview,
                 onContentClick = onContentClick,
-                showBrowseAll = true
+                showBrowseAll = true,
+                isTablet = isTablet
             )
         }
         
@@ -876,17 +921,21 @@ private fun ContentSection(
     title: String,
     content: List<Content>,
     onContentClick: (String, String) -> Unit,
-    showBrowseAll: Boolean = false
+    showBrowseAll: Boolean = false,
+    isTablet: Boolean
 ) {
-    // Spotlight section - EXACT CSS replica
+    // Spotlight section - Responsive
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                Color(0x99141417), // CSS: rgba(15, 15, 16, 0.6)
-                RoundedCornerShape(32.dp)
+                Color(0x99141417),
+                RoundedCornerShape(if (isTablet) 32.dp else 24.dp)
             )
-            .padding(horizontal = 36.dp, vertical = 32.dp) // CSS: padding: 32px 36px 44px
+            .padding(
+                horizontal = if (isTablet) 36.dp else 24.dp,
+                vertical = if (isTablet) 32.dp else 24.dp
+            )
     ) {
         // Spotlight header
         Row(
@@ -899,8 +948,8 @@ private fun ContentSection(
             Text(
                 text = title,
                 color = Color.White,
-                fontSize = 25.sp, // CSS: 1.6rem
-                fontWeight = FontWeight.SemiBold // CSS: font-weight: 600
+                fontSize = if (isTablet) 25.sp else 20.sp,
+                fontWeight = FontWeight.SemiBold
             )
             
             if (showBrowseAll) {
@@ -920,13 +969,14 @@ private fun ContentSection(
         
         // Content row
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp), // CSS: gap: 16px
-            modifier = Modifier.padding(vertical = 20.dp) // CSS: padding: 20px 0
+            horizontalArrangement = Arrangement.spacedBy(if (isTablet) 16.dp else 12.dp),
+            modifier = Modifier.padding(vertical = if (isTablet) 20.dp else 16.dp)
         ) {
             items(content) { item ->
                 MovieCard(
                     content = item,
-                    onClick = { onContentClick(item.id, item.type.name.lowercase()) }
+                    onClick = { onContentClick(item.id, item.type.name.lowercase()) },
+                    isTablet = isTablet
                 )
             }
         }
@@ -936,28 +986,38 @@ private fun ContentSection(
 @Composable
 private fun MovieCard(
     content: Content,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isTablet: Boolean
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     
-    // Movie card - EXACT CSS replica
+    // Movie card - Responsive
+    val cardWidth = if (isTablet) 180.dp else 140.dp
+    val cardHeight = if (isTablet) 320.dp else 240.dp
+    val expandedWidth = if (isTablet) 480.dp else 320.dp
+    
     Box(
         modifier = Modifier
-            .width(if (isExpanded) 480.dp else 180.dp) // CSS: width: 180px, expanded: 480px
-            .height(320.dp) // CSS: height: 320px
-            .clip(RoundedCornerShape(16.dp)) // CSS: border-radius: 16px
-            .background(Color(0x0AFFFFFF)) // CSS: rgba(255, 255, 255, 0.04)
+            .width(if (isExpanded) expandedWidth else cardWidth)
+            .height(cardHeight)
+            .clip(RoundedCornerShape(if (isTablet) 16.dp else 12.dp))
+            .background(Color(0x0AFFFFFF))
             .clickable { 
                 isExpanded = !isExpanded
                 if (isExpanded) {
-                    // Delay click to show expansion
                     coroutineScope.launch {
                         delay(300)
                         onClick()
                     }
                 }
-            } // CSS: transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1)
+            }
+            .animateContentSize(
+                animationSpec = tween(
+                    durationMillis = 600,
+                    easing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
+                )
+            )
     ) {
         // Poster images
         AsyncImage(
@@ -1011,8 +1071,8 @@ private fun MovieCard(
                 Text(
                     text = content.title,
                     color = Color.White,
-                    fontSize = 29.sp, // CSS: 1.8rem
-                    fontWeight = FontWeight.Bold, // CSS: font-weight: 700
+                    fontSize = if (isTablet) 29.sp else 22.sp,
+                    fontWeight = FontWeight.Bold,
                     lineHeight = 1.2.em,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )

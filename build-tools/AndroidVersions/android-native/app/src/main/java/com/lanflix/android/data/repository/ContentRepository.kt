@@ -12,20 +12,40 @@ class ContentRepository @Inject constructor(
 ) {
     
     suspend fun getMovies(): List<Content> {
-        val response = apiService.getMovies()
-        if (response.isSuccessful) {
-            return response.body()?.items ?: emptyList()
-        } else {
-            throw Exception("Failed to load movies: ${response.message()}")
+        return try {
+            val response = apiService.getMovies()
+            if (response.isSuccessful) {
+                val body = response.body()
+                println("ContentRepository: Movies response successful, items count: ${body?.items?.size ?: 0}")
+                body?.items ?: emptyList()
+            } else {
+                val errorBody = response.errorBody()?.string()
+                println("ContentRepository: Movies request failed with code ${response.code()}: ${response.message()}")
+                println("ContentRepository: Error body: $errorBody")
+                throw Exception("Failed to load movies: HTTP ${response.code()} - ${response.message()}")
+            }
+        } catch (e: Exception) {
+            println("ContentRepository: Exception loading movies: ${e.message}")
+            throw Exception("Failed to load movies: ${e.message}")
         }
     }
     
     suspend fun getSeries(): List<Content> {
-        val response = apiService.getSeries()
-        if (response.isSuccessful) {
-            return response.body()?.items ?: emptyList()
-        } else {
-            throw Exception("Failed to load series: ${response.message()}")
+        return try {
+            val response = apiService.getSeries()
+            if (response.isSuccessful) {
+                val body = response.body()
+                println("ContentRepository: Series response successful, items count: ${body?.items?.size ?: 0}")
+                body?.items ?: emptyList()
+            } else {
+                val errorBody = response.errorBody()?.string()
+                println("ContentRepository: Series request failed with code ${response.code()}: ${response.message()}")
+                println("ContentRepository: Error body: $errorBody")
+                throw Exception("Failed to load series: HTTP ${response.code()} - ${response.message()}")
+            }
+        } catch (e: Exception) {
+            println("ContentRepository: Exception loading series: ${e.message}")
+            throw Exception("Failed to load series: ${e.message}")
         }
     }
     
@@ -39,11 +59,23 @@ class ContentRepository @Inject constructor(
     }
     
     suspend fun searchContent(query: String, type: String? = null): List<Content> {
-        val response = apiService.searchContent(query, type)
-        if (response.isSuccessful) {
-            return response.body() ?: emptyList()
-        } else {
-            throw Exception("Search failed: ${response.message()}")
+        return try {
+            val response = apiService.searchContent(query, type)
+            if (response.isSuccessful) {
+                val body = response.body()
+                println("ContentRepository: Search response successful, items count: ${body?.size ?: 0}")
+                body ?: emptyList()
+            } else {
+                val errorBody = response.errorBody()?.string()
+                println("ContentRepository: Search request failed with code ${response.code()}: ${response.message()}")
+                println("ContentRepository: Error body: $errorBody")
+                // Don't throw for search failures, just return empty list
+                emptyList()
+            }
+        } catch (e: Exception) {
+            println("ContentRepository: Exception during search: ${e.message}")
+            // Don't throw for search failures, just return empty list
+            emptyList()
         }
     }
     

@@ -67,10 +67,16 @@ class HomeViewModel @Inject constructor(
                     e.message?.contains("ConnectException") == true -> "Cannot connect to server. Please check if the server is running and accessible."
                     e.message?.contains("timeout") == true -> "Connection timeout. Server may be slow or unreachable."
                     e.message?.contains("UnknownHostException") == true -> "Server not found. Please check the server address."
+                    e.message?.contains("HTTP 400") == true -> "Bad request. The server doesn't understand the request format."
+                    e.message?.contains("HTTP 404") == true -> "API endpoint not found. Please check if the server is running the correct version."
+                    e.message?.contains("HTTP 500") == true -> "Server error. Please try again later."
                     else -> e.message ?: "Failed to load content"
                 }
                 
                 println("HomeViewModel: Error loading content: $errorMessage")
+                println("HomeViewModel: Full exception: ${e.javaClass.simpleName}: ${e.message}")
+                e.printStackTrace()
+                
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = errorMessage

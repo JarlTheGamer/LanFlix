@@ -158,7 +158,7 @@ switch ($Action.ToLower()) {
             Write-Host "  ✨ Exact Netflix-style UI replica" -ForegroundColor White
             Write-Host "  🚀 Native 60fps performance" -ForegroundColor White
             Write-Host "  📱 Server discovery and connection" -ForegroundColor White
-            Write-Host "  👤 Profile management" -ForegroundColor White
+            Write-Host "  Profile management" -ForegroundColor White
             Write-Host "  🎥 ExoPlayer video playback" -ForegroundColor White
             Write-Host "  📺 Android TV support" -ForegroundColor White
             Write-Host ""

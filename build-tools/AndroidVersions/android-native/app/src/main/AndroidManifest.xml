@@ -6,13 +6,14 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     
-    <!-- Screen support -->
+    <!-- Screen support with proper density handling -->
     <supports-screens
         android:smallScreens="true"
         android:normalScreens="true"
         android:largeScreens="true"
         android:xlargeScreens="true"
-        android:anyDensity="true" />
+        android:anyDensity="true"
+        android:resizeable="true" />
     
     <!-- TV Features -->
     <uses-feature
@@ -21,6 +22,8 @@
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />
+    
+
 
     <application
         android:name=".LanflixApplication"
@@ -38,9 +41,11 @@
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/Theme.Lanflix"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|density|smallestScreenSize"
             android:screenOrientation="unspecified"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="false">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
