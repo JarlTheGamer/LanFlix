@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Lanflix" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/lanflix_primary</item>
+        <item name="colorSecondary">@color/lanflix_secondary</item>
+        <item name="android:colorBackground">@color/lanflix_background</item>
+        <item name="colorSurface">@color/lanflix_surface</item>
+        <item name="android:statusBarColor">@color/lanflix_background</item>
+        <item name="android:navigationBarColor">@color/lanflix_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+    
+    <!-- Android TV Theme -->
+    <style name="Theme.Leanback" parent="Theme.Leanback.Browse">
+        <item name="android:colorPrimary">@color/lanflix_primary</item>
+        <item name="android:colorAccent">@color/lanflix_secondary</item>
+        <item name="android:windowBackground">@color/lanflix_background</item>
+    </style>
+</resources>

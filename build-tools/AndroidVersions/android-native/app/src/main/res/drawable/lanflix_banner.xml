@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="80dp"
+    android:viewportWidth="200"
+    android:viewportHeight="80">
+    
+    <rect
+        android:width="200"
+        android:height="80"
+        android:fillColor="@color/lanflix_primary" />
+    
+    <text
+        android:x="100"
+        android:y="45"
+        android:text="LANFLIX"
+        android:textSize="18sp"
+        android:textColor="@color/white"
+        android:textAlignment="center"
+        android:fontFamily="sans-serif-medium" />
+</vector>

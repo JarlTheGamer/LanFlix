@@ -316,6 +316,11 @@ main {
   transition: transform var(--transition), background var(--transition), border-color var(--transition);
   position: relative;
   z-index: 5;
+  /* Improve touch targets */
+  min-height: 44px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
 .profile-avatar {
@@ -346,6 +351,11 @@ main {
   background: rgba(255, 255, 255, 0.95);
   border-color: rgba(255, 255, 255, 0.95);
   transform: translateY(-2px);
+}
+
+.profile:active {
+  transform: translateY(0px) scale(0.98);
+  transition: all 0.1s ease;
 }
 
 .profile:hover .profile-avatar,
@@ -1117,6 +1127,8 @@ main {
   inset: 0;
   z-index: 1;
   overflow: hidden;
+  pointer-events: none;
+  /* Prevent background from blocking clicks */
 }
 
 .profile-background-animation {
@@ -1128,6 +1140,8 @@ main {
   left: -25%;
   transform: rotate(-20deg);
   overflow: hidden;
+  pointer-events: none;
+  /* Prevent background animation from blocking clicks */
 }
 
 .background-row {
@@ -1176,6 +1190,8 @@ main {
   opacity: 0.3;
   transition: opacity 0.8s ease;
   flex-shrink: 0;
+  pointer-events: none;
+  /* Prevent tiles from blocking clicks */
 }
 
 .profile-background-overlay {
@@ -1239,6 +1255,14 @@ main {
   position: relative;
   overflow: hidden;
   min-width: 120px;
+  /* Improve touch targets for mobile */
+  min-height: 44px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  /* Ensure clicks work */
+  pointer-events: auto;
+  z-index: 10;
 }
 
 .profile-item::before {
@@ -1254,10 +1278,16 @@ main {
   opacity: 1;
 }
 
-.profile-item.focused {
+.profile-item.focused,
+.profile-item:hover {
   transform: scale(1.05);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
   background: rgba(255, 255, 255, 0.12);
+}
+
+.profile-item:active {
+  transform: scale(0.98);
+  transition: all 0.1s ease;
 }
 
 .profile-item.selected {
@@ -1277,6 +1307,8 @@ main {
   justify-content: center;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  /* Let clicks pass through to parent */
 }
 
 .profile-item.focused .profile-avatar-large {
@@ -1300,6 +1332,8 @@ main {
   text-align: center;
   transition: color 0.3s ease;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  /* Let clicks pass through to parent */
 }
 
 .profile-item.focused .profile-name {
@@ -1368,9 +1402,13 @@ main {
 
   .profile-item {
     min-width: 100px;
+    /* Increase touch target size on mobile */
+    padding: 24px 20px;
+    min-height: 48px;
   }
 
-  .profile-item.focused {
+  .profile-item.focused,
+  .profile-item:hover {
     transform: scale(1.05);
   }
 

@@ -1,6 +1,9 @@
 import stateManager from './data.js';
 import apiClient from './api-client.js';
 
+// Global debug function for testing
+window.debugProfileManager = null;
+
 export class ProfileManager {
   constructor() {
     this.selectedProfileId = null;
@@ -13,8 +16,11 @@ export class ProfileManager {
     // Load profiles from backend
     await this.loadProfiles();
 
+    // Make this instance available for debugging
+    window.debugProfileManager = this;
+
     const profilesBar = document.getElementById('profiles-vertical-bar');
-    
+
     // Only initialize UI if profile elements exist (on profiles page)
     if (!profilesBar) {
       return;
@@ -32,6 +38,36 @@ export class ProfileManager {
         </div>
         <div class="profile-name">${profile.name}</div>
       `;
+
+      // Add click/touch event handlers for all devices
+      profileItem.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Profile clicked:', profile.name, profile.id);
+        this.selectProfile(profile.id);
+      });
+
+      // Add touch event handlers for mobile devices
+      profileItem.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Update focus to show visual feedback
+        this.focusedProfileIndex = index;
+        this.updateFocus();
+      });
+
+      profileItem.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Profile touch end:', profile.name, profile.id);
+        this.selectProfile(profile.id);
+      });
+
+      // Add mouse hover for desktop
+      profileItem.addEventListener('mouseenter', () => {
+        this.focusedProfileIndex = index;
+        this.updateFocus();
+      });
 
       profilesBar.appendChild(profileItem);
     });
@@ -65,7 +101,7 @@ export class ProfileManager {
 
   createBackgroundTiles() {
     const backgroundAnimation = document.getElementById('profile-background-animation');
-    
+
     if (!backgroundAnimation) return;
 
     // Use placeholder images for background tiles
@@ -121,8 +157,10 @@ export class ProfileManager {
   }
 
   selectProfile(profileId) {
+    console.log('selectProfile called with:', profileId);
     this.selectedProfileId = profileId;
     const selectedProfile = this.profiles.find(p => p.id === profileId);
+    console.log('Selected profile:', selectedProfile);
 
     // Save selected profile to state
     stateManager.currentProfileId = profileId;
@@ -214,6 +252,36 @@ export class ProfileManager {
         <div class="profile-name">${profile.name}</div>
       `;
 
+      // Add click/touch event handlers for all devices
+      profileItem.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Profile clicked:', profile.name, profile.id);
+        this.selectProfile(profile.id);
+      });
+
+      // Add touch event handlers for mobile devices
+      profileItem.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Update focus to show visual feedback
+        this.focusedProfileIndex = index;
+        this.updateFocus();
+      });
+
+      profileItem.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Profile touch end:', profile.name, profile.id);
+        this.selectProfile(profile.id);
+      });
+
+      // Add mouse hover for desktop
+      profileItem.addEventListener('mouseenter', () => {
+        this.focusedProfileIndex = index;
+        this.updateFocus();
+      });
+
       profilesBar.appendChild(profileItem);
     });
 
@@ -295,5 +363,32 @@ export class ProfileManager {
     console.log('Show profile management UI');
     // For now, just show the profile selection
     this.show();
+  }
+
+  /**
+   * Debug function to test profile clicks
+   */
+  debugProfileClicks() {
+    console.log('=== Profile Click Debug Info ===');
+    console.log('Profiles loaded:', this.profiles.length);
+    console.log('Profile selection active:', this.profileSelectionActive);
+
+    const profileItems = document.querySelectorAll('.profile-item');
+    console.log('Profile items found:', profileItems.length);
+
+    profileItems.forEach((item, index) => {
+      console.log(`Profile ${index}:`, {
+        id: item.dataset.profileId,
+        clickable: window.getComputedStyle(item).pointerEvents !== 'none',
+        zIndex: window.getComputedStyle(item).zIndex,
+        position: window.getComputedStyle(item).position
+      });
+    });
+
+    // Test if we can manually trigger a click
+    if (profileItems.length > 0) {
+      console.log('Attempting to trigger click on first profile...');
+      profileItems[0].click();
+    }
   }
 }

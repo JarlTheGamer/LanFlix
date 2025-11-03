@@ -80,13 +80,44 @@ set VERSION=%VERSION:"=%
 echo ✓ Version bumped to %VERSION%
 echo.
 
-REM Step 2: Build server (optional - skip for Android-only releases)
-echo [2/7] Skipping server build (Android-only release)...
-echo ✓ Server build skipped
+REM Step 2: Build web frontend
+echo [2/8] Building web frontend...
+cd lanflix-server\app\WebApi\ClientApp
+call npm install
+if errorlevel 1 (
+    echo ERROR: npm install failed
+    cd ..\..\..\..
+    pause
+    exit /b 1
+)
+
+call npm run build
+if errorlevel 1 (
+    echo ERROR: Frontend build failed
+    cd ..\..\..\..
+    pause
+    exit /b 1
+)
+echo ✓ Web frontend built successfully
+cd ..\..\..\..
 echo.
 
-REM Step 3: Build Android APK
-echo [3/7] Building Android APK...
+REM Step 3: Build server
+echo [3/8] Building server...
+cd lanflix-server
+call dotnet publish app\WebApi\Lanflix.WebApi.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true -o ..\releases\server-win-x64
+if errorlevel 1 (
+    echo ERROR: Server build failed
+    cd ..
+    pause
+    exit /b 1
+)
+echo ✓ Server built successfully
+cd ..
+echo.
+
+REM Step 4: Build Android APK
+echo [4/8] Building Android APK...
 
 REM Set JAVA_HOME to Java 21 for Gradle compatibility
 if exist "C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot" (
@@ -100,32 +131,42 @@ if exist "C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot" (
 set "PATH=%JAVA_HOME%\bin;%PATH%"
 echo Using Java: %JAVA_HOME%
 
-cd build-tools\android
+cd build-tools\AndroidVersions\android-native
 if exist "gradlew.bat" (
-    call gradlew.bat assembleDebug
+    call gradlew.bat assembleRelease
+    if errorlevel 1 (
+        echo WARNING: Release build failed, trying debug build...
+        call gradlew.bat assembleDebug
+    )
 ) else (
     echo ERROR: gradlew.bat not found
-    cd ..\..
+    cd ..\..\..
     pause
     exit /b 1
 )
 
 if errorlevel 1 (
     echo ERROR: Gradle build failed
-    cd ..\..
+    cd ..\..\..
     pause
     exit /b 1
 )
 echo ✓ APK built successfully
-cd ..\..
+cd ..\..\..
 echo.
 
-REM Step 4: Copy APK to releases folder
-echo [4/7] Preparing release files...
+REM Step 5: Copy release files
+echo [5/8] Preparing release files...
 if not exist "releases" mkdir releases
 
-REM Find the debug APK (auto-signed)
-set APK_SOURCE=build-tools\android\app\build\outputs\apk\debug\app-debug.apk
+REM Find the APK (try release first, then debug)
+set APK_SOURCE=build-tools\AndroidVersions\android-native\app\build\outputs\apk\release\app-release.apk
+set APK_TYPE=release
+if not exist "!APK_SOURCE!" (
+    set APK_SOURCE=build-tools\AndroidVersions\android-native\app\build\outputs\apk\debug\app-debug.apk
+    set APK_TYPE=debug
+)
+
 if not exist "!APK_SOURCE!" (
     echo ERROR: APK not found at: !APK_SOURCE!
     echo.
@@ -136,11 +177,21 @@ if not exist "!APK_SOURCE!" (
 
 set APK_DEST=releases\lanflix-android-v!VERSION!.apk
 copy "!APK_SOURCE!" "!APK_DEST!"
-echo ✓ APK copied to: !APK_DEST!
+echo ✓ APK copied to: !APK_DEST! ^(!APK_TYPE! build^)
+
+REM Copy server executable
+set SERVER_SOURCE=releases\server-win-x64\Lanflix.WebApi.exe
+if exist "!SERVER_SOURCE!" (
+    set SERVER_DEST=releases\lanflix-server-v!VERSION!.exe
+    copy "!SERVER_SOURCE!" "!SERVER_DEST!"
+    echo ✓ Server copied to: !SERVER_DEST!
+) else (
+    echo WARNING: Server executable not found at: !SERVER_SOURCE!
+)
 echo.
 
-REM Step 5: Git commit and tag
-echo [5/7] Committing to Git...
+REM Step 6: Git commit and tag
+echo [6/8] Committing to Git...
 git add .
 git commit -m "Release v!VERSION!"
 if errorlevel 1 (
@@ -195,8 +246,8 @@ if errorlevel 1 (
 echo ✓ Pushed to GitHub
 echo.
 
-REM Step 6: Create GitHub Release
-echo [6/7] Creating GitHub Release...
+REM Step 7: Create GitHub Release
+echo [7/8] Creating GitHub Release...
 
 if "!MANUAL_UPLOAD!"=="1" (
     echo.
@@ -247,27 +298,52 @@ if "!MANUAL_UPLOAD!"=="1" (
     )
 
     REM Create release notes file
-    echo ## What's New in v!VERSION! > release-notes.tmp
+    echo ## 🎬 Lanflix v!VERSION! - Complete Media Streaming Solution > release-notes.tmp
     echo. >> release-notes.tmp
-    echo ### New Features >> release-notes.tmp
-    echo - Automated release system >> release-notes.tmp
-    echo - In-app update notifications >> release-notes.tmp
+    echo ### 📦 What's Included >> release-notes.tmp
+    echo - **🖥️ Server**: Complete media server with web interface >> release-notes.tmp
+    echo - **📱 Android App**: Native app with Netflix-style UI >> release-notes.tmp
     echo. >> release-notes.tmp
-    echo ### Bug Fixes >> release-notes.tmp
-    echo - Various bug fixes and improvements >> release-notes.tmp
+    echo ### ✨ New Features >> release-notes.tmp
+    echo - Pixel-perfect Netflix-style Android UI >> release-notes.tmp
+    echo - Auto-server discovery on port 5037 >> release-notes.tmp
+    echo - Native ExoPlayer video playback >> release-notes.tmp
+    echo - Hardware-accelerated rendering >> release-notes.tmp
+    echo - Android TV support with remote control >> release-notes.tmp
     echo. >> release-notes.tmp
-    echo ### Performance >> release-notes.tmp
-    echo - Improved app performance >> release-notes.tmp
+    echo ### 🚀 Performance >> release-notes.tmp
+    echo - 60fps native Android UI vs WebView >> release-notes.tmp
+    echo - Instant app startup >> release-notes.tmp
+    echo - Optimized memory usage >> release-notes.tmp
     echo. >> release-notes.tmp
-    echo ## Installation >> release-notes.tmp
-    echo Download the APK and install on your Android device. >> release-notes.tmp
+    echo ## 📋 Installation >> release-notes.tmp
+    echo. >> release-notes.tmp
+    echo ### 🖥️ Server Setup >> release-notes.tmp
+    echo 1. Download `lanflix-server-v!VERSION!.exe` >> release-notes.tmp
+    echo 2. Run the executable >> release-notes.tmp
+    echo 3. Server starts on port 5037 >> release-notes.tmp
+    echo 4. Access web interface at http://localhost:5037 >> release-notes.tmp
+    echo. >> release-notes.tmp
+    echo ### 📱 Android Setup >> release-notes.tmp
+    echo 1. Download `lanflix-android-v!VERSION!.apk` >> release-notes.tmp
+    echo 2. Install on your Android device >> release-notes.tmp
+    echo 3. App will auto-discover your server >> release-notes.tmp
+    echo 4. Enjoy Netflix-style native performance! >> release-notes.tmp
     echo. >> release-notes.tmp
     echo **Requirements:** >> release-notes.tmp
-    echo - Android 7.0 or higher >> release-notes.tmp
-    echo - Backend server running on your network >> release-notes.tmp
+    echo - Windows 10/11 ^(for server^) >> release-notes.tmp
+    echo - Android 7.0+ ^(for mobile app^) >> release-notes.tmp
+    echo - Same network for auto-discovery >> release-notes.tmp
 
     echo Creating GitHub release...
-    gh release create v!VERSION! "!APK_DEST!" ^
+    
+    REM Prepare release assets
+    set RELEASE_ASSETS="!APK_DEST!"
+    if exist "!SERVER_DEST!" (
+        set RELEASE_ASSETS=!RELEASE_ASSETS! "!SERVER_DEST!"
+    )
+    
+    gh release create v!VERSION! !RELEASE_ASSETS! ^
         --title "Lanflix v!VERSION!" ^
         --notes-file release-notes.tmp ^
         --repo JarlTheGamer/Applications.
@@ -286,15 +362,31 @@ if "!MANUAL_UPLOAD!"=="1" (
     echo ✓ GitHub release created successfully
 )
 
+REM Step 8: Final summary
+echo [8/8] Release summary...
 echo.
 echo ========================================
 echo   Release Complete!
 echo ========================================
 echo.
 echo Version: v!VERSION!
-echo APK: !APK_DEST!
-echo Release: https://github.com/JarlTheGamer/Applications./releases/tag/v!VERSION!
 echo.
-echo Users can now update via the in-app updater!
+echo 📱 Android APK: !APK_DEST! ^(!APK_TYPE! build^)
+if exist "!SERVER_DEST!" (
+    echo 🖥️  Server: !SERVER_DEST!
+)
+echo 🌐 Release: https://github.com/JarlTheGamer/Applications./releases/tag/v!VERSION!
+echo.
+echo 🎉 Both web and Android versions built successfully!
+echo.
+echo 📋 What's included:
+echo   ✅ Web frontend ^(built into server^)
+echo   ✅ Server executable ^(Windows x64^)
+echo   ✅ Android APK ^(connects to port 5037^)
+echo.
+echo 🚀 Users can now:
+echo   1. Run the server executable
+echo   2. Install the Android APK
+echo   3. Android app will auto-discover the server on port 5037
 echo.
 pause
