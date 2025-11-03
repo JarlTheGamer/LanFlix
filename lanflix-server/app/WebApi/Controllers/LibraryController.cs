@@ -249,6 +249,15 @@ public class LibraryController : ControllerBase
             // Load additional metadata from metadata.json if available
             var enhancedMetadata = await LoadMetadataFromFile(content.FilePath);
 
+            // For series, fetch episodes once and reuse for seasons calculation
+            object[]? episodes = null;
+            object[]? seasons = null;
+            if (content.Type == ContentType.Series)
+            {
+                episodes = await GetSeriesEpisodes(content.Id, cancellationToken);
+                seasons = GetSeasonsFromEpisodes(episodes);
+            }
+
             var result = new
             {
                 id = content.Id,
@@ -277,10 +286,10 @@ public class LibraryController : ControllerBase
                 productionCompanies = enhancedMetadata?.ProductionCompanies,
                 
                 // For series, include episode and season information
-                episodes = content.Type == ContentType.Series ? await GetSeriesEpisodes(content.Id, cancellationToken) : null,
-                seasons = content.Type == ContentType.Series ? await GetSeriesSeasons(content.Id, cancellationToken) : null,
-                numberOfSeasons = content.Type == ContentType.Series ? (await GetSeriesSeasons(content.Id, cancellationToken)).Length : (int?)null,
-                numberOfEpisodes = content.Type == ContentType.Series ? (await GetSeriesEpisodes(content.Id, cancellationToken)).Length : (int?)null
+                episodes = episodes,
+                seasons = seasons,
+                numberOfSeasons = seasons?.Length,
+                numberOfEpisodes = episodes?.Length
             };
 
             return Ok(result);
@@ -443,7 +452,22 @@ public class LibraryController : ControllerBase
         {
             // Get all episodes for the series
             var episodes = await GetSeriesEpisodes(seriesId, cancellationToken);
-            
+            return GetSeasonsFromEpisodes(episodes);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get seasons for series: {SeriesId}", seriesId);
+            return new object[0];
+        }
+    }
+
+    /// <summary>
+    /// Helper method to create seasons from episodes array (avoids duplicate TMDB calls)
+    /// </summary>
+    private object[] GetSeasonsFromEpisodes(object[] episodes)
+    {
+        try
+        {
             // Group episodes by season
             var seasons = episodes
                 .Cast<dynamic>()
@@ -462,8 +486,41 @@ public class LibraryController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to get seasons for series: {SeriesId}", seriesId);
+            _logger.LogWarning(ex, "Failed to group episodes into seasons");
             return new object[0];
+        }
+    }
+
+    /// <summary>
+    /// Debug endpoint to check episode file paths
+    /// </summary>
+    [HttpGet("debug/episodes/{seriesId}")]
+    public async Task<IActionResult> DebugEpisodes(
+        [FromRoute] int seriesId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var episodes = await _context.Episodes
+                .Where(e => e.ContentId == seriesId)
+                .Select(e => new
+                {
+                    e.Id,
+                    e.SeasonNumber,
+                    e.EpisodeNumber,
+                    e.Title,
+                    e.FilePath,
+                    FileExists = !string.IsNullOrEmpty(e.FilePath) && System.IO.File.Exists(e.FilePath),
+                    IsDirectory = !string.IsNullOrEmpty(e.FilePath) && Directory.Exists(e.FilePath)
+                })
+                .ToListAsync(cancellationToken);
+
+            return Ok(new { seriesId, episodes });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to debug episodes for series: {SeriesId}", seriesId);
+            return StatusCode(500, new { error = "Failed to debug episodes", details = ex.Message });
         }
     }
 

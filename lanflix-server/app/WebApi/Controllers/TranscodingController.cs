@@ -53,35 +53,83 @@ public class TranscodingController : ControllerBase
         [FromQuery] string clientType = "web",
         [FromQuery] string? sessionId = null,
         [FromQuery] double? startTime = null,
-        [FromQuery] int? profileId = null)
+        [FromQuery] int? profileId = null,
+        [FromQuery] int? episodeId = null)
     {
         var requestStart = DateTime.UtcNow;
         
         try
         {
-            _logger.LogInformation("Stream request for content ID: {ContentId}, profileId: {ProfileId}, clientType: {ClientType}, startTime: {StartTime}s", 
-                contentId, profileId, clientType, startTime ?? 0);
+            _logger.LogInformation("Stream request for content ID: {ContentId}, profileId: {ProfileId}, clientType: {ClientType}, startTime: {StartTime}s, episodeId: {EpisodeId}", 
+                contentId, profileId, clientType, startTime ?? 0, episodeId);
 
-            // Get content from database
-            var content = await _context.Contents
-                .FirstOrDefaultAsync(c => c.Id == contentId);
+            string filePath;
             
-            if (content == null)
+            // Handle episode streaming
+            if (episodeId.HasValue)
             {
-                _logger.LogWarning("Content not found in database: {ContentId}", contentId);
-                return NotFound("Content not found");
+                var episode = await _context.Episodes
+                    .FirstOrDefaultAsync(e => e.Id == episodeId.Value && e.ContentId == contentId);
+                
+                if (episode == null)
+                {
+                    _logger.LogWarning("Episode not found: EpisodeId={EpisodeId}, ContentId={ContentId}", episodeId, contentId);
+                    return NotFound("Episode not found");
+                }
+                
+                filePath = episode.FilePath;
+                if (string.IsNullOrEmpty(filePath))
+                {
+                    _logger.LogWarning("No file path found for episode: EpisodeId={EpisodeId}", episodeId);
+                    return NotFound("Episode file not found");
+                }
             }
-
-            var filePath = content.FilePath;
-            if (string.IsNullOrEmpty(filePath))
+            else
             {
-                _logger.LogWarning("No file path found for content ID: {ContentId}", contentId);
-                return NotFound("Content not found");
+                // Handle movie or series-level streaming
+                var content = await _context.Contents
+                    .FirstOrDefaultAsync(c => c.Id == contentId);
+                
+                if (content == null)
+                {
+                    _logger.LogWarning("Content not found in database: {ContentId}", contentId);
+                    return NotFound("Content not found");
+                }
+
+                filePath = content.FilePath;
+                if (string.IsNullOrEmpty(filePath))
+                {
+                    _logger.LogWarning("No file path found for content ID: {ContentId}", contentId);
+                    return NotFound("Content not found");
+                }
             }
 
             if (!System.IO.File.Exists(filePath))
             {
                 _logger.LogWarning("File does not exist: {FilePath}", filePath);
+                
+                // Additional debugging for episode files
+                if (episodeId.HasValue)
+                {
+                    _logger.LogWarning("Episode file path issue - EpisodeId: {EpisodeId}, ContentId: {ContentId}, FilePath: {FilePath}", 
+                        episodeId, contentId, filePath);
+                    
+                    // Check if it's a directory instead of a file
+                    if (Directory.Exists(filePath))
+                    {
+                        _logger.LogWarning("FilePath points to a directory, not a file: {FilePath}", filePath);
+                        
+                        // Try to find video files in the directory
+                        var videoExtensions = new[] { ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v" };
+                        var videoFiles = Directory.GetFiles(filePath, "*.*", SearchOption.TopDirectoryOnly)
+                            .Where(f => videoExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                            .ToArray();
+                        
+                        _logger.LogWarning("Found {Count} video files in directory: {Files}", 
+                            videoFiles.Length, string.Join(", ", videoFiles.Select(Path.GetFileName)));
+                    }
+                }
+                
                 return NotFound("Content not found");
             }
 
@@ -107,13 +155,13 @@ public class TranscodingController : ControllerBase
 
             // Create session key based on content and parameters (Jellyfin-style seeking)
             // Each seek position gets its own session to restart transcoding at that point
-            var sessionKey = $"content_{contentId}_{clientType}_{profileId}_{startTime?.ToString("F3") ?? "0"}";
+            var sessionKey = $"content_{contentId}_{episodeId ?? 0}_{clientType}_{profileId}_{startTime?.ToString("F3") ?? "0"}";
             
             // Log seeking behavior for debugging (Jellyfin-style)
             if (startTime.HasValue && startTime.Value > 0)
             {
-                _logger.LogInformation("Jellyfin-style seeking: Restarting transcoding at {StartTime}s for content {ContentId}, session: {SessionKey}", 
-                    startTime.Value, contentId, sessionKey);
+                _logger.LogInformation("Jellyfin-style seeking: Restarting transcoding at {StartTime}s for content {ContentId}, episode {EpisodeId}, session: {SessionKey}", 
+                    startTime.Value, contentId, episodeId, sessionKey);
             }
 
             // Use session manager to get or create transcoding session
@@ -366,33 +414,55 @@ public class TranscodingController : ControllerBase
 
 
     /// <summary>
-    /// Gets media information for a content item
+    /// Gets media information for a content item or episode
     /// </summary>
     [HttpGet("stream/{contentId}/info")]
-    public async Task<IActionResult> GetMediaInfo(int contentId, [FromQuery] int? profileId = null)
+    public async Task<IActionResult> GetMediaInfo(int contentId, [FromQuery] int? profileId = null, [FromQuery] int? episodeId = null)
     {
         try
         {
-            // Get content from database
-            var content = await _context.Contents
-                .FirstOrDefaultAsync(c => c.Id == contentId);
+            string filePath;
             
-            if (content == null)
+            // Handle episode info request
+            if (episodeId.HasValue)
             {
-                return NotFound("Content not found");
+                var episode = await _context.Episodes
+                    .FirstOrDefaultAsync(e => e.Id == episodeId.Value && e.ContentId == contentId);
+                
+                if (episode == null)
+                {
+                    return NotFound("Episode not found");
+                }
+                
+                filePath = episode.FilePath;
+                if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+                {
+                    return NotFound("Episode file not found");
+                }
             }
-
-            var filePath = content.FilePath;
-            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+            else
             {
-                return NotFound("Content file not found");
+                // Handle content info request
+                var content = await _context.Contents
+                    .FirstOrDefaultAsync(c => c.Id == contentId);
+                
+                if (content == null)
+                {
+                    return NotFound("Content not found");
+                }
+
+                filePath = content.FilePath;
+                if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+                {
+                    return NotFound("Content file not found");
+                }
             }
 
             // Analyze media
             var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
 
-            _logger.LogInformation("Media info for content {ContentId}: Duration={Duration}s, Video={VideoCodec} {Width}x{Height}", 
-                contentId, mediaInfo.Duration.TotalSeconds, mediaInfo.Video.Codec, mediaInfo.Video.Width, mediaInfo.Video.Height);
+            _logger.LogInformation("Media info for content {ContentId}, episode {EpisodeId}: Duration={Duration}s, Video={VideoCodec} {Width}x{Height}", 
+                contentId, episodeId, mediaInfo.Duration.TotalSeconds, mediaInfo.Video.Codec, mediaInfo.Video.Width, mediaInfo.Video.Height);
 
             return Ok(new
             {
@@ -438,26 +508,48 @@ public class TranscodingController : ControllerBase
     }
 
     /// <summary>
-    /// Gets available subtitles for a content item
+    /// Gets available subtitles for a content item or episode
     /// </summary>
     [HttpGet("stream/{contentId}/subtitles")]
-    public async Task<IActionResult> GetSubtitles(int contentId, [FromQuery] int? profileId = null)
+    public async Task<IActionResult> GetSubtitles(int contentId, [FromQuery] int? profileId = null, [FromQuery] int? episodeId = null)
     {
         try
         {
-            // Get content from database
-            var content = await _context.Contents
-                .FirstOrDefaultAsync(c => c.Id == contentId);
+            string filePath;
             
-            if (content == null)
+            // Handle episode subtitles request
+            if (episodeId.HasValue)
             {
-                return NotFound("Content not found");
+                var episode = await _context.Episodes
+                    .FirstOrDefaultAsync(e => e.Id == episodeId.Value && e.ContentId == contentId);
+                
+                if (episode == null)
+                {
+                    return NotFound("Episode not found");
+                }
+                
+                filePath = episode.FilePath;
+                if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+                {
+                    return NotFound("Episode file not found");
+                }
             }
-
-            var filePath = content.FilePath;
-            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+            else
             {
-                return NotFound("Content file not found");
+                // Handle content subtitles request
+                var content = await _context.Contents
+                    .FirstOrDefaultAsync(c => c.Id == contentId);
+                
+                if (content == null)
+                {
+                    return NotFound("Content not found");
+                }
+
+                filePath = content.FilePath;
+                if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+                {
+                    return NotFound("Content file not found");
+                }
             }
 
             // Analyze media to get subtitle streams
@@ -495,12 +587,13 @@ public class TranscodingController : ControllerBase
         int contentId,
         [FromQuery] double startTime,
         [FromQuery] string clientType = "web",
-        [FromQuery] int? profileId = null)
+        [FromQuery] int? profileId = null,
+        [FromQuery] int? episodeId = null)
     {
         try
         {
-            _logger.LogInformation("Seek request for content ID: {ContentId} to position {StartTime}s", 
-                contentId, startTime);
+            _logger.LogInformation("Seek request for content ID: {ContentId}, episode {EpisodeId} to position {StartTime}s", 
+                contentId, episodeId, startTime);
 
             // Redirect to the main streaming endpoint with the start time
             // This follows Jellyfin's approach of restarting transcoding at the seek position
@@ -510,6 +603,7 @@ public class TranscodingController : ControllerBase
                 startTime = startTime, 
                 clientType = clientType, 
                 profileId = profileId,
+                episodeId = episodeId,
                 sessionId = Guid.NewGuid().ToString() // Force new session for seek
             });
         }
