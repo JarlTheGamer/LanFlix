@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.MalformedURLException
 
 class SettingsActivity : AppCompatActivity() {
     
@@ -48,6 +49,14 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
         
+        // Validate URL format
+        try {
+            URL(serverUrl)
+        } catch (e: MalformedURLException) {
+            Toast.makeText(this, "Invalid URL format", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
         preferenceManager.setServerUrl(serverUrl)
         Toast.makeText(this, "Settings saved", Toast.LENGTH_SHORT).show()
         
@@ -63,6 +72,14 @@ class SettingsActivity : AppCompatActivity() {
         
         if (serverUrl.isEmpty()) {
             Toast.makeText(this, "Please enter server URL", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        // Validate URL format
+        try {
+            URL(serverUrl)
+        } catch (e: MalformedURLException) {
+            Toast.makeText(this, "Invalid URL format", Toast.LENGTH_SHORT).show()
             return
         }
         
@@ -89,15 +106,21 @@ class SettingsActivity : AppCompatActivity() {
                 } else {
                     Toast.makeText(
                         this@SettingsActivity,
-                        "Connection failed",
+                        "Connection failed - Server returned error",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
             } catch (e: Exception) {
+                val errorMessage = when (e) {
+                    is java.net.ConnectException -> "Cannot connect to server"
+                    is java.net.SocketTimeoutException -> "Connection timeout"
+                    is java.net.UnknownHostException -> "Server not found"
+                    else -> "Error: ${e.message}"
+                }
                 Toast.makeText(
                     this@SettingsActivity,
-                    "Error: ${e.message}",
-                    Toast.LENGTH_SHORT
+                    errorMessage,
+                    Toast.LENGTH_LONG
                 ).show()
             } finally {
                 binding.buttonTest.isEnabled = true

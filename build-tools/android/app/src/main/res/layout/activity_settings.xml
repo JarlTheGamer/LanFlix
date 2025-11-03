@@ -49,14 +49,14 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textUri"
-                    android:text="http://192.168.1.100:8080" />
+                    android:text="http://192.168.178.13:5037" />
 
             </com.google.android.material.textfield.TextInputLayout>
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Example: http://192.168.1.100:8080"
+                android:text="Example: http://192.168.178.13:5037"
                 android:textSize="12sp"
                 android:textColor="@android:color/darker_gray"
                 android:layout_marginBottom="16dp" />

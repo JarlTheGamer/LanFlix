@@ -404,11 +404,59 @@ builder.Services.AddCors(options =>
                 "http://localhost:4200"       // Angular dev server
             };
         
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials()             // Required for SignalR and JWT cookies
-              .WithExposedHeaders("Content-Disposition", "X-Pagination"); // Expose custom headers
+        // In development, allow local network access
+        if (builder.Environment.IsDevelopment())
+        {
+            policy.SetIsOriginAllowed(origin =>
+            {
+                if (string.IsNullOrEmpty(origin)) return false;
+                
+                // Allow configured origins
+                if (allowedOrigins.Contains(origin)) return true;
+                
+                // Allow any localhost with any port
+                if (origin.StartsWith("http://localhost:") || origin.StartsWith("https://localhost:")) return true;
+                
+                // Allow local network IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+                try
+                {
+                    var uri = new Uri(origin);
+                    var host = uri.Host;
+                    
+                    if (System.Net.IPAddress.TryParse(host, out var ip))
+                    {
+                        var bytes = ip.GetAddressBytes();
+                        if (bytes.Length == 4) // IPv4
+                        {
+                            // 192.168.x.x
+                            if (bytes[0] == 192 && bytes[1] == 168) return true;
+                            // 10.x.x.x
+                            if (bytes[0] == 10) return true;
+                            // 172.16.x.x - 172.31.x.x
+                            if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) return true;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Invalid URI, deny
+                }
+                
+                return false;
+            })
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials()
+            .WithExposedHeaders("Content-Disposition", "X-Pagination");
+        }
+        else
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials()             // Required for SignalR and JWT cookies
+                  .WithExposedHeaders("Content-Disposition", "X-Pagination"); // Expose custom headers
+        }
     });
     
     // Strict policy for production (can be used with [EnableCors("Production")])

@@ -56,12 +56,35 @@ class MainActivity : AppCompatActivity() {
             settings.mediaPlaybackRequiresUserGesture = false
             settings.allowFileAccess = true
             settings.allowContentAccess = true
+            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onReceivedError(
+                    view: WebView?,
+                    errorCode: Int,
+                    description: String?,
+                    failingUrl: String?
+                ) {
+                    super.onReceivedError(view, errorCode, description, failingUrl)
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Failed to load server: $description",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
             webChromeClient = WebChromeClient()
             
             // Load the server's web UI
-            loadUrl(serverUrl)
+            try {
+                loadUrl(serverUrl)
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Error loading URL: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
     
@@ -125,6 +148,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (binding.webView.canGoBack()) {
             binding.webView.goBack()
