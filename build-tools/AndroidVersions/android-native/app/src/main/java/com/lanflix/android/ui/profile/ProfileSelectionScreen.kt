@@ -40,7 +40,13 @@ fun ProfileSelectionScreen(
     val uiState by viewModel.uiState.collectAsState()
     
     LaunchedEffect(Unit) {
-        viewModel.loadProfiles()
+        try {
+            println("ProfileSelectionScreen: Loading profiles...")
+            viewModel.loadProfiles()
+        } catch (e: Exception) {
+            println("ProfileSelectionScreen: Error in LaunchedEffect: ${e.message}")
+            e.printStackTrace()
+        }
     }
     
     LanflixTheme {

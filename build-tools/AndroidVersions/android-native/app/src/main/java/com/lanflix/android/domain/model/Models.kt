@@ -5,7 +5,7 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data class Profile(
-    val id: Int,
+    val id: String,
     val name: String,
     val avatarPath: String? = null,
     val isKidsProfile: Boolean = false,

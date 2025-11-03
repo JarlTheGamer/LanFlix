@@ -64,14 +64,14 @@ class ProfileRepository @Inject constructor(
     }
     
     suspend fun updateProfile(
-        profileId: Int,
+        profileId: String,
         name: String? = null,
         avatarPath: String? = null,
         isKidsProfile: Boolean? = null,
         preferences: UserPreferences? = null
     ): Profile {
         val request = UpdateProfileRequest(name, avatarPath, isKidsProfile, preferences)
-        val response = apiService.updateProfile(profileId.toString(), request)
+        val response = apiService.updateProfile(profileId, request)
         
         if (response.isSuccessful) {
             return response.body() ?: throw Exception("Empty response")
@@ -80,8 +80,8 @@ class ProfileRepository @Inject constructor(
         }
     }
     
-    suspend fun deleteProfile(profileId: Int) {
-        val response = apiService.deleteProfile(profileId.toString())
+    suspend fun deleteProfile(profileId: String) {
+        val response = apiService.deleteProfile(profileId)
         
         if (!response.isSuccessful) {
             throw Exception("Failed to delete profile: ${response.message()}")

@@ -33,6 +33,14 @@ class MainActivity : ComponentActivity() {
         
         println("MainActivity: Starting Lanflix app...")
         
+        // Test JSON parsing
+        try {
+            com.lanflix.android.utils.ProfileTestUtil.testProfileParsing()
+        } catch (e: Exception) {
+            println("MainActivity: Profile test failed: ${e.message}")
+            e.printStackTrace()
+        }
+        
         setContent {
             LanflixTheme {
                 LanflixApp()

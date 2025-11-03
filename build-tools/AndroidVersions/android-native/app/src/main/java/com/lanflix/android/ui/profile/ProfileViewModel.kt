@@ -57,7 +57,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
     
-    fun updateProfile(profileId: Int, name: String?, isKidsProfile: Boolean? = null) {
+    fun updateProfile(profileId: String, name: String?, isKidsProfile: Boolean? = null) {
         viewModelScope.launch {
             try {
                 val updatedProfile = profileRepository.updateProfile(profileId, name, null, isKidsProfile, null)
@@ -73,7 +73,7 @@ class ProfileViewModel @Inject constructor(
         }
     }
     
-    fun deleteProfile(profileId: Int) {
+    fun deleteProfile(profileId: String) {
         viewModelScope.launch {
             try {
                 profileRepository.deleteProfile(profileId)
