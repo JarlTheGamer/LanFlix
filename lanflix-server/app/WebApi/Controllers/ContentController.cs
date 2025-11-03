@@ -202,7 +202,7 @@ public class ContentController : ControllerBase
                 results.movies.AddRange(movieResults.Results);
             }
 
-            if (type == "all" || type == "tv")
+            if (type == "all" || type == "tv" || type == "series")
             {
                 var tvResults = await _tmdbClient.SearchTvSeriesAsync(q, cancellationToken);
                 // Set MediaType and normalize titles for frontend

@@ -154,6 +154,11 @@ class SearchModule {
         results = response.results;
       } else if (response && response.data && Array.isArray(response.data)) {
         results = response.data;
+      } else if (response && response.movies && response.series) {
+        // Handle the actual API response format: { movies: [], series: [] }
+        const movies = response.movies.map(movie => ({ ...movie, type: 'movie' }));
+        const series = response.series.map(show => ({ ...show, type: 'series' }));
+        results = [...movies, ...series];
       }
 
       if (results.length === 0) {
@@ -200,17 +205,18 @@ class SearchModule {
    * Create result card element
    */
   createResultCard(item) {
-    // Get poster URL - backend returns full URL in posterUrl field
-    const posterUrl = item.posterUrl || null;
+    // Get poster URL - backend returns full URL in PosterUrl field
+    const posterUrl = item.PosterUrl || item.posterUrl || null;
 
-    const year = item.releaseDate ? new Date(item.releaseDate).getFullYear() : '';
-    const typeLabel = item.type === 'movie' ? 'Movie' : 'TV Show';
-    const rating = item.voteAverage ? item.voteAverage.toFixed(1) : 'N/A';
+    const releaseDate = item.ReleaseDate || item.releaseDate || item.FirstAirDate || item.firstAirDate;
+    const year = releaseDate ? new Date(releaseDate).getFullYear() : '';
+    const typeLabel = item.Type === 'movie' || item.type === 'movie' ? 'Movie' : 'TV Show';
+    const rating = item.VoteAverage || item.voteAverage ? (item.VoteAverage || item.voteAverage).toFixed(1) : 'N/A';
 
     // Create card element
     const card = document.createElement('div');
     card.className = 'search-result-card';
-    card.dataset.id = item.id;
+    card.dataset.id = item.Id || item.id;
 
     // Create poster container
     const posterContainer = document.createElement('div');
@@ -218,9 +224,10 @@ class SearchModule {
 
     // Create image
     const img = document.createElement('img');
+    const title = item.Title || item.title || item.Name || item.name || 'Unknown';
     if (posterUrl) {
       img.src = posterUrl;
-      img.alt = item.title;
+      img.alt = title;
       img.loading = 'lazy';
     } else {
       // Create placeholder
@@ -230,7 +237,7 @@ class SearchModule {
           <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24" fill="#666">No Image</text>
         </svg>
       `);
-      img.alt = item.title;
+      img.alt = title;
     }
 
     // Create overlay
@@ -250,9 +257,9 @@ class SearchModule {
     info.className = 'search-result-info';
 
     // Create title
-    const title = document.createElement('h3');
-    title.className = 'search-result-title';
-    title.textContent = item.title;
+    const titleElement = document.createElement('h3');
+    titleElement.className = 'search-result-title';
+    titleElement.textContent = title;
 
     // Create meta
     const meta = document.createElement('div');
@@ -280,7 +287,7 @@ class SearchModule {
     `;
     meta.appendChild(ratingSpan);
 
-    info.appendChild(title);
+    info.appendChild(titleElement);
     info.appendChild(meta);
 
     // Assemble card
@@ -304,7 +311,10 @@ class SearchModule {
         selectedProfileId: stateManager.currentProfileId
       };
       const contentModal = new ContentModal(profileManager);
-      contentModal.show(item.id, item.type, true); // true = isDiscovery
+      // Use the correct ID field - TMDB search returns Id (capital I)
+      const itemId = item.Id || item.id;
+      const itemType = item.Type || item.type;
+      contentModal.show(itemId, itemType, true); // true = isDiscovery
     });
   }
 
