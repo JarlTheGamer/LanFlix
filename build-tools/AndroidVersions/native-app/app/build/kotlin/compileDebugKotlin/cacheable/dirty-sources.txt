@@ -1,0 +1,2 @@
+F:\Programming\Flix\build-tools\AndroidVersions\native-app\app\src\main\java\com\lanflix\webview\MainActivity.kt
+F:\Programming\Flix\build-tools\AndroidVersions\native-app\app\src\main\java\com\lanflix\webview\SplashActivity.kt

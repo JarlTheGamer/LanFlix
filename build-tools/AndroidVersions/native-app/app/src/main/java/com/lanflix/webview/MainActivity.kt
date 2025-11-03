@@ -61,6 +61,9 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort = true
             loadWithOverviewMode = true
             
+            // TV-specific viewport settings
+            layoutAlgorithm = WebSettings.LayoutAlgorithm.NORMAL
+            
             // Media settings
             mediaPlaybackRequiresUserGesture = false
             
@@ -70,6 +73,13 @@ class MainActivity : AppCompatActivity() {
         
         // Enable hardware acceleration on the WebView
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        
+        // Set initial scale for proper TV display
+        webView.setInitialScale(100)
+        
+        // Force WebView to use full screen dimensions
+        webView.layoutParams.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        webView.layoutParams.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT
         
         // Set WebView client for handling page navigation
         webView.webViewClient = object : WebViewClient() {
@@ -147,6 +157,11 @@ class MainActivity : AppCompatActivity() {
         webView.isFocusable = true
         webView.isFocusableInTouchMode = true
         webView.requestFocus()
+        
+        // Disable swipe refresh on TV (no touch)
+        if (packageManager.hasSystemFeature("android.software.leanback")) {
+            swipeRefresh.isEnabled = false
+        }
     }
     
     private fun setupSwipeRefresh() {
@@ -182,53 +197,31 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             
-            // TV remote control support
+            // TV remote control support - Enter/OK button
             KeyEvent.KEYCODE_DPAD_CENTER,
             KeyEvent.KEYCODE_ENTER -> {
-                // Simulate click at center of screen for TV remotes
-                val x = webView.width / 2
-                val y = webView.height / 2
-                webView.evaluateJavascript(
-                    "document.elementFromPoint($x, $y)?.click();",
-                    null
-                )
+                webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown', {keyCode: 13, which: 13}));", null)
                 return true
             }
             
-            // D-pad navigation - inject JavaScript to handle focus
+            // D-pad navigation - enhanced for Fire TV
             KeyEvent.KEYCODE_DPAD_UP -> {
-                webView.evaluateJavascript(
-                    """
-                    var focusable = document.querySelectorAll('button, a, input, [tabindex]:not([tabindex="-1"])');
-                    var current = document.activeElement;
-                    var currentIndex = Array.from(focusable).indexOf(current);
-                    if (currentIndex > 0) focusable[currentIndex - 1].focus();
-                    """.trimIndent(),
-                    null
-                )
+                webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown', {keyCode: 38, which: 38}));", null)
                 return true
             }
             
             KeyEvent.KEYCODE_DPAD_DOWN -> {
-                webView.evaluateJavascript(
-                    """
-                    var focusable = document.querySelectorAll('button, a, input, [tabindex]:not([tabindex="-1"])');
-                    var current = document.activeElement;
-                    var currentIndex = Array.from(focusable).indexOf(current);
-                    if (currentIndex < focusable.length - 1) focusable[currentIndex + 1].focus();
-                    """.trimIndent(),
-                    null
-                )
+                webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown', {keyCode: 40, which: 40}));", null)
                 return true
             }
             
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                webView.evaluateJavascript("window.scrollBy(-100, 0);", null)
+                webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown', {keyCode: 37, which: 37}));", null)
                 return true
             }
             
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                webView.evaluateJavascript("window.scrollBy(100, 0);", null)
+                webView.evaluateJavascript("document.dispatchEvent(new KeyboardEvent('keydown', {keyCode: 39, which: 39}));", null)
                 return true
             }
             
@@ -245,41 +238,252 @@ class MainActivity : AppCompatActivity() {
     private fun injectTvOptimizations() {
         val tvOptimizationScript = """
             (function() {
-                // Add TV-friendly focus styles
+                // Add TV-friendly focus styles and viewport fixes
                 var style = document.createElement('style');
                 style.textContent = `
                     * { 
                         -webkit-user-select: none; 
                         -webkit-touch-callout: none; 
                     }
-                    button:focus, a:focus, input:focus, [tabindex]:focus {
-                        outline: 3px solid #03DAC5 !important;
-                        outline-offset: 2px !important;
-                        background-color: rgba(3, 218, 197, 0.1) !important;
+                    
+                    /* TV viewport fixes */
+                    html, body {
+                        width: 100vw !important;
+                        height: 100vh !important;
+                        overflow-x: hidden !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        box-sizing: border-box !important;
                     }
-                    body {
-                        overflow-x: hidden;
+                    
+                    /* Orientation-specific styles */
+                    @media (orientation: landscape) {
+                        body.landscape-mode {
+                            /* Landscape optimizations */
+                        }
+                    }
+                    
+                    @media (orientation: portrait) {
+                        body.portrait-mode {
+                            /* Portrait optimizations */
+                        }
+                    }
+                    
+                    /* Container fixes for TV */
+                    .container, .main-container, #app, [class*="container"] {
+                        width: 100% !important;
+                        max-width: none !important;
+                        min-height: 100vh !important;
+                    }
+                    
+                    /* Focus styles for TV navigation */
+                    button:focus, a:focus, input:focus, [tabindex]:focus, 
+                    .focusable:focus, [role="button"]:focus {
+                        outline: 4px solid #03DAC5 !important;
+                        outline-offset: 4px !important;
+                        background-color: rgba(3, 218, 197, 0.2) !important;
+                        transform: scale(1.05) !important;
+                        transition: all 0.2s ease !important;
+                        z-index: 9999 !important;
+                        position: relative !important;
+                    }
+                    
+                    /* Movie/content card focus */
+                    .movie-card:focus, .content-item:focus, [class*="card"]:focus {
+                        outline: 4px solid #03DAC5 !important;
+                        outline-offset: 2px !important;
+                        transform: scale(1.1) !important;
+                        z-index: 999 !important;
                     }
                 `;
                 document.head.appendChild(style);
                 
-                // Make all clickable elements focusable
-                var clickables = document.querySelectorAll('button, a, [onclick], .clickable');
-                clickables.forEach(function(el) {
+                // Add viewport meta tag for proper TV scaling
+                var viewport = document.querySelector('meta[name="viewport"]');
+                if (!viewport) {
+                    viewport = document.createElement('meta');
+                    viewport.name = 'viewport';
+                    document.head.appendChild(viewport);
+                }
+                // Force landscape-friendly viewport for TV
+                viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+                
+                // Force body to use full viewport
+                document.body.style.width = '100vw';
+                document.body.style.height = '100vh';
+                document.body.style.margin = '0';
+                document.body.style.padding = '0';
+                document.body.style.overflow = 'hidden';
+                
+                // Make all clickable elements focusable and add TV navigation
+                var clickables = document.querySelectorAll('button, a, [onclick], .clickable, [role="button"], .movie-card, .content-item, [class*="card"]');
+                clickables.forEach(function(el, index) {
                     if (!el.hasAttribute('tabindex')) {
                         el.setAttribute('tabindex', '0');
                     }
+                    el.setAttribute('data-nav-index', index);
                 });
                 
-                // Focus first focusable element
-                var firstFocusable = document.querySelector('button, a, input, [tabindex]:not([tabindex="-1"])');
-                if (firstFocusable) {
-                    firstFocusable.focus();
+                // TV Remote Navigation System
+                var currentFocusIndex = 0;
+                var focusableElements = Array.from(clickables);
+                
+                // Auto-focus first element and ensure navigation is ready
+                setTimeout(function() {
+                    if (focusableElements.length > 0) {
+                        focusableElements[0].focus();
+                        // Trigger a focus event to ensure navigation is active
+                        document.body.focus();
+                        // Dispatch a synthetic key event to activate navigation
+                        document.dispatchEvent(new KeyboardEvent('keydown', {keyCode: 0, which: 0}));
+                    }
+                }, 200);
+                
+                // Enhanced keyboard/remote navigation
+                document.addEventListener('keydown', function(e) {
+                    var current = document.activeElement;
+                    var currentIndex = focusableElements.indexOf(current);
+                    
+                    switch(e.keyCode) {
+                        case 13: // Enter/OK button
+                            e.preventDefault();
+                            if (current && (current.click || current.onclick)) {
+                                current.click();
+                            }
+                            break;
+                            
+                        case 37: // Left arrow / D-pad left
+                            e.preventDefault();
+                            navigateHorizontal(-1, currentIndex);
+                            break;
+                            
+                        case 39: // Right arrow / D-pad right
+                            e.preventDefault();
+                            navigateHorizontal(1, currentIndex);
+                            break;
+                            
+                        case 38: // Up arrow / D-pad up
+                            e.preventDefault();
+                            navigateVertical(-1, currentIndex);
+                            break;
+                            
+                        case 40: // Down arrow / D-pad down
+                            e.preventDefault();
+                            navigateVertical(1, currentIndex);
+                            break;
+                            
+                        case 8: // Back button
+                            e.preventDefault();
+                            window.history.back();
+                            break;
+                    }
+                });
+                
+                function navigateHorizontal(direction, currentIndex) {
+                    var newIndex = currentIndex + direction;
+                    if (newIndex >= 0 && newIndex < focusableElements.length) {
+                        focusableElements[newIndex].focus();
+                        scrollIntoViewIfNeeded(focusableElements[newIndex]);
+                    }
                 }
+                
+                function navigateVertical(direction, currentIndex) {
+                    // Try to find element in same column but different row
+                    var current = focusableElements[currentIndex];
+                    if (!current) return;
+                    
+                    var currentRect = current.getBoundingClientRect();
+                    var candidates = focusableElements.filter(function(el, index) {
+                        if (index === currentIndex) return false;
+                        var rect = el.getBoundingClientRect();
+                        var isInSameColumn = Math.abs(rect.left - currentRect.left) < 100;
+                        var isInCorrectDirection = direction > 0 ? rect.top > currentRect.top : rect.top < currentRect.top;
+                        return isInSameColumn && isInCorrectDirection;
+                    });
+                    
+                    if (candidates.length > 0) {
+                        // Sort by distance and focus closest
+                        candidates.sort(function(a, b) {
+                            var aRect = a.getBoundingClientRect();
+                            var bRect = b.getBoundingClientRect();
+                            var aDist = Math.abs(aRect.top - currentRect.top);
+                            var bDist = Math.abs(bRect.top - currentRect.top);
+                            return aDist - bDist;
+                        });
+                        candidates[0].focus();
+                        scrollIntoViewIfNeeded(candidates[0]);
+                    } else {
+                        // Fallback to simple navigation
+                        navigateHorizontal(direction * 5, currentIndex);
+                    }
+                }
+                
+                function scrollIntoViewIfNeeded(element) {
+                    var rect = element.getBoundingClientRect();
+                    var isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+                    if (!isVisible) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+                
+                // Handle dynamic content loading
+                var observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.addedNodes.length > 0) {
+                            // Re-scan for new focusable elements
+                            setTimeout(function() {
+                                var newClickables = document.querySelectorAll('button, a, [onclick], .clickable, [role="button"], .movie-card, .content-item, [class*="card"]');
+                                newClickables.forEach(function(el, index) {
+                                    if (!el.hasAttribute('tabindex')) {
+                                        el.setAttribute('tabindex', '0');
+                                    }
+                                });
+                                focusableElements = Array.from(newClickables);
+                            }, 100);
+                        }
+                    });
+                });
+                
+                observer.observe(document.body, { childList: true, subtree: true });
+                
+                console.log('TV Navigation initialized with', focusableElements.length, 'focusable elements');
             })();
         """.trimIndent()
         
         webView.evaluateJavascript(tvOptimizationScript, null)
+    }
+    
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        
+        // Handle orientation changes
+        when (newConfig.orientation) {
+            android.content.res.Configuration.ORIENTATION_LANDSCAPE -> {
+                // Landscape mode - inject CSS to optimize for wide screens
+                webView.evaluateJavascript(
+                    """
+                    document.body.classList.add('landscape-mode');
+                    document.body.classList.remove('portrait-mode');
+                    """.trimIndent(),
+                    null
+                )
+            }
+            android.content.res.Configuration.ORIENTATION_PORTRAIT -> {
+                // Portrait mode
+                webView.evaluateJavascript(
+                    """
+                    document.body.classList.add('portrait-mode');
+                    document.body.classList.remove('landscape-mode');
+                    """.trimIndent(),
+                    null
+                )
+            }
+        }
+        
+        // Re-inject TV optimizations after orientation change
+        webView.post {
+            injectTvOptimizations()
+        }
     }
     
     override fun onDestroy() {

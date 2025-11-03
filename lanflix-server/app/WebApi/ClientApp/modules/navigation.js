@@ -270,7 +270,12 @@ export class Navigation {
         this.setupRemoteControlSupport();
       }
 
-      this.updateFocus();
+      // Auto-focus for TV/remote control devices - no need to press Enter first
+      setTimeout(() => {
+        this.updateFocus();
+        // Ensure the page is ready for navigation immediately
+        document.body.focus();
+      }, 100);
     } else {
       // For touch devices, ensure touch interactions work smoothly
       this.setupTouchNavigation();
