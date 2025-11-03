@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Lanflix" parent="Theme.AppCompat.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/lanflix_primary</item>
-        <item name="colorPrimaryDark">@color/lanflix_background</item>
-        <item name="colorAccent">@color/accent</item>
+    <style name="Theme.Lanflix" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">@color/lanflix_primary</item>
         <item name="android:colorBackground">@color/lanflix_background</item>
         <item name="android:statusBarColor">@color/lanflix_background</item>
         <item name="android:navigationBarColor">@color/lanflix_background</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:forceDarkAllowed">false</item>
     </style>
     
     <!-- Android TV Theme -->

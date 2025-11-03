@@ -105,9 +105,11 @@ class ServerDiscoveryRepository @Inject constructor(
         
         return try {
             // Test multiple endpoints to confirm it's a Lanflix server
+            println("Testing connection to: $url")
             val profilesResponse = apiService.getProfiles()
             
             if (profilesResponse.isSuccessful) {
+                println("Successfully connected to Lanflix server at: $url")
                 // Try to get server info if available
                 var serverName = "Lanflix Server"
                 var version = "Unknown"
@@ -130,9 +132,11 @@ class ServerDiscoveryRepository @Inject constructor(
                     isConnected = true
                 )
             } else {
+                println("Server at $url responded with error: ${profilesResponse.code()}")
                 throw Exception("Server responded with error: ${profilesResponse.code()}")
             }
         } catch (e: Exception) {
+            println("Failed to connect to $url: ${e.message}")
             throw Exception("Cannot connect to server at $url: ${e.message}")
         }
     }

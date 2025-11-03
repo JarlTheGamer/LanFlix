@@ -23,7 +23,8 @@ class ServerPreferences @Inject constructor(
     private val SERVER_NAME_KEY = stringPreferencesKey("server_name")
     
     val serverUrl: Flow<String> = context.serverDataStore.data.map { preferences ->
-        preferences[SERVER_URL_KEY] ?: "" // No default - must discover server
+        // Always return empty to force server discovery
+        ""
     }
     
     val serverName: Flow<String> = context.serverDataStore.data.map { preferences ->

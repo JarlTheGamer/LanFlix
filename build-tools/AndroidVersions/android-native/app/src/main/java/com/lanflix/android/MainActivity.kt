@@ -45,6 +45,7 @@ fun LanflixApp() {
     var selectedProfile by remember { mutableStateOf<Profile?>(null) }
     var selectedServer by remember { mutableStateOf<ServerInfo?>(null) }
     
+    // Always start with server discovery to ensure proper connection
     NavHost(
         navController = navController,
         startDestination = "server_discovery"
