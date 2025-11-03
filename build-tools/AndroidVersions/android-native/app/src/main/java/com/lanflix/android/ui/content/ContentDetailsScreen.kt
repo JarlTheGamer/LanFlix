@@ -81,7 +81,7 @@ fun ContentDetailsScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = uiState.error,
+                                text = uiState.error ?: "Unknown error",
                                 color = Color(0x99FFFFFF),
                                 fontSize = 14.sp
                             )
@@ -100,7 +100,7 @@ fun ContentDetailsScreen(
                 
                 uiState.content != null -> {
                     ContentDetailsContent(
-                        content = uiState.content,
+                        content = uiState.content!!,
                         onBackClick = onBackClick,
                         onPlayClick = onPlayClick
                     )

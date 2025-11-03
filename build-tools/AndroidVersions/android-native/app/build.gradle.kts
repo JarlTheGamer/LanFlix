@@ -62,6 +62,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.appcompat:appcompat:1.6.1")
     
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.02.00"))
@@ -103,8 +104,7 @@ dependencies {
     implementation("androidx.leanback:leanback-preference:1.0.0")
     implementation("androidx.tvprovider:tvprovider:1.0.0")
     
-    // Network Discovery
-    implementation("javax.jmdns:jmdns:3.5.8")
+    // Network Discovery (simplified - no mDNS dependency)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     
     // Dependency Injection

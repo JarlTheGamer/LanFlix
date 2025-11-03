@@ -20,9 +20,7 @@ import java.net.NetworkInterface
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
-import javax.jmdns.JmDNS
-import javax.jmdns.ServiceEvent
-import javax.jmdns.ServiceListener
+// Removed mDNS imports - using IP scanning only
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "server_settings")
 
@@ -38,56 +36,12 @@ class ServerDiscoveryRepository @Inject constructor(
         val servers = mutableListOf<ServerInfo>()
         
         try {
-            // Get local IP address
-            val localAddress = getLocalIpAddress()
-            if (localAddress != null) {
-                val jmdns = JmDNS.create(localAddress)
-                
-                val serviceListener = object : ServiceListener {
-                    override fun serviceAdded(event: ServiceEvent) {
-                        // Service discovered, request more info
-                        jmdns.requestServiceInfo(event.type, event.name)
-                    }
-                    
-                    override fun serviceRemoved(event: ServiceEvent) {
-                        // Handle service removal if needed
-                    }
-                    
-                    override fun serviceResolved(event: ServiceEvent) {
-                        val info = event.info
-                        if (info != null) {
-                            val serverInfo = ServerInfo(
-                                baseUrl = "http://${info.hostAddresses[0]}:${info.port}",
-                                name = info.name,
-                                version = info.getPropertyString("version") ?: "Unknown",
-                                isConnected = false
-                            )
-                            servers.add(serverInfo)
-                            // Emit updated list
-                        }
-                    }
-                }
-                
-                // Listen for Lanflix services (you'll need to add mDNS to your server)
-                jmdns.addServiceListener("_lanflix._tcp.local.", serviceListener)
-                
-                // Also try common IP ranges for fallback
-                scanCommonIpRanges(servers)
-                
-                emit(servers.toList())
-                
-                // Clean up
-                jmdns.removeServiceListener("_lanflix._tcp.local.", serviceListener)
-                jmdns.close()
-            } else {
-                // Fallback to IP scanning
-                scanCommonIpRanges(servers)
-                emit(servers.toList())
-            }
-        } catch (e: Exception) {
-            // Fallback to IP scanning
+            // Use IP scanning to find Lanflix servers
             scanCommonIpRanges(servers)
             emit(servers.toList())
+        } catch (e: Exception) {
+            // Return empty list on error
+            emit(emptyList())
         }
     }
     
@@ -96,8 +50,8 @@ class ServerDiscoveryRepository @Inject constructor(
         val localIp = getLocalIpAddress()?.hostAddress ?: return
         val networkPrefix = localIp.substringBeforeLast(".")
         
-        // Common Lanflix ports
-        val commonPorts = listOf(5037, 8080, 3000, 5000)
+        // Common Lanflix ports - prioritize 5037
+        val commonPorts = listOf(5037, 5037, 5037, 8080, 3000, 5000) // Try 5037 multiple times first
         
         // Scan local network range (last 20 IPs for performance)
         for (i in 1..20) {

@@ -1,7 +1,7 @@
 package com.lanflix.android.ui.tv
 
-import android.app.Activity
 import android.os.Bundle
+import androidx.fragment.app.FragmentActivity
 import androidx.leanback.app.BrowseSupportFragment
 import androidx.leanback.widget.*
 import com.lanflix.android.R
@@ -9,14 +9,14 @@ import com.lanflix.android.domain.model.Content
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
-class TvMainActivity : Activity() {
+class TvMainActivity : FragmentActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_tv_main)
         
         val fragment = TvBrowseFragment()
-        fragmentManager.beginTransaction()
+        supportFragmentManager.beginTransaction()
             .replace(R.id.tv_main_browse_fragment, fragment)
             .commit()
     }

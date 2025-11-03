@@ -1,5 +1,6 @@
 package com.lanflix.android.ui.profile
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -86,7 +87,7 @@ fun ProfileSelectionScreen(
                         
                         uiState.error != null -> {
                             ErrorState(
-                                error = uiState.error,
+                                error = uiState.error ?: "Profile loading error",
                                 onRetry = { viewModel.loadProfiles() }
                             )
                         }

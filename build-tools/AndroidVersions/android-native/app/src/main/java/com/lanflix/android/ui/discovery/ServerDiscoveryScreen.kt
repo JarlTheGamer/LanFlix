@@ -245,7 +245,7 @@ fun ServerDiscoveryScreen(
                             if (uiState.connectionError != null) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = uiState.connectionError,
+                                    text = uiState.connectionError ?: "Connection error",
                                     color = Color.Red,
                                     fontSize = 12.sp
                                 )

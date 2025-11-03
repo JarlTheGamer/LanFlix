@@ -5,17 +5,13 @@
     android:viewportWidth="200"
     android:viewportHeight="80">
     
-    <rect
-        android:width="200"
-        android:height="80"
-        android:fillColor="@color/lanflix_primary" />
+    <!-- Background rectangle -->
+    <path
+        android:fillColor="@color/lanflix_primary"
+        android:pathData="M0,0 L200,0 L200,80 L0,80 Z" />
     
-    <text
-        android:x="100"
-        android:y="45"
-        android:text="LANFLIX"
-        android:textSize="18sp"
-        android:textColor="@color/white"
-        android:textAlignment="center"
-        android:fontFamily="sans-serif-medium" />
+    <!-- Simple "L" for Lanflix -->
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M80,20 L80,60 L120,60 L120,55 L85,55 L85,20 Z" />
 </vector>

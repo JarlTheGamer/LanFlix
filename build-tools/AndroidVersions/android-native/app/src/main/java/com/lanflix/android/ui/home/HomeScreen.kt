@@ -1,5 +1,6 @@
 package com.lanflix.android.ui.home
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -28,6 +30,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -160,8 +164,7 @@ private fun HeroAmbilight(
                 .fillMaxSize()
                 .scale(1.08f) // CSS: transform: scale(1.08)
                 .blur(140.dp) // CSS: filter: blur(140px)
-                .alpha(if (activeLayer == 1) 0.68f else 0f) // CSS: opacity transition
-                .animateContentSize(),
+                .alpha(if (activeLayer == 1) 0.68f else 0f), // CSS: opacity transition
             contentScale = ContentScale.Crop
         )
         
@@ -173,8 +176,7 @@ private fun HeroAmbilight(
                 .fillMaxSize()
                 .scale(1.08f)
                 .blur(140.dp)
-                .alpha(if (activeLayer == 2) 0.68f else 0f)
-                .animateContentSize(),
+                .alpha(if (activeLayer == 2) 0.68f else 0f),
             contentScale = ContentScale.Crop
         )
     }
@@ -220,8 +222,8 @@ private fun TopNavigation(
                 .fillMaxWidth()
                 .height(120.dp) // Enough height for gradient
                 .background(
-                    if (isScrolled) {
-                        Color(0xF2040404) // CSS: rgba(4, 4, 4, 0.95) when is-solid
+                    brush = if (isScrolled) {
+                        Brush.verticalGradient(listOf(Color(0xF2040404), Color(0xF2040404)))
                     } else {
                         // CSS: linear-gradient(180deg, rgba(10, 10, 11, 0.86), rgba(10, 10, 10, 0.32), rgba(10, 10, 10, 0))
                         Brush.verticalGradient(
@@ -339,7 +341,7 @@ private fun TopNavigation(
                         color = Color(0xDBFFECE1), // CSS: rgba(255, 236, 225, 0.86)
                         fontSize = 13.sp, // CSS: 0.82rem
                         fontWeight = FontWeight.SemiBold, // CSS: font-weight: 600
-                        letterSpacing = 0.12.em, // CSS: letter-spacing: 0.12em
+                        letterSpacing = (0.12).sp, // CSS: letter-spacing: 0.12em (converted to sp)
                         modifier = Modifier.padding(start = 12.dp) // CSS: gap: 12px from brand
                     )
                 }
@@ -446,7 +448,7 @@ private fun MenuButton(
             },
             fontSize = 16.sp, // CSS: 0.98rem
             fontWeight = FontWeight.Medium, // CSS: font-weight: 500
-            letterSpacing = 0.02.em // CSS: letter-spacing: 0.02em
+            letterSpacing = (0.02).sp // CSS: letter-spacing: 0.02em (converted to sp)
         )
     }
 }
@@ -576,7 +578,7 @@ private fun HeroContent(
                     text = "Your Library • ${hero.genres.take(2).joinToString(", ")}",
                     color = Color(0xC7FFFFFF), // CSS: var(--text-secondary)
                     fontSize = 13.sp, // CSS: 0.8rem
-                    letterSpacing = 0.1.em, // CSS: letter-spacing: 0.1em
+                    letterSpacing = (0.1).sp, // CSS: letter-spacing: 0.1em (converted to sp)
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -587,7 +589,7 @@ private fun HeroContent(
                 color = Color.White,
                 fontSize = 51.sp, // CSS: clamp(1.8rem, 3.5vw, 3.2rem) - using large size
                 fontWeight = FontWeight.Bold, // CSS: font-weight: 700
-                letterSpacing = (-0.02).em, // CSS: letter-spacing: -0.02em
+                letterSpacing = (-0.02).sp, // CSS: letter-spacing: -0.02em (converted to sp)
                 lineHeight = 1.15.em, // CSS: line-height: 1.15
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -653,7 +655,7 @@ private fun HeroContent(
                         text = "▶ PLAY",
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold, // CSS: font-weight: 600
-                        letterSpacing = 0.04.em // CSS: letter-spacing: 0.04em
+                        letterSpacing = (0.04).sp // CSS: letter-spacing: 0.04em (converted to sp)
                     )
                 }
                 
@@ -670,7 +672,7 @@ private fun HeroContent(
                         text = "MORE INFO",
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.04.em
+                        letterSpacing = (0.04).sp
                     )
                 }
             }
@@ -865,6 +867,7 @@ private fun MovieCard(
     onClick: () -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
     
     // Movie card - EXACT CSS replica
     Box(
@@ -877,15 +880,12 @@ private fun MovieCard(
                 isExpanded = !isExpanded
                 if (isExpanded) {
                     // Delay click to show expansion
-                    kotlinx.coroutines.GlobalScope.launch {
-                        kotlinx.coroutines.delay(300)
+                    coroutineScope.launch {
+                        delay(300)
                         onClick()
                     }
                 }
-            }
-            .animateContentSize(
-                animationSpec = tween(600, easing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f))
-            ) // CSS: transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1)
+            } // CSS: transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1)
     ) {
         // Poster images
         AsyncImage(
@@ -910,7 +910,6 @@ private fun MovieCard(
                         )
                     )
                     .alpha(if (isExpanded) 1f else 0f)
-                    .animateContentSize()
             )
         }
         

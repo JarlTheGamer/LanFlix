@@ -47,7 +47,7 @@ object NetworkModule {
             try {
                 serverPreferences.getServerUrl()
             } catch (e: Exception) {
-                "http://192.168.1.100:5037/"
+                "http://localhost:5037/"
             }
         }
         

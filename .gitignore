@@ -81,6 +81,32 @@ Media/
 releases/
 *.apk
 
+# Android build files
+build-tools/AndroidVersions/android-native/build/
+build-tools/AndroidVersions/android-native/app/build/
+build-tools/AndroidVersions/android-native/.gradle/
+build-tools/AndroidVersions/android-native/local.properties
+build-tools/AndroidVersions/android-native/gradle.properties
+build-tools/AndroidVersions/android-native/gradlew.bat
+build-tools/AndroidVersions/android-native/gradle/
+build-tools/AndroidVersions/WebUI/build/
+build-tools/AndroidVersions/WebUI/app/build/
+build-tools/AndroidVersions/WebUI/.gradle/
+build-tools/AndroidVersions/WebUI/local.properties
+
+# Android Studio
+*.iml
+.idea/
+.gradle/
+local.properties
+gradle.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin
+*.kt.backup
+
 # Environment
 .env
 .env.local
