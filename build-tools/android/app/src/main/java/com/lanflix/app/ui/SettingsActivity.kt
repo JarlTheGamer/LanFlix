@@ -24,9 +24,6 @@ class SettingsActivity : AppCompatActivity() {
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
-        setSupportActionBar(binding.toolbar)
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        
         preferenceManager = PreferenceManager(this)
         
         // Load current settings
@@ -127,10 +124,5 @@ class SettingsActivity : AppCompatActivity() {
                 binding.buttonTest.text = "Test Connection"
             }
         }
-    }
-    
-    override fun onSupportNavigateUp(): Boolean {
-        finish()
-        return true
     }
 }
