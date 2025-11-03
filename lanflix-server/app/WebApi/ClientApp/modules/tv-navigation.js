@@ -1,19 +1,13 @@
 /**
  * TV Navigation Module
- * Handles D-pad navigation for Android TV, Fire TV, and other TV platforms
+ * Handles remote control navigation for Android TV, Fire TV, and other TV platforms
+ * Works exactly like the existing arrow key navigation without any UI scaling
  */
 
 export class TVNavigation {
   constructor() {
     this.isTV = this.detectTV();
-    this.focusedElement = null;
-    this.focusableElements = [];
-    this.currentIndex = 0;
-
-    // Grid navigation state
-    this.gridRows = [];
-    this.currentRow = 0;
-    this.currentCol = 0;
+    this.navigation = null; // Will be set by the main navigation module
   }
 
   /**
@@ -21,7 +15,7 @@ export class TVNavigation {
    */
   detectTV() {
     const userAgent = navigator.userAgent.toLowerCase();
-    return (
+    const isTV = (
       userAgent.includes('tv') ||
       userAgent.includes('aftm') || // Fire TV
       userAgent.includes('aftb') || // Fire TV Stick
@@ -32,401 +26,284 @@ export class TVNavigation {
       userAgent.includes('smarttv') ||
       userAgent.includes('web0s') || // LG webOS
       userAgent.includes('tizen') || // Samsung Tizen
-      userAgent.includes('netcast') // LG NetCast
+      userAgent.includes('netcast') || // LG NetCast
+      // Also detect Android WebView (for Android TV app)
+      (userAgent.includes('android') && userAgent.includes('wv'))
     );
+    
+    console.log('TV Detection:', { userAgent, isTV });
+    return isTV;
   }
 
   /**
    * Initialize TV navigation
    */
-  initialize() {
+  initialize(navigationInstance = null) {
     if (!this.isTV) {
       console.log('Not a TV platform, skipping TV navigation');
       return;
     }
 
-    console.log('🎮 TV platform detected - enabling D-pad navigation');
+    console.log('🎮 TV platform detected - enabling remote control navigation');
+    
+    // Store reference to main navigation instance
+    this.navigation = navigationInstance;
+    
+    // NO custom CSS - use exact same styling as website
+    // Just add a class for detection purposes only
     document.body.classList.add('tv-mode');
 
-    // Setup keyboard event listener for D-pad
-    document.addEventListener('keydown', (e) => this.handleDPad(e));
-
-    // Initial focus
-    this.updateFocusableElements();
-    this.focusFirst();
+    // Setup remote control event listeners
+    this.setupRemoteControlListeners();
+    
+    // Setup gamepad support (some TV remotes register as gamepads)
+    this.setupGamepadSupport();
   }
 
   /**
-   * Update list of focusable elements
+   * Setup remote control event listeners
    */
-  updateFocusableElements() {
-    // Get all interactive elements
-    const selectors = [
-      '.menu-item',
-      '.tab',
-      '.movie-card',
-      '.hero',
-      '.profile',
-      '.settings-btn',
-      '.notifications-btn',
-      'button:not([disabled])',
-      'a[href]',
-      'input[type="text"]',
-      'input[type="url"]',
-      'input[type="checkbox"]',
-      'select',
-      '.setting-input',
-      '.player-btn'
-    ];
-
-    this.focusableElements = Array.from(
-      document.querySelectorAll(selectors.join(','))
-    ).filter(el => {
-      // Filter out hidden elements
-      const style = window.getComputedStyle(el);
-      return style.display !== 'none' && style.visibility !== 'hidden';
-    });
+  setupRemoteControlListeners() {
+    // Listen for all key events and map remote control buttons
+    document.addEventListener('keydown', (e) => this.handleRemoteControl(e), true);
+    
+    // Also listen for media key events
+    document.addEventListener('keyup', (e) => this.handleMediaKeys(e), true);
   }
 
   /**
-   * Focus first element
+   * Handle remote control input
    */
-  focusFirst() {
-    this.updateFocusableElements();
-    if (this.focusableElements.length > 0) {
-      this.setFocus(0);
-    }
-  }
+  handleRemoteControl(e) {
+    // Map remote control buttons to standard keyboard events
+    const remoteKeyMap = {
+      // D-pad navigation
+      'ArrowUp': 'ArrowUp',
+      'ArrowDown': 'ArrowDown', 
+      'ArrowLeft': 'ArrowLeft',
+      'ArrowRight': 'ArrowRight',
+      
+      // Center/OK button
+      'Enter': 'Enter',
+      'Select': 'Enter',
+      'OK': 'Enter',
+      
+      // Back button
+      'Back': 'Escape',
+      'Escape': 'Escape',
+      'Backspace': 'Escape',
+      
+      // Media keys
+      'MediaPlay': ' ',
+      'MediaPause': ' ',
+      'MediaPlayPause': ' ',
+      'MediaStop': 'Escape',
+      'MediaTrackNext': 'ArrowRight',
+      'MediaTrackPrevious': 'ArrowLeft',
+      
+      // Number keys (for direct navigation)
+      'Digit0': '0', 'Digit1': '1', 'Digit2': '2', 'Digit3': '3', 'Digit4': '4',
+      'Digit5': '5', 'Digit6': '6', 'Digit7': '7', 'Digit8': '8', 'Digit9': '9',
+      
+      // Color buttons (common on TV remotes)
+      'ColorF0Red': 'r',
+      'ColorF1Green': 'g', 
+      'ColorF2Yellow': 'y',
+      'ColorF3Blue': 'b',
+      
+      // Menu/Options
+      'Menu': 'm',
+      'Options': 'o',
+      'Info': 'i',
+      'Guide': 'g',
+      'Home': 'h'
+    };
 
-  /**
-   * Set focus to element at index
-   */
-  setFocus(index) {
-    // Remove previous focus
-    if (this.focusedElement) {
-      this.focusedElement.classList.remove('tv-focused');
-    }
-
-    // Set new focus
-    this.currentIndex = Math.max(0, Math.min(index, this.focusableElements.length - 1));
-    this.focusedElement = this.focusableElements[this.currentIndex];
-
-    if (this.focusedElement) {
-      this.focusedElement.classList.add('tv-focused');
-      this.focusedElement.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-        inline: 'center'
-      });
-    }
-  }
-
-  /**
-   * Handle D-pad input
-   */
-  handleDPad(e) {
-    const key = e.key;
-
-    // Special handling for Back/Escape - always process these
-    if (key === 'Escape' || key === 'Back') {
+    const mappedKey = remoteKeyMap[e.key] || remoteKeyMap[e.code];
+    
+    if (mappedKey) {
+      // Prevent the original event
       e.preventDefault();
       e.stopPropagation();
-      this.handleBack();
-      return;
+      
+      // Create a synthetic keyboard event that the existing navigation will handle
+      const syntheticEvent = new KeyboardEvent('keydown', {
+        key: mappedKey,
+        code: mappedKey,
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      });
+      
+      // Dispatch to the existing navigation system
+      document.dispatchEvent(syntheticEvent);
     }
+  }
 
-    // If a text input is actively focused (user is typing), don't intercept navigation
-    // except for Back/Escape which we handled above
-    if (document.activeElement &&
-      (document.activeElement.tagName === 'INPUT' ||
-        document.activeElement.tagName === 'SELECT' ||
-        document.activeElement.tagName === 'TEXTAREA')) {
-      // Let the input handle the key naturally
-      return;
-    }
-
-    // Update focusable elements on each keypress (in case DOM changed)
-    this.updateFocusableElements();
-
-    // Prevent default scrolling
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(key)) {
-      e.preventDefault();
-    }
-
-    switch (key) {
-      case 'ArrowUp':
-        this.navigateUp();
+  /**
+   * Handle media key events
+   */
+  handleMediaKeys(e) {
+    // Handle media keys that might need special processing
+    switch (e.key) {
+      case 'MediaPlay':
+      case 'MediaPause':
+      case 'MediaPlayPause':
+        // If we're on a video player page, let it handle media keys
+        const videoPlayer = document.querySelector('video');
+        if (videoPlayer) {
+          if (e.key === 'MediaPlay' || (e.key === 'MediaPlayPause' && videoPlayer.paused)) {
+            videoPlayer.play();
+          } else if (e.key === 'MediaPause' || (e.key === 'MediaPlayPause' && !videoPlayer.paused)) {
+            videoPlayer.pause();
+          }
+          e.preventDefault();
+        }
         break;
-      case 'ArrowDown':
-        this.navigateDown();
+        
+      case 'MediaStop':
+        // Stop video and go back
+        const video = document.querySelector('video');
+        if (video) {
+          video.pause();
+          video.currentTime = 0;
+        }
+        // Trigger back navigation
+        window.history.back();
+        e.preventDefault();
         break;
-      case 'ArrowLeft':
-        this.navigateLeft();
-        break;
-      case 'ArrowRight':
-        this.navigateRight();
-        break;
-      case 'Enter':
-        this.activateFocused();
+        
+      case 'Home':
+        // Go to home page
+        window.location.href = '/';
+        e.preventDefault();
         break;
     }
   }
 
   /**
-   * Navigate up
+   * Setup gamepad support for TV remotes that register as gamepads
    */
-  navigateUp() {
-    const current = this.focusedElement;
-    if (!current) {
-      this.focusFirst();
-      return;
-    }
-
-    const currentRect = current.getBoundingClientRect();
-    let bestMatch = null;
-    let bestDistance = Infinity;
-
-    // Find closest element above
-    this.focusableElements.forEach(el => {
-      if (el === current) return;
-
-      const rect = el.getBoundingClientRect();
-
-      // Must be above current element
-      if (rect.bottom <= currentRect.top) {
-        // Calculate distance (prefer elements in same column)
-        const verticalDistance = currentRect.top - rect.bottom;
-        const horizontalDistance = Math.abs(rect.left - currentRect.left);
-        const distance = verticalDistance + horizontalDistance * 0.5;
-
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestMatch = el;
-        }
-      }
+  setupGamepadSupport() {
+    let gamepadIndex = -1;
+    
+    // Check for gamepad connection
+    window.addEventListener('gamepadconnected', (e) => {
+      console.log('Gamepad connected:', e.gamepad.id);
+      gamepadIndex = e.gamepad.index;
+      this.startGamepadPolling(gamepadIndex);
     });
-
-    if (bestMatch) {
-      const index = this.focusableElements.indexOf(bestMatch);
-      this.setFocus(index);
-    }
-  }
-
-  /**
-   * Navigate down
-   */
-  navigateDown() {
-    const current = this.focusedElement;
-    if (!current) {
-      this.focusFirst();
-      return;
-    }
-
-    const currentRect = current.getBoundingClientRect();
-    let bestMatch = null;
-    let bestDistance = Infinity;
-
-    // Find closest element below
-    this.focusableElements.forEach(el => {
-      if (el === current) return;
-
-      const rect = el.getBoundingClientRect();
-
-      // Must be below current element
-      if (rect.top >= currentRect.bottom) {
-        // Calculate distance (prefer elements in same column)
-        const verticalDistance = rect.top - currentRect.bottom;
-        const horizontalDistance = Math.abs(rect.left - currentRect.left);
-        const distance = verticalDistance + horizontalDistance * 0.5;
-
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestMatch = el;
-        }
-      }
+    
+    window.addEventListener('gamepaddisconnected', (e) => {
+      console.log('Gamepad disconnected:', e.gamepad.id);
+      gamepadIndex = -1;
     });
-
-    if (bestMatch) {
-      const index = this.focusableElements.indexOf(bestMatch);
-      this.setFocus(index);
-    }
   }
 
   /**
-   * Navigate left
+   * Poll gamepad for input (for remotes that register as gamepads)
    */
-  navigateLeft() {
-    const current = this.focusedElement;
-    if (!current) {
-      this.focusFirst();
-      return;
-    }
-
-    const currentRect = current.getBoundingClientRect();
-    let bestMatch = null;
-    let bestDistance = Infinity;
-
-    // Find closest element to the left
-    this.focusableElements.forEach(el => {
-      if (el === current) return;
-
-      const rect = el.getBoundingClientRect();
-
-      // Must be to the left of current element
-      if (rect.right <= currentRect.left) {
-        // Calculate distance (prefer elements in same row)
-        const horizontalDistance = currentRect.left - rect.right;
-        const verticalDistance = Math.abs(rect.top - currentRect.top);
-        const distance = horizontalDistance + verticalDistance * 0.5;
-
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestMatch = el;
+  startGamepadPolling(gamepadIndex) {
+    let lastButtons = [];
+    let lastAxes = [];
+    
+    const poll = () => {
+      if (gamepadIndex === -1) return;
+      
+      const gamepad = navigator.getGamepads()[gamepadIndex];
+      if (!gamepad) return;
+      
+      // Check buttons
+      gamepad.buttons.forEach((button, index) => {
+        if (button.pressed && !lastButtons[index]) {
+          this.handleGamepadButton(index);
         }
-      }
-    });
-
-    if (bestMatch) {
-      const index = this.focusableElements.indexOf(bestMatch);
-      this.setFocus(index);
-    }
+        lastButtons[index] = button.pressed;
+      });
+      
+      // Check axes (for D-pad on some remotes)
+      gamepad.axes.forEach((axis, index) => {
+        const threshold = 0.5;
+        const lastAxis = lastAxes[index] || 0;
+        
+        if (Math.abs(axis) > threshold && Math.abs(lastAxis) <= threshold) {
+          this.handleGamepadAxis(index, axis);
+        }
+        lastAxes[index] = axis;
+      });
+      
+      requestAnimationFrame(poll);
+    };
+    
+    poll();
   }
 
   /**
-   * Navigate right
+   * Handle gamepad button press
    */
-  navigateRight() {
-    const current = this.focusedElement;
-    if (!current) {
-      this.focusFirst();
-      return;
-    }
-
-    const currentRect = current.getBoundingClientRect();
-    let bestMatch = null;
-    let bestDistance = Infinity;
-
-    // Find closest element to the right
-    this.focusableElements.forEach(el => {
-      if (el === current) return;
-
-      const rect = el.getBoundingClientRect();
-
-      // Must be to the right of current element
-      if (rect.left >= currentRect.right) {
-        // Calculate distance (prefer elements in same row)
-        const horizontalDistance = rect.left - currentRect.right;
-        const verticalDistance = Math.abs(rect.top - currentRect.top);
-        const distance = horizontalDistance + verticalDistance * 0.5;
-
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestMatch = el;
-        }
-      }
-    });
-
-    if (bestMatch) {
-      const index = this.focusableElements.indexOf(bestMatch);
-      this.setFocus(index);
+  handleGamepadButton(buttonIndex) {
+    // Map common gamepad buttons to keyboard events
+    const buttonMap = {
+      0: 'Enter',    // A button / OK
+      1: 'Escape',   // B button / Back
+      2: ' ',        // X button / Play/Pause
+      3: 'i',        // Y button / Info
+      12: 'ArrowUp',    // D-pad up
+      13: 'ArrowDown',  // D-pad down
+      14: 'ArrowLeft',  // D-pad left
+      15: 'ArrowRight', // D-pad right
+      8: 'Escape',   // Select / Back
+      9: 'm',        // Start / Menu
+      16: 'h'        // Home button
+    };
+    
+    const mappedKey = buttonMap[buttonIndex];
+    if (mappedKey) {
+      const syntheticEvent = new KeyboardEvent('keydown', {
+        key: mappedKey,
+        code: mappedKey,
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      });
+      
+      document.dispatchEvent(syntheticEvent);
     }
   }
 
   /**
-   * Activate focused element (Enter key)
+   * Handle gamepad axis movement (D-pad on some remotes)
    */
-  activateFocused() {
-    if (!this.focusedElement) return;
-
-    // Handle input fields differently
-    if (this.focusedElement.tagName === 'INPUT' || this.focusedElement.tagName === 'SELECT') {
-      // For checkboxes, toggle them
-      if (this.focusedElement.type === 'checkbox') {
-        this.focusedElement.checked = !this.focusedElement.checked;
-        this.focusedElement.dispatchEvent(new Event('change', { bubbles: true }));
-        return;
-      }
-
-      // For text inputs, focus them so user can type
-      // Remove TV focus styling while typing
-      this.focusedElement.classList.remove('tv-focused');
-      this.focusedElement.focus();
-
-      // Add blur listener to return to TV navigation
-      const handleBlur = () => {
-        this.focusedElement.removeEventListener('blur', handleBlur);
-        this.updateFocusableElements();
-        // Re-establish TV focus on the same element
-        const index = this.focusableElements.indexOf(this.focusedElement);
-        if (index >= 0) {
-          this.setFocus(index);
-        }
-      };
-      this.focusedElement.addEventListener('blur', handleBlur);
-      return;
+  handleGamepadAxis(axisIndex, value) {
+    let key = null;
+    
+    if (axisIndex === 0) { // Horizontal axis
+      key = value > 0 ? 'ArrowRight' : 'ArrowLeft';
+    } else if (axisIndex === 1) { // Vertical axis
+      key = value > 0 ? 'ArrowDown' : 'ArrowUp';
     }
-
-    // Trigger click event for buttons and links
-    this.focusedElement.click();
-  }
-
-  /**
-   * Handle back button
-   */
-  handleBack() {
-    // If an input field is focused, blur it and return to TV navigation
-    if (document.activeElement &&
-      (document.activeElement.tagName === 'INPUT' ||
-        document.activeElement.tagName === 'SELECT' ||
-        document.activeElement.tagName === 'TEXTAREA')) {
-      document.activeElement.blur();
-
-      // Force update focusable elements and move to next element
-      this.updateFocusableElements();
-
-      // Find the next non-input element to focus
-      let nextIndex = this.currentIndex;
-      for (let i = 0; i < this.focusableElements.length; i++) {
-        const el = this.focusableElements[i];
-        if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT' && el.tagName !== 'TEXTAREA') {
-          nextIndex = i;
-          break;
-        }
-      }
-
-      this.setFocus(nextIndex);
-      return;
-    }
-
-    // Check if we're in a modal or overlay
-    const modal = document.querySelector('.content-modal.active');
-    if (modal) {
-      const closeBtn = modal.querySelector('.close-modal');
-      if (closeBtn) {
-        closeBtn.click();
-        return;
-      }
-    }
-
-    // Otherwise go back in history
-    if (window.history.length > 1) {
-      window.history.back();
+    
+    if (key) {
+      const syntheticEvent = new KeyboardEvent('keydown', {
+        key: key,
+        code: key,
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      });
+      
+      document.dispatchEvent(syntheticEvent);
     }
   }
 
+
+
   /**
-   * Refresh focusable elements (call after DOM changes)
+   * Refresh method for compatibility
    */
   refresh() {
-    this.updateFocusableElements();
-
-    // Try to maintain focus on same element
-    if (this.focusedElement && this.focusableElements.includes(this.focusedElement)) {
-      const index = this.focusableElements.indexOf(this.focusedElement);
-      this.setFocus(index);
-    } else {
-      this.focusFirst();
-    }
+    // This method exists for compatibility with the old TV navigation
+    // The new system doesn't need manual refresh as it uses the existing navigation
   }
 }
 

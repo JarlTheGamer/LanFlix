@@ -32,14 +32,15 @@ export class Navigation {
   }
 
   /**
-   * Detect if running on Android TV
+   * Detect if running on Android TV or other TV platforms
    */
   detectAndroidTV() {
     const userAgent = navigator.userAgent.toLowerCase();
     return userAgent.includes('android') && 
            (userAgent.includes('tv') || 
             userAgent.includes('aftm') || // Fire TV
-            userAgent.includes('aftb')); // Fire TV Stick
+            userAgent.includes('aftb') || // Fire TV Stick
+            userAgent.includes('wv')); // WebView (Android TV app)
   }
 
   initialize() {
@@ -47,6 +48,13 @@ export class Navigation {
     this.setupTabs();
     this.setupKeyboardNavigation();
     this.setupServerStatusListener();
+  }
+
+  /**
+   * Get reference for TV navigation integration
+   */
+  getTVNavigationReference() {
+    return this;
   }
 
   /**

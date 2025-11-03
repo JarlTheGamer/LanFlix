@@ -42,8 +42,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await contentDisplay.initialize();
     navigation.initialize();
     
-    // Initialize TV navigation if on TV platform
-    tvNavigation.initialize();
+    // Initialize TV navigation with navigation reference
+    tvNavigation.initialize(navigation.getTVNavigationReference());
     
     // Initialize search module
     searchModule.initialize();

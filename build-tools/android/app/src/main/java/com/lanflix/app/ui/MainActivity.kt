@@ -53,6 +53,16 @@ class MainActivity : AppCompatActivity() {
             settings.allowContentAccess = true
             settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             
+            // TV-specific settings - no scaling, use website as-is
+            settings.useWideViewPort = false
+            settings.loadWithOverviewMode = false
+            settings.builtInZoomControls = false
+            settings.displayZoomControls = false
+            settings.setSupportZoom(false)
+            
+            // Ensure proper TV user agent
+            settings.userAgentString = settings.userAgentString + " AndroidTV"
+            
             webViewClient = object : WebViewClient() {
                 override fun onReceivedError(
                     view: WebView?,
