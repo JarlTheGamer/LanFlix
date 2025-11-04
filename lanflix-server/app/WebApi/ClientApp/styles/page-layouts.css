@@ -17,7 +17,7 @@
 
 /* Universal Carousel Section */
 .carousel-section {
-  margin-bottom: 60px;
+  margin-bottom: clamp(40px, 8vh, 60px);
   isolation: isolate;
   contain: layout style;
 }
@@ -26,7 +26,7 @@
   position: relative;
   overflow-x: auto;
   overflow-y: visible;
-  padding: 20px 0 40px;
+  padding: clamp(12px, 3vh, 20px) 0 clamp(24px, 5vh, 40px);
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
   /* Prevent scroll chaining to parent/next section */
@@ -34,6 +34,8 @@
   overscroll-behavior-y: none;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
+  /* Improve touch scrolling on mobile */
+  scroll-behavior: smooth;
 }
 
 .carousel-row::-webkit-scrollbar {
@@ -120,54 +122,77 @@
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .discover-layout {
-    padding: 80px 28px 28px;
+    padding: clamp(60px, 12vh, 80px) clamp(16px, 4vw, 28px) clamp(16px, 4vw, 28px);
   }
 
   .discover-title {
-    font-size: 36px;
+    font-size: clamp(28px, 6vw, 36px);
   }
 
   .discover-subtitle {
-    font-size: 16px;
-    margin-bottom: 40px;
+    font-size: clamp(14px, 3vw, 16px);
+    margin-bottom: clamp(24px, 5vh, 40px);
   }
 
   .carousel-section {
-    margin-bottom: 40px;
+    margin-bottom: clamp(24px, 5vh, 40px);
   }
 
   .section-title {
-    font-size: 20px;
+    font-size: clamp(18px, 4vw, 20px);
   }
 
   .page-title {
-    font-size: 28px;
+    font-size: clamp(24px, 5vw, 28px);
   }
 }
 
 @media (max-width: 480px) {
   .discover-layout {
-    padding: 60px 20px 20px;
+    padding: clamp(50px, 10vh, 60px) clamp(12px, 3vw, 20px) clamp(12px, 3vw, 20px);
   }
 
   .discover-title {
-    font-size: 28px;
+    font-size: clamp(22px, 5vw, 28px);
   }
 
   .discover-subtitle {
-    font-size: 14px;
+    font-size: clamp(12px, 2.5vw, 14px);
   }
 
   .carousel-section {
-    margin-bottom: 32px;
+    margin-bottom: clamp(20px, 4vh, 32px);
   }
 
   .section-title {
-    font-size: 18px;
+    font-size: clamp(16px, 3.5vw, 18px);
   }
 
   .page-title {
-    font-size: 24px;
+    font-size: clamp(20px, 4.5vw, 24px);
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 360px) {
+  .discover-layout {
+    padding: 45px 10px 10px;
+  }
+
+  .discover-title {
+    font-size: 20px;
+  }
+
+  .discover-subtitle {
+    font-size: 11px;
+  }
+
+  .section-title {
+    font-size: 15px;
+  }
+
+  .page-title {
+    font-size: 18px;
   }
 }
 

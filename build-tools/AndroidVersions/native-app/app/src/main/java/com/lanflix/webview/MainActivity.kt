@@ -61,9 +61,15 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort = true
             loadWithOverviewMode = true
             
-            // Better text scaling
+            // Better text scaling - prevent automatic text scaling
             textZoom = 100
-            minimumFontSize = 8
+            minimumFontSize = 1
+            minimumLogicalFontSize = 1
+            defaultFontSize = 16
+            defaultFixedFontSize = 13
+            
+            // Prevent automatic scaling
+            layoutAlgorithm = WebSettings.LayoutAlgorithm.NORMAL
             
             // Media settings
             mediaPlaybackRequiresUserGesture = false
@@ -75,8 +81,8 @@ class MainActivity : AppCompatActivity() {
         // Enable hardware acceleration on the WebView
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         
-        // Set initial scale for better display
-        webView.setInitialScale(100)
+        // Set initial scale for better display - use 0 for automatic scaling
+        webView.setInitialScale(0)
         
         // Enable scrollbars for better user experience
         webView.isScrollbarFadingEnabled = true
@@ -110,37 +116,59 @@ class MainActivity : AppCompatActivity() {
                         viewport.name = 'viewport';
                         document.head.appendChild(viewport);
                     }
-                    viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+                    viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no';
                     
-                    // Add CSS for better mobile experience
+                    // Add CSS for better mobile experience and Android WebView optimizations
                     var style = document.createElement('style');
                     style.innerHTML = `
                         * {
                             outline: none !important;
                             -webkit-tap-highlight-color: transparent !important;
                             -webkit-focus-ring-color: transparent !important;
+                            -webkit-text-size-adjust: 100% !important;
+                            text-size-adjust: 100% !important;
                         }
                         *:focus {
                             outline: none !important;
                             box-shadow: none !important;
+                        }
+                        html {
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            -webkit-text-size-adjust: 100% !important;
+                            text-size-adjust: 100% !important;
+                            font-size: 16px !important;
                         }
                         body {
                             overflow-y: auto !important;
                             -webkit-overflow-scrolling: touch !important;
                             margin: 0 !important;
                             padding: 0 !important;
-                        }
-                        html {
-                            margin: 0 !important;
-                            padding: 0 !important;
+                            -webkit-text-size-adjust: 100% !important;
+                            text-size-adjust: 100% !important;
+                            min-height: 100vh !important;
+                            position: relative !important;
                         }
                         input, textarea, select, button {
                             outline: none !important;
                             -webkit-tap-highlight-color: transparent !important;
+                            -webkit-text-size-adjust: 100% !important;
+                            text-size-adjust: 100% !important;
                         }
                         input:focus, textarea:focus, select:focus, button:focus {
                             outline: none !important;
                             box-shadow: none !important;
+                        }
+                        /* Ensure proper scaling on Android */
+                        .top-nav {
+                            -webkit-transform: translateZ(0) !important;
+                            transform: translateZ(0) !important;
+                            will-change: transform !important;
+                        }
+                        /* Prevent zoom on input focus */
+                        input[type="text"], input[type="email"], input[type="password"], 
+                        input[type="search"], textarea, select {
+                            font-size: 16px !important;
                         }
                     `;
                     document.head.appendChild(style);

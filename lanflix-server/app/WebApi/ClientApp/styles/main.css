@@ -11,6 +11,12 @@
   font-family: 'Poppins', sans-serif;
   background-color: var(--bg-primary);
   --hero-bg-image: none;
+  
+  /* Mobile-first responsive variables */
+  --nav-padding-x: clamp(16px, 4vw, 56px);
+  --nav-padding-y: clamp(12px, 3vh, 22px);
+  --nav-height: clamp(60px, 12vh, 96px);
+  --content-padding: clamp(16px, 4vw, 72px);
 }
 
 * {
@@ -27,18 +33,21 @@ body {
 }
 
 main {
-  padding-top: 96px;
+  padding-top: var(--nav-height);
 }
 
 .top-nav {
   position: fixed;
   inset: 0 0 auto 0;
-  padding: 22px 56px;
+  padding: var(--nav-padding-y) var(--nav-padding-x);
   background: transparent;
   backdrop-filter: blur(22px);
   z-index: 20;
   transition: background 240ms ease, box-shadow 240ms ease, opacity 240ms ease;
   isolation: isolate;
+  min-height: var(--nav-height);
+  display: flex;
+  align-items: center;
 }
 
 .top-nav::before,
@@ -120,34 +129,39 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 32px;
+  gap: clamp(12px, 3vw, 32px);
+  width: 100%;
+  flex-wrap: nowrap;
 }
 
 .left-section {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: clamp(8px, 2vw, 18px);
+  flex-shrink: 0;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: clamp(6px, 1.5vw, 12px);
+  flex-shrink: 0;
 }
 
 .brand-name {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  font-size: 0.82rem;
+  font-size: clamp(0.7rem, 2vw, 0.82rem);
   color: rgba(255, 236, 225, 0.86);
+  white-space: nowrap;
 }
 
 .notifications-btn,
 .settings-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: clamp(32px, 8vw, 36px);
+  height: clamp(32px, 8vw, 36px);
+  border-radius: clamp(8px, 2vw, 10px);
   border: none;
   background: transparent;
   cursor: pointer;
@@ -157,6 +171,7 @@ main {
   outline: 0px solid rgba(255, 255, 255, 0);
   outline-offset: 4px;
   position: relative;
+  flex-shrink: 0;
 }
 
 .notifications-btn {
@@ -165,8 +180,8 @@ main {
 
 .notifications-btn svg,
 .settings-btn svg {
-  width: 18px;
-  height: 18px;
+  width: clamp(16px, 4vw, 18px);
+  height: clamp(16px, 4vw, 18px);
   fill: rgba(255, 236, 225, 0.86);
   transition: fill var(--transition);
 }
@@ -215,23 +230,35 @@ main {
 .menu {
   display: flex;
   align-items: center;
-  gap: 26px;
+  gap: clamp(8px, 2vw, 26px);
+  flex: 1;
+  justify-content: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 0 clamp(4px, 1vw, 8px);
+}
+
+.menu::-webkit-scrollbar {
+  display: none;
 }
 
 .menu-item {
   border: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.82);
-  font-size: 0.98rem;
+  font-size: clamp(0.8rem, 2.2vw, 0.98rem);
   font-weight: 500;
   cursor: pointer;
   position: relative;
-  padding: 10px 18px;
+  padding: clamp(6px, 2vw, 10px) clamp(8px, 3vw, 18px);
   letter-spacing: 0.02em;
   transition: all var(--transition);
   outline: 0px solid rgba(255, 255, 255, 0);
   outline-offset: 4px;
-  border-radius: 20px;
+  border-radius: clamp(12px, 3vw, 20px);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .menu-item::after {
@@ -274,19 +301,20 @@ main {
 }
 
 .menu-item.search-home {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: clamp(36px, 8vw, 40px);
+  height: clamp(36px, 8vw, 40px);
+  border-radius: clamp(10px, 2.5vw, 12px);
   padding: 0;
   display: grid;
   place-items: center;
-  margin-right: 8px;
+  margin-right: clamp(4px, 1vw, 8px);
   position: relative;
   z-index: 10;
 }
 
 .menu-item.search-home svg {
-  width: 20px;
+  width: clamp(18px, 4vw, 20px);
+  height: clamp(18px, 4vw, 20px);
   fill: rgba(255, 226, 219, 0.9);
   transition: fill var(--transition);
 }
@@ -307,9 +335,9 @@ main {
 .profile {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px 6px 6px;
-  border-radius: 8px;
+  gap: clamp(4px, 1vw, 8px);
+  padding: clamp(4px, 1vw, 6px) clamp(8px, 2vw, 12px) clamp(4px, 1vw, 6px) clamp(4px, 1vw, 6px);
+  border-radius: clamp(6px, 1.5vw, 8px);
   border: 1px solid transparent;
   background: rgba(0, 0, 0, 0.35);
   cursor: pointer;
@@ -317,19 +345,21 @@ main {
   position: relative;
   z-index: 5;
   /* Improve touch targets */
-  min-height: 44px;
+  min-height: clamp(40px, 8vh, 44px);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .profile-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: clamp(28px, 6vw, 32px);
+  height: clamp(28px, 6vw, 32px);
+  border-radius: clamp(4px, 1vw, 6px);
   background: #ff6b6b;
   position: relative;
   transition: background var(--transition);
+  flex-shrink: 0;
 }
 
 .profile-avatar::before {
@@ -370,10 +400,11 @@ main {
 }
 
 .profile-arrow {
-  width: 14px;
-  height: 14px;
+  width: clamp(12px, 3vw, 14px);
+  height: clamp(12px, 3vw, 14px);
   fill: rgba(255, 226, 219, 0.7);
   transition: fill var(--transition);
+  flex-shrink: 0;
 }
 
 .profile:hover .profile-arrow,
@@ -899,24 +930,15 @@ main {
 }
 
 @media (max-width: 1024px) {
-  .top-nav {
-    padding: 18px 32px;
-  }
-
-  main {
-    padding-top: 88px;
-  }
-
-  .nav-inner {
-    gap: 24px;
-  }
-
-  .menu {
-    gap: 18px;
+  :root {
+    --nav-padding-x: clamp(20px, 5vw, 32px);
+    --nav-padding-y: clamp(14px, 3vh, 18px);
+    --nav-height: clamp(70px, 12vh, 88px);
+    --content-padding: clamp(20px, 5vw, 48px);
   }
 
   .hero-stage {
-    padding: 0 48px;
+    padding: 0 var(--content-padding);
   }
 
   .hero {
@@ -924,39 +946,46 @@ main {
   }
 
   .hero-body {
-    padding: 140px 48px 96px;
+    padding: 140px var(--content-padding) 96px;
     min-height: 100%;
     justify-content: flex-start;
     overflow: hidden;
   }
 
   .hero-secondary {
-    right: 48px;
-    bottom: 48px;
+    right: var(--content-padding);
+    bottom: var(--content-padding);
   }
 
   .content-shell {
-    padding: 0 48px 72px;
+    padding: 0 var(--content-padding) 72px;
   }
 }
 
 @media (max-width: 768px) {
+  :root {
+    --nav-padding-x: clamp(16px, 4vw, 28px);
+    --nav-padding-y: clamp(12px, 2.5vh, 16px);
+    --nav-height: clamp(60px, 10vh, 76px);
+    --content-padding: clamp(16px, 4vw, 28px);
+  }
+
   .nav-inner {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 16px;
+    gap: clamp(8px, 2vw, 16px);
   }
 
   .menu {
-    order: 2;
-    width: 100%;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 16px;
+    gap: clamp(6px, 1.5vw, 12px);
+    padding: 0 clamp(2px, 0.5vw, 4px);
+  }
+
+  .menu-item {
+    font-size: clamp(0.75rem, 2vw, 0.9rem);
+    padding: clamp(4px, 1.5vw, 8px) clamp(6px, 2vw, 12px);
   }
 
   .hero-stage {
-    padding: 0 28px;
+    padding: 0 var(--content-padding);
   }
 
   .hero-ambilight {
@@ -964,20 +993,12 @@ main {
     filter: blur(120px) saturate(150%);
   }
 
-  .left-section {
-    order: 1;
-  }
-
-  .brand {
-    order: 3;
-  }
-
   .hero {
     border-radius: 24px;
   }
 
   .hero-body {
-    padding: 120px 28px 72px;
+    padding: 120px var(--content-padding) 72px;
     min-height: 100%;
     justify-content: flex-start;
     overflow: hidden;
@@ -988,7 +1009,7 @@ main {
   }
 
   .content-shell {
-    padding: 0 28px 60px;
+    padding: 0 var(--content-padding) 60px;
   }
 
   .spotlight {
@@ -1017,16 +1038,33 @@ main {
 }
 
 @media (max-width: 480px) {
-  .top-nav {
-    padding: 16px 20px;
+  :root {
+    --nav-padding-x: clamp(12px, 3vw, 20px);
+    --nav-padding-y: clamp(10px, 2vh, 16px);
+    --nav-height: clamp(56px, 9vh, 76px);
+    --content-padding: clamp(12px, 3vw, 20px);
   }
 
-  main {
-    padding-top: 76px;
+  .nav-inner {
+    gap: clamp(6px, 1.5vw, 12px);
+  }
+
+  .menu {
+    gap: clamp(4px, 1vw, 8px);
+    padding: 0 clamp(1px, 0.25vw, 2px);
+  }
+
+  .menu-item {
+    font-size: clamp(0.7rem, 1.8vw, 0.85rem);
+    padding: clamp(3px, 1vw, 6px) clamp(4px, 1.5vw, 8px);
+  }
+
+  .brand-name {
+    font-size: clamp(0.6rem, 1.5vw, 0.75rem);
   }
 
   .hero-stage {
-    padding: 0 20px;
+    padding: 0 var(--content-padding);
   }
 
   .hero-ambilight {
@@ -1044,7 +1082,7 @@ main {
   }
 
   .hero-body {
-    padding: 110px 22px 64px;
+    padding: 110px var(--content-padding) 64px;
     gap: 24px;
     min-height: 100%;
     justify-content: flex-start;
@@ -1056,7 +1094,7 @@ main {
   }
 
   .content-shell {
-    padding: 0 20px 52px;
+    padding: 0 var(--content-padding) 52px;
   }
 
   .movie-card {
@@ -1080,6 +1118,109 @@ main {
   .movie-hub {
     gap: 12px;
     padding: 0 10px;
+  }
+}
+
+/* Extra small screens and Android WebView optimizations */
+@media (max-width: 360px) {
+  :root {
+    --nav-padding-x: 10px;
+    --nav-padding-y: 8px;
+    --nav-height: 52px;
+    --content-padding: 10px;
+  }
+
+  .nav-inner {
+    gap: 6px;
+  }
+
+  .menu {
+    gap: 3px;
+    padding: 0 1px;
+  }
+
+  .menu-item {
+    font-size: 0.65rem;
+    padding: 2px 4px;
+  }
+
+  .brand-name {
+    font-size: 0.55rem;
+  }
+
+  .notifications-btn,
+  .settings-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .notifications-btn svg,
+  .settings-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .profile {
+    min-height: 36px;
+    padding: 3px 6px 3px 3px;
+    gap: 3px;
+  }
+
+  .profile-avatar {
+    width: 24px;
+    height: 24px;
+  }
+
+  .profile-arrow {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+/* Android WebView specific optimizations */
+@media screen and (max-device-width: 480px) {
+  .top-nav {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  .nav-inner {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+
+  /* Prevent text scaling in landscape */
+  .menu-item,
+  .brand-name {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Improve touch targets */
+  .menu-item,
+  .notifications-btn,
+  .settings-btn,
+  .profile {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .menu-item.search-home {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Landscape orientation optimizations */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --nav-height: clamp(48px, 8vh, 60px);
+    --nav-padding-y: clamp(6px, 1.5vh, 12px);
+  }
+
+  .menu-item {
+    padding: clamp(2px, 1vh, 6px) clamp(4px, 2vw, 12px);
   }
 }
 
