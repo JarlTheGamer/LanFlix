@@ -303,37 +303,15 @@ export class Navigation {
    * Setup Android TV remote control support
    */
   setupRemoteControlSupport() {
-    // Enhanced remote control button mappings
+    // Map remote control buttons to keyboard events
     const remoteButtonMap = {
-      // Media keys
-      'MediaPlayPause': ' ',
+      'MediaPlayPause': ' ', // Space for play/pause
       'MediaPlay': ' ',
       'MediaPause': ' ',
       'MediaStop': 'Escape',
       'MediaTrackNext': 'ArrowRight',
       'MediaTrackPrevious': 'ArrowLeft',
-      'MediaFastForward': 'ArrowRight',
-      'MediaRewind': 'ArrowLeft',
-      
-      // Navigation
-      'Back': 'Escape',
-      'Home': 'h',
-      'Menu': 'm',
-      'Info': 'i',
-      'Guide': 'g',
-      'Exit': 'Escape',
-      
-      // Color buttons
-      'ColorF0Red': 'r',
-      'ColorF1Green': 'g',
-      'ColorF2Yellow': 'y',
-      'ColorF3Blue': 'b',
-      
-      // Channel/Volume (repurpose for navigation)
-      'ChannelUp': 'ArrowUp',
-      'ChannelDown': 'ArrowDown',
-      'VolumeUp': 'ArrowRight',
-      'VolumeDown': 'ArrowLeft'
+      'Back': 'Escape'
     };
 
     document.addEventListener('keydown', (e) => {
@@ -347,64 +325,6 @@ export class Navigation {
         });
         e.preventDefault();
         document.dispatchEvent(syntheticEvent);
-      }
-    });
-
-    // Add auto-navigation features for TV
-    this.setupAutoNavigation();
-  }
-
-  /**
-   * Setup auto-navigation features for TV remotes
-   */
-  setupAutoNavigation() {
-    // Auto-advance hero carousel every 10 seconds when idle
-    let heroAutoAdvanceTimer = null;
-    let lastInteractionTime = Date.now();
-
-    const resetAutoAdvance = () => {
-      lastInteractionTime = Date.now();
-      if (heroAutoAdvanceTimer) {
-        clearTimeout(heroAutoAdvanceTimer);
-      }
-      
-      // Only auto-advance when focused on hero
-      if (this.focusedElement === 'hero') {
-        heroAutoAdvanceTimer = setTimeout(() => {
-          // Check if still idle and on hero
-          if (Date.now() - lastInteractionTime >= 10000 && this.focusedElement === 'hero') {
-            const heroCount = document.querySelectorAll('.hero').length;
-            if (heroCount > 1) {
-              this.contentDisplay.goToSlide(this.contentDisplay.currentHeroIndex + 1);
-              resetAutoAdvance(); // Reset timer for next auto-advance
-            }
-          }
-        }, 10000);
-      }
-    };
-
-    // Reset timer on any user interaction
-    document.addEventListener('keydown', resetAutoAdvance);
-    document.addEventListener('click', resetAutoAdvance);
-    document.addEventListener('touchstart', resetAutoAdvance);
-
-    // Start initial timer
-    resetAutoAdvance();
-
-    // Number key shortcuts for direct navigation
-    document.addEventListener('keydown', (e) => {
-      if (e.key >= '1' && e.key <= '5') {
-        const menuIndex = parseInt(e.key) - 1;
-        const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
-        
-        if (menuButtons[menuIndex] && !menuButtons[menuIndex].classList.contains('search-home')) {
-          e.preventDefault();
-          this.focusedMenuIndex = menuIndex;
-          menuButtons.forEach((btn) => btn.classList.remove('active'));
-          menuButtons[menuIndex].classList.add('active');
-          this.navigateToPage(menuButtons[menuIndex].dataset.hero).catch(console.error);
-          this.updateFocus();
-        }
       }
     });
   }

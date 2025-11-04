@@ -20,15 +20,6 @@ export class ContentDisplay {
     this.ambilightLayer1 = document.getElementById('ambilight-layer-1');
     this.ambilightLayer2 = document.getElementById('ambilight-layer-2');
     this.topNav = document.querySelector('.top-nav');
-
-    // Swipe functionality properties
-    this.swipeStartX = 0;
-    this.swipeStartY = 0;
-    this.swipeEndX = 0;
-    this.swipeEndY = 0;
-    this.isSwipeActive = false;
-    this.swipeThreshold = 50; // Minimum distance for a swipe
-    this.swipeTimeout = null;
   }
 
   async initialize() {
@@ -50,7 +41,6 @@ export class ContentDisplay {
 
     this.setupScrollHandler();
     this.setupOfflineHandlers();
-    this.setupSwipeHandlers();
   }
 
   /**
@@ -271,69 +261,6 @@ export class ContentDisplay {
     if (this.focusedHeroElement) {
       this.focusedHeroElement.classList.add('focused');
     }
-
-    // Add swipe indicators if multiple heroes
-    this.createSwipeIndicators();
-  }
-
-  /**
-   * Create swipe indicators for hero carousel
-   */
-  createSwipeIndicators() {
-    // Remove existing indicators
-    const existingIndicators = document.querySelector('.hero-indicators');
-    if (existingIndicators) {
-      existingIndicators.remove();
-    }
-
-    const heroes = this.heroCarouselTrack.querySelectorAll('.hero');
-    if (heroes.length <= 1) return;
-
-    const heroStage = document.querySelector('.hero-stage');
-    const indicators = document.createElement('div');
-    indicators.className = 'hero-indicators';
-    indicators.style.cssText = `
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      z-index: 10;
-      pointer-events: none;
-    `;
-
-    heroes.forEach((_, index) => {
-      const dot = document.createElement('div');
-      dot.className = 'hero-indicator';
-      dot.style.cssText = `
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: ${index === this.currentHeroIndex ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.3)'};
-        transition: background 0.3s ease, transform 0.3s ease;
-        ${index === this.currentHeroIndex ? 'transform: scale(1.2);' : ''}
-      `;
-      indicators.appendChild(dot);
-    });
-
-    heroStage.appendChild(indicators);
-  }
-
-  /**
-   * Update swipe indicators
-   */
-  updateSwipeIndicators() {
-    const indicators = document.querySelectorAll('.hero-indicator');
-    indicators.forEach((indicator, index) => {
-      if (index === this.currentHeroIndex) {
-        indicator.style.background = 'rgba(255, 255, 255, 0.9)';
-        indicator.style.transform = 'scale(1.2)';
-      } else {
-        indicator.style.background = 'rgba(255, 255, 255, 0.3)';
-        indicator.style.transform = 'scale(1)';
-      }
-    });
   }
 
   /**
@@ -579,7 +506,6 @@ export class ContentDisplay {
     this.updateCarouselPosition();
     this.updateAmbilightForCurrentSlide();
     this.updateFocusedHero();
-    this.updateSwipeIndicators();
   }
 
   updateAmbilightForCurrentSlide() {
@@ -1048,65 +974,6 @@ export class ContentDisplay {
           this.contentModal.show(contentId, contentType, isDiscovery);
         }
       });
-    });
-
-    // Setup swipe handlers for card carousels
-    this.setupCardCarouselSwipe();
-  }
-
-  /**
-   * Setup swipe functionality for card carousels
-   */
-  setupCardCarouselSwipe() {
-    const carouselRows = document.querySelectorAll('.carousel-row, .spotlight-row');
-
-    carouselRows.forEach(row => {
-      let startX = 0;
-      let scrollLeft = 0;
-      let isDown = false;
-
-      // Mouse events
-      row.addEventListener('mousedown', (e) => {
-        isDown = true;
-        row.style.cursor = 'grabbing';
-        startX = e.pageX - row.offsetLeft;
-        scrollLeft = row.scrollLeft;
-        e.preventDefault();
-      });
-
-      row.addEventListener('mouseleave', () => {
-        isDown = false;
-        row.style.cursor = 'grab';
-      });
-
-      row.addEventListener('mouseup', () => {
-        isDown = false;
-        row.style.cursor = 'grab';
-      });
-
-      row.addEventListener('mousemove', (e) => {
-        if (!isDown) return;
-        e.preventDefault();
-        const x = e.pageX - row.offsetLeft;
-        const walk = (x - startX) * 2;
-        row.scrollLeft = scrollLeft - walk;
-      });
-
-      // Touch events
-      row.addEventListener('touchstart', (e) => {
-        startX = e.touches[0].pageX - row.offsetLeft;
-        scrollLeft = row.scrollLeft;
-      }, { passive: true });
-
-      row.addEventListener('touchmove', (e) => {
-        const x = e.touches[0].pageX - row.offsetLeft;
-        const walk = (x - startX) * 2;
-        row.scrollLeft = scrollLeft - walk;
-      }, { passive: true });
-
-      // Add scroll snap behavior
-      row.style.scrollBehavior = 'smooth';
-      row.style.cursor = 'grab';
     });
   }
 
@@ -1577,140 +1444,5 @@ export class ContentDisplay {
       const card = this.createContentCard(item, index, isDiscoveryContent);
       hub.appendChild(card);
     });
-  }
-
-  /**
-   * Setup swipe handlers for hero carousel
-   */
-  setupSwipeHandlers() {
-    const heroStage = document.querySelector('.hero-stage');
-    if (!heroStage) return;
-
-    // Touch events for mobile
-    heroStage.addEventListener('touchstart', (e) => this.handleSwipeStart(e), { passive: true });
-    heroStage.addEventListener('touchmove', (e) => this.handleSwipeMove(e), { passive: true });
-    heroStage.addEventListener('touchend', (e) => this.handleSwipeEnd(e), { passive: true });
-
-    // Mouse events for desktop (optional - for testing)
-    heroStage.addEventListener('mousedown', (e) => this.handleSwipeStart(e));
-    heroStage.addEventListener('mousemove', (e) => this.handleSwipeMove(e));
-    heroStage.addEventListener('mouseup', (e) => this.handleSwipeEnd(e));
-    heroStage.addEventListener('mouseleave', (e) => this.handleSwipeEnd(e));
-
-    // Prevent context menu on long press
-    heroStage.addEventListener('contextmenu', (e) => {
-      if (this.isSwipeActive) {
-        e.preventDefault();
-      }
-    });
-  }
-
-  /**
-   * Handle swipe/drag start
-   */
-  handleSwipeStart(e) {
-    this.isSwipeActive = true;
-
-    // Clear any existing timeout
-    if (this.swipeTimeout) {
-      clearTimeout(this.swipeTimeout);
-    }
-
-    // Get coordinates from touch or mouse event
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-    this.swipeStartX = clientX;
-    this.swipeStartY = clientY;
-    this.swipeEndX = clientX;
-    this.swipeEndY = clientY;
-
-    // Add visual feedback
-    const heroStage = document.querySelector('.hero-stage');
-    if (heroStage) {
-      heroStage.style.cursor = 'grabbing';
-      heroStage.style.userSelect = 'none';
-    }
-  }
-
-  /**
-   * Handle swipe/drag move
-   */
-  handleSwipeMove(e) {
-    if (!this.isSwipeActive) return;
-
-    // Get coordinates from touch or mouse event
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-    this.swipeEndX = clientX;
-    this.swipeEndY = clientY;
-
-    // Optional: Add real-time visual feedback during swipe
-    const deltaX = this.swipeEndX - this.swipeStartX;
-    const heroCarouselWrapper = document.querySelector('.hero-carousel-wrapper');
-
-    if (heroCarouselWrapper && Math.abs(deltaX) > 10) {
-      // Add subtle transform during swipe for immediate feedback
-      const currentTransform = -this.currentHeroIndex * 100;
-      const swipeOffset = (deltaX / window.innerWidth) * 20; // Limit the preview effect
-      heroCarouselWrapper.style.transform = `translateX(${currentTransform + swipeOffset}%)`;
-      heroCarouselWrapper.style.transition = 'none';
-    }
-  }
-
-  /**
-   * Handle swipe/drag end
-   */
-  handleSwipeEnd(e) {
-    if (!this.isSwipeActive) return;
-
-    this.isSwipeActive = false;
-
-    // Reset cursor and selection
-    const heroStage = document.querySelector('.hero-stage');
-    if (heroStage) {
-      heroStage.style.cursor = '';
-      heroStage.style.userSelect = '';
-    }
-
-    // Reset transform and enable transition
-    const heroCarouselWrapper = document.querySelector('.hero-carousel-wrapper');
-    if (heroCarouselWrapper) {
-      heroCarouselWrapper.style.transform = '';
-      heroCarouselWrapper.style.transition = '';
-    }
-
-    // Calculate swipe distance and direction
-    const deltaX = this.swipeEndX - this.swipeStartX;
-    const deltaY = this.swipeEndY - this.swipeStartY;
-    const absDeltaX = Math.abs(deltaX);
-    const absDeltaY = Math.abs(deltaY);
-
-    // Check if this is a horizontal swipe (not vertical scroll)
-    if (absDeltaX > this.swipeThreshold && absDeltaX > absDeltaY * 2) {
-      // Prevent accidental swipes during scrolling
-      e.preventDefault();
-
-      // Determine swipe direction and navigate
-      if (deltaX > 0) {
-        // Swipe right - go to previous slide
-        this.goToSlide(this.currentHeroIndex - 1);
-      } else {
-        // Swipe left - go to next slide
-        this.goToSlide(this.currentHeroIndex + 1);
-      }
-
-      // Add haptic feedback on supported devices
-      if (navigator.vibrate) {
-        navigator.vibrate(50);
-      }
-    }
-
-    // Reset swipe coordinates
-    this.swipeStartX = 0;
-    this.swipeStartY = 0;
-    this.swipeEndX = 0;
-    this.swipeEndY = 0;
   }
 }
