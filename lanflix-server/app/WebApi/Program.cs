@@ -548,7 +548,7 @@ if (!string.IsNullOrEmpty(moviesPath) || !string.IsNullOrEmpty(seriesPath))
                 ServeUnknownFileTypes = true,
                 OnPrepareResponse = ctx =>
                 {
-                    // Set appropriate content type for images
+                    // Set appropriate content type for images and videos
                     if (ctx.File.Name.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
                         ctx.File.Name.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
                     {
@@ -558,6 +558,41 @@ if (!string.IsNullOrEmpty(moviesPath) || !string.IsNullOrEmpty(seriesPath))
                     {
                         ctx.Context.Response.ContentType = "image/png";
                     }
+                    else if (ctx.File.Name.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ctx.Context.Response.ContentType = "video/mp4";
+                        ctx.Context.Response.Headers["Accept-Ranges"] = "bytes";
+                    }
+                    else if (ctx.File.Name.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ctx.Context.Response.ContentType = "video/x-matroska";
+                        ctx.Context.Response.Headers["Accept-Ranges"] = "bytes";
+                    }
+                }
+            });
+            
+            // Also serve videos directly from the videos path for the /videos/ controller
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(mediaRoot),
+                RequestPath = "/videos",
+                ServeUnknownFileTypes = true,
+                OnPrepareResponse = ctx =>
+                {
+                    // Set video content types and enable range requests (like Chrome does)
+                    var extension = Path.GetExtension(ctx.File.Name).ToLowerInvariant();
+                    ctx.Context.Response.ContentType = extension switch
+                    {
+                        ".mp4" => "video/mp4",
+                        ".mkv" => "video/x-matroska",
+                        ".avi" => "video/x-msvideo",
+                        ".mov" => "video/quicktime",
+                        ".wmv" => "video/x-ms-wmv",
+                        ".webm" => "video/webm",
+                        _ => "video/mp4"
+                    };
+                    ctx.Context.Response.Headers["Accept-Ranges"] = "bytes";
+                    ctx.Context.Response.Headers["Cache-Control"] = "public, max-age=3600";
                 }
             });
             Log.Information("Serving media files from: {Path}", mediaRoot);
@@ -566,8 +601,6 @@ if (!string.IsNullOrEmpty(moviesPath) || !string.IsNullOrEmpty(seriesPath))
 }
 
 app.UseCors();
-app.UseRateLimiter();
-app.UseOutputCache();
 
 // Authentication & Authorization (order matters!)
 app.UseAuthentication();
