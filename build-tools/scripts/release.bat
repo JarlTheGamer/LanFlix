@@ -96,12 +96,27 @@ set "PATH=%JAVA_HOME%\bin;%PATH%"
 echo Using Java: %JAVA_HOME%
 
 cd build-tools\AndroidVersions\native-app
+
+REM Clean previous builds to ensure fresh build
+echo Cleaning previous builds...
 if exist "gradlew.bat" (
-    call gradlew.bat assembleRelease
+    call gradlew.bat clean
     if errorlevel 1 (
-        echo WARNING: Native Release build failed, trying debug build...
-        call gradlew.bat assembleDebug
+        echo WARNING: Clean failed, continuing with build...
+    ) else (
+        echo ✓ Clean completed successfully
     )
+) else (
+    echo ERROR: Native app gradlew.bat not found
+    cd ..\..\..
+    pause
+    exit /b 1
+)
+
+REM Build the APK (using debug for easier signing)
+echo Building APK...
+if exist "gradlew.bat" (
+    call gradlew.bat assembleDebug
 ) else (
     echo ERROR: Native app gradlew.bat not found
     cd ..\..\..
@@ -123,13 +138,9 @@ REM Step 3: Copy APK files
 echo [3/5] Preparing release files...
 if not exist "releases" mkdir releases
 
-REM Find Native WebView APK (try release first, then debug)
-set NATIVE_APK_SOURCE=build-tools\AndroidVersions\native-app\app\build\outputs\apk\release\app-release.apk
-set NATIVE_APK_TYPE=release
-if not exist "!NATIVE_APK_SOURCE!" (
-    set NATIVE_APK_SOURCE=build-tools\AndroidVersions\native-app\app\build\outputs\apk\debug\app-debug.apk
-    set NATIVE_APK_TYPE=debug
-)
+REM Find Native WebView APK (using debug build)
+set NATIVE_APK_SOURCE=build-tools\AndroidVersions\native-app\app\build\outputs\apk\debug\app-debug.apk
+set NATIVE_APK_TYPE=debug
 
 if not exist "!NATIVE_APK_SOURCE!" (
     echo ERROR: Native WebView APK not found at: !NATIVE_APK_SOURCE!

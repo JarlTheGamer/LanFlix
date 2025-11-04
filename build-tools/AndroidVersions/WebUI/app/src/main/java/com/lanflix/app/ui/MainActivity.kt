@@ -53,12 +53,19 @@ class MainActivity : AppCompatActivity() {
             settings.allowContentAccess = true
             settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             
-            // TV-specific settings - no scaling, use website as-is
-            settings.useWideViewPort = false
-            settings.loadWithOverviewMode = false
+            // TV-specific settings - enable proper scaling for TV screens
+            settings.useWideViewPort = true
+            settings.loadWithOverviewMode = true
             settings.builtInZoomControls = false
             settings.displayZoomControls = false
             settings.setSupportZoom(false)
+            
+            // Set initial scale for better TV display
+            settings.setInitialScale(100)
+            
+            // Enable hardware acceleration for better performance
+            settings.setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
+            settings.setEnableSmoothTransition(true)
             
             // Ensure proper TV user agent
             settings.userAgentString = settings.userAgentString + " AndroidTV"
@@ -79,6 +86,9 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             webChromeClient = WebChromeClient()
+            
+            // Enable hardware acceleration for better performance
+            setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
             
             // Load the server's web UI
             try {

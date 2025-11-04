@@ -93,49 +93,36 @@ class MainActivity : AppCompatActivity() {
                 swipeRefresh.isRefreshing = false
                 
                 // Inject CSS to remove all focus outlines and tap highlights
-                val cssInjection = """
-                    function injectNoOutlineCSS() {
-                        var existingStyle = document.getElementById('no-outline-style');
-                        if (existingStyle) {
-                            existingStyle.remove();
+                webView.evaluateJavascript(
+                    """
+                    var style = document.createElement('style');
+                    style.innerHTML = `
+                        * {
+                            outline: none !important;
+                            -webkit-tap-highlight-color: transparent !important;
+                            -webkit-focus-ring-color: transparent !important;
+                            -webkit-user-select: none !important;
                         }
-                        
-                        var style = document.createElement('style');
-                        style.id = 'no-outline-style';
-                        style.innerHTML = `
-                            * {
-                                outline: none !important;
-                                -webkit-tap-highlight-color: transparent !important;
-                                -webkit-focus-ring-color: transparent !important;
-                                -webkit-user-select: none !important;
-                            }
-                            *:focus, *:active, *:hover {
-                                outline: none !important;
-                                box-shadow: none !important;
-                                border: none !important;
-                            }
-                            input, textarea, select, button, a, div, span {
-                                outline: none !important;
-                                -webkit-tap-highlight-color: transparent !important;
-                                -webkit-appearance: none !important;
-                            }
-                            input:focus, textarea:focus, select:focus, button:focus, a:focus {
-                                outline: none !important;
-                                box-shadow: none !important;
-                                border-color: inherit !important;
-                            }
-                        `;
-                        document.head.appendChild(style);
-                    }
-                    
-                    injectNoOutlineCSS();
-                    
-                    // Re-inject after a delay to catch dynamic content
-                    setTimeout(injectNoOutlineCSS, 500);
-                    setTimeout(injectNoOutlineCSS, 1000);
-                """.trimIndent()
-                
-                webView.evaluateJavascript(cssInjection, null)
+                        *:focus {
+                            outline: none !important;
+                            box-shadow: none !important;
+                            border: none !important;
+                        }
+                        input, textarea, select, button {
+                            outline: none !important;
+                            -webkit-tap-highlight-color: transparent !important;
+                            -webkit-appearance: none !important;
+                        }
+                        input:focus, textarea:focus, select:focus, button:focus {
+                            outline: none !important;
+                            box-shadow: none !important;
+                            border-color: inherit !important;
+                        }
+                    `;
+                    document.head.appendChild(style);
+                    """.trimIndent(),
+                    null
+                )
             }
             
             override fun onReceivedError(

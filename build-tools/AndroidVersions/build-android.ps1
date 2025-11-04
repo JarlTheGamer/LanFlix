@@ -30,7 +30,7 @@ if ($Help) {
 }
 
 # Check if we're in the right directory
-$androidDir = "android-native"
+$androidDir = "native-app"
 if (-not (Test-Path $androidDir)) {
     Write-Host "❌ Android project not found. Make sure you're in the build-tools/AndroidVersions directory." -ForegroundColor Red
     exit 1
@@ -165,7 +165,7 @@ switch ($Action.ToLower()) {
             
             # Try to launch the app
             Write-Host "🚀 Launching Lanflix..." -ForegroundColor Yellow
-            adb shell am start -n com.lanflix.android/.MainActivity
+            adb shell am start -n com.lanflix.webview/.MainActivity
         } else {
             Write-Host "❌ Run failed!" -ForegroundColor Red
             exit 1
