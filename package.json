@@ -1,6 +1,6 @@
 {
   "name": "lanflix",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "Self-hosted streaming media server",
   "scripts": {
     "build:server": "node build-tools/scripts/build-server.js",
