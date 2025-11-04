@@ -71,6 +71,11 @@ class MainActivity : AppCompatActivity() {
         // Enable hardware acceleration on the WebView
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         
+        // Disable default focus highlighting
+        webView.isScrollbarFadingEnabled = false
+        webView.isVerticalScrollBarEnabled = false
+        webView.isHorizontalScrollBarEnabled = false
+        
         // Set WebView client for handling page navigation
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -82,9 +87,6 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 binding.progressBar.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
-                
-                // Inject TV-friendly CSS and JavaScript
-                injectTvOptimizations()
             }
             
             override fun onReceivedError(
@@ -242,45 +244,7 @@ class MainActivity : AppCompatActivity() {
         return super.onKeyDown(keyCode, event)
     }
     
-    private fun injectTvOptimizations() {
-        val tvOptimizationScript = """
-            (function() {
-                // Add TV-friendly focus styles
-                var style = document.createElement('style');
-                style.textContent = `
-                    * { 
-                        -webkit-user-select: none; 
-                        -webkit-touch-callout: none; 
-                    }
-                    button:focus, a:focus, input:focus, [tabindex]:focus {
-                        outline: 3px solid #03DAC5 !important;
-                        outline-offset: 2px !important;
-                        background-color: rgba(3, 218, 197, 0.1) !important;
-                    }
-                    body {
-                        overflow-x: hidden;
-                    }
-                `;
-                document.head.appendChild(style);
-                
-                // Make all clickable elements focusable
-                var clickables = document.querySelectorAll('button, a, [onclick], .clickable');
-                clickables.forEach(function(el) {
-                    if (!el.hasAttribute('tabindex')) {
-                        el.setAttribute('tabindex', '0');
-                    }
-                });
-                
-                // Focus first focusable element
-                var firstFocusable = document.querySelector('button, a, input, [tabindex]:not([tabindex="-1"])');
-                if (firstFocusable) {
-                    firstFocusable.focus();
-                }
-            })();
-        """.trimIndent()
-        
-        webView.evaluateJavascript(tvOptimizationScript, null)
-    }
+
     
     override fun onDestroy() {
         super.onDestroy()
