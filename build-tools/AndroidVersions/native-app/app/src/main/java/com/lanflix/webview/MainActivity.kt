@@ -88,12 +88,13 @@ class MainActivity : AppCompatActivity() {
                 binding.progressBar.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
                 
-                // Inject CSS to remove all focus outlines
+                // KILL ALL FOCUS INDICATORS WITH FIRE
                 webView.evaluateJavascript(
                     """
                     var style = document.createElement('style');
-                    style.innerHTML = '* { outline: none !important; -webkit-tap-highlight-color: transparent !important; }';
+                    style.innerHTML = '* { outline: none !important; -webkit-tap-highlight-color: transparent !important; } *:focus { outline: none !important; }';
                     document.head.appendChild(style);
+                    document.addEventListener('focusin', function(e) { e.target.blur(); });
                     """.trimIndent(),
                     null
                 )
