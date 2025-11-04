@@ -35,6 +35,7 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="sensor"
             android:theme="@style/Theme.Lanflix.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
