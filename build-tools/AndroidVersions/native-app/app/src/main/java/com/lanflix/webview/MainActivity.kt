@@ -54,12 +54,16 @@ class MainActivity : AppCompatActivity() {
             allowFileAccessFromFileURLs = true
             allowUniversalAccessFromFileURLs = true
             
-            // Zoom and viewport settings
+            // Zoom and viewport settings for proper scaling
             setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
             useWideViewPort = true
             loadWithOverviewMode = true
+            
+            // Better text scaling
+            textZoom = 100
+            minimumFontSize = 8
             
             // Media settings
             mediaPlaybackRequiresUserGesture = false
@@ -71,14 +75,18 @@ class MainActivity : AppCompatActivity() {
         // Enable hardware acceleration on the WebView
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         
-        // Disable default focus highlighting and scrollbars
-        webView.isScrollbarFadingEnabled = false
-        webView.isVerticalScrollBarEnabled = false
+        // Set initial scale for better display
+        webView.setInitialScale(100)
+        
+        // Enable scrollbars for better user experience
+        webView.isScrollbarFadingEnabled = true
+        webView.isVerticalScrollBarEnabled = true
         webView.isHorizontalScrollBarEnabled = false
         
-        // Additional settings to prevent focus outlines
-        webView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
-        webView.isHapticFeedbackEnabled = false
+        // Set background and enable smooth scrolling
+        webView.setBackgroundColor(android.graphics.Color.BLACK)
+        webView.isHapticFeedbackEnabled = true
+        webView.isScrollContainer = true
      
         // Set WebView client for handling page navigation
         webView.webViewClient = object : WebViewClient() {
@@ -92,31 +100,47 @@ class MainActivity : AppCompatActivity() {
                 binding.progressBar.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
                 
-                // Inject CSS to remove all focus outlines and tap highlights
+                // Inject viewport meta tag and CSS for proper scaling and mobile experience
                 webView.evaluateJavascript(
                     """
+                    // Add or update viewport meta tag for proper scaling
+                    var viewport = document.querySelector('meta[name="viewport"]');
+                    if (!viewport) {
+                        viewport = document.createElement('meta');
+                        viewport.name = 'viewport';
+                        document.head.appendChild(viewport);
+                    }
+                    viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+                    
+                    // Add CSS for better mobile experience
                     var style = document.createElement('style');
                     style.innerHTML = `
                         * {
                             outline: none !important;
                             -webkit-tap-highlight-color: transparent !important;
                             -webkit-focus-ring-color: transparent !important;
-                            -webkit-user-select: none !important;
                         }
                         *:focus {
                             outline: none !important;
                             box-shadow: none !important;
-                            border: none !important;
+                        }
+                        body {
+                            overflow-y: auto !important;
+                            -webkit-overflow-scrolling: touch !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                        }
+                        html {
+                            margin: 0 !important;
+                            padding: 0 !important;
                         }
                         input, textarea, select, button {
                             outline: none !important;
                             -webkit-tap-highlight-color: transparent !important;
-                            -webkit-appearance: none !important;
                         }
                         input:focus, textarea:focus, select:focus, button:focus {
                             outline: none !important;
                             box-shadow: none !important;
-                            border-color: inherit !important;
                         }
                     `;
                     document.head.appendChild(style);
@@ -181,23 +205,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
-        // Disable focus to prevent blue outlines
-        webView.isFocusable = false
-        webView.isFocusableInTouchMode = false
+        // Enable focus for proper touch interactions
+        webView.isFocusable = true
+        webView.isFocusableInTouchMode = true
     }
     
     private fun setupSwipeRefresh() {
-        swipeRefresh.setOnRefreshListener {
-            webView.reload()
-        }
-        
-        // Set refresh colors
-        swipeRefresh.setColorSchemeResources(
-            android.R.color.holo_blue_bright,
-            android.R.color.holo_green_light,
-            android.R.color.holo_orange_light,
-            android.R.color.holo_red_light
-        )
+        // Disable pull-to-refresh to prevent accidental refreshes
+        swipeRefresh.isEnabled = false
     }
     
     private fun loadWebApp() {
