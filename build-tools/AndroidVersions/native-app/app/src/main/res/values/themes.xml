@@ -8,8 +8,16 @@
         <item name="colorOnSecondary">@color/black</item>
         <item name="android:statusBarColor">@color/primary_color</item>
         <item name="android:navigationBarColor">@color/black</item>
-        <!-- Disable focus indicators -->
+        <!-- Disable all focus and selection indicators -->
         <item name="colorControlHighlight">@android:color/transparent</item>
+        <item name="colorControlActivated">@color/primary_color</item>
+        <item name="colorControlNormal">@color/primary_color</item>
+        <item name="android:colorControlHighlight">@android:color/transparent</item>
+        <item name="android:colorControlActivated">@color/primary_color</item>
+        <item name="android:colorControlNormal">@color/primary_color</item>
+        <!-- Remove ripple effects -->
+        <item name="android:selectableItemBackground">@android:color/transparent</item>
+        <item name="android:selectableItemBackgroundBorderless">@android:color/transparent</item>
     </style>
 
     <style name="Theme.Lanflix" parent="Base.Theme.Lanflix" />
@@ -18,8 +26,6 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowFullscreen">false</item>
-        <!-- TV optimizations -->
-        <item name="android:windowOverscan">true</item>
     </style>
     
     <style name="Theme.Lanflix.Splash" parent="Theme.Lanflix.NoActionBar">

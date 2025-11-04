@@ -75,7 +75,7 @@ class MainActivity : AppCompatActivity() {
         webView.isScrollbarFadingEnabled = false
         webView.isVerticalScrollBarEnabled = false
         webView.isHorizontalScrollBarEnabled = false
-        
+     
         // Set WebView client for handling page navigation
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -87,6 +87,16 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 binding.progressBar.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
+                
+                // Inject CSS to remove all focus outlines
+                webView.evaluateJavascript(
+                    """
+                    var style = document.createElement('style');
+                    style.innerHTML = '* { outline: none !important; -webkit-tap-highlight-color: transparent !important; }';
+                    document.head.appendChild(style);
+                    """.trimIndent(),
+                    null
+                )
             }
             
             override fun onReceivedError(
@@ -145,10 +155,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
-        // Enable focus for TV remote navigation
-        webView.isFocusable = true
-        webView.isFocusableInTouchMode = true
-        webView.requestFocus()
+        // Disable focus to prevent blue outlines
+        webView.isFocusable = false
+        webView.isFocusableInTouchMode = false
     }
     
     private fun setupSwipeRefresh() {
@@ -173,72 +182,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    // Handle remote control and keyboard navigation
+    // Handle back button only
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        when (keyCode) {
-            // Back button - navigate back in WebView or exit
-            KeyEvent.KEYCODE_BACK -> {
-                if (webView.canGoBack()) {
-                    webView.goBack()
-                    return true
-                }
-            }
-            
-            // TV remote control support
-            KeyEvent.KEYCODE_DPAD_CENTER,
-            KeyEvent.KEYCODE_ENTER -> {
-                // Simulate click at center of screen for TV remotes
-                val x = webView.width / 2
-                val y = webView.height / 2
-                webView.evaluateJavascript(
-                    "document.elementFromPoint($x, $y)?.click();",
-                    null
-                )
-                return true
-            }
-            
-            // D-pad navigation - inject JavaScript to handle focus
-            KeyEvent.KEYCODE_DPAD_UP -> {
-                webView.evaluateJavascript(
-                    """
-                    var focusable = document.querySelectorAll('button, a, input, [tabindex]:not([tabindex="-1"])');
-                    var current = document.activeElement;
-                    var currentIndex = Array.from(focusable).indexOf(current);
-                    if (currentIndex > 0) focusable[currentIndex - 1].focus();
-                    """.trimIndent(),
-                    null
-                )
-                return true
-            }
-            
-            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                webView.evaluateJavascript(
-                    """
-                    var focusable = document.querySelectorAll('button, a, input, [tabindex]:not([tabindex="-1"])');
-                    var current = document.activeElement;
-                    var currentIndex = Array.from(focusable).indexOf(current);
-                    if (currentIndex < focusable.length - 1) focusable[currentIndex + 1].focus();
-                    """.trimIndent(),
-                    null
-                )
-                return true
-            }
-            
-            KeyEvent.KEYCODE_DPAD_LEFT -> {
-                webView.evaluateJavascript("window.scrollBy(-100, 0);", null)
-                return true
-            }
-            
-            KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                webView.evaluateJavascript("window.scrollBy(100, 0);", null)
-                return true
-            }
-            
-            // Menu button - refresh page
-            KeyEvent.KEYCODE_MENU -> {
-                webView.reload()
-                return true
-            }
+        // Only handle back button for WebView navigation
+        if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
+            webView.goBack()
+            return true
         }
         
         return super.onKeyDown(keyCode, event)
