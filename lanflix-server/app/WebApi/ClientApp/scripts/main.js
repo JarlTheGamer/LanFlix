@@ -59,17 +59,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize notification badge
     notificationBadge.init();
 
-    // Add global debug methods for testing
-    window.debugNavigation = {
-      enableKeyboard: () => navigation.enableKeyboardNavigation(),
-      enableTV: () => window.enableTVNavigation(),
-      checkStatus: () => window.checkTVNavigation(),
-      navigation: navigation,
-      tvNavigation: tvNavigation
-    };
-
-    console.log('Debug methods available: window.debugNavigation');
-
   } catch (error) {
     console.error('Failed to initialize application:', error);
     // Show error message to user
