@@ -55,15 +55,26 @@ export class TVNavigation {
     // Store reference to main navigation instance
     this.navigation = navigationInstance;
 
-    // NO custom CSS - use exact same styling as website
-    // Just add a class for detection purposes only
+    // Add TV mode class and platform-specific classes
     document.body.classList.add('tv-mode');
+
+    if (this.isFireTV) {
+      document.body.classList.add('fire-tv');
+    } else if (this.detectAndroidTV()) {
+      document.body.classList.add('android-tv');
+    }
 
     // Setup remote control event listeners
     this.setupRemoteControlListeners();
 
     // Setup gamepad support (some TV remotes register as gamepads)
     this.setupGamepadSupport();
+
+    // Setup focus management for better TV experience
+    this.setupFocusManagement();
+
+    // Setup scroll management for carousels
+    this.setupScrollManagement();
   }
 
   /**
@@ -71,7 +82,13 @@ export class TVNavigation {
    */
   setupRemoteControlListeners() {
     // Listen for all key events and map remote control buttons
-    document.addEventListener('keydown', (e) => this.handleRemoteControl(e), true);
+    document.addEventListener('keydown', (e) => {
+      // Try enhanced handler first
+      if (!this.handleEnhancedRemoteControl(e)) {
+        // Fall back to original handler
+        this.handleRemoteControl(e);
+      }
+    }, true);
 
     // Also listen for media key events
     document.addEventListener('keyup', (e) => this.handleMediaKeys(e), true);
@@ -332,6 +349,174 @@ export class TVNavigation {
   }
 
 
+
+  /**
+   * Detect Android TV specifically
+   */
+  detectAndroidTV() {
+    const userAgent = navigator.userAgent.toLowerCase();
+    return userAgent.includes('android') &&
+      (userAgent.includes('tv') || userAgent.includes('wv'));
+  }
+
+  /**
+   * Setup focus management for better TV experience
+   */
+  setupFocusManagement() {
+    // Ensure focused elements are always visible
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          const element = mutation.target;
+          if (element.classList.contains('focused')) {
+            this.ensureElementVisible(element);
+          }
+        }
+      });
+    });
+
+    // Observe all elements for class changes
+    observer.observe(document.body, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ['class']
+    });
+  }
+
+  /**
+   * Ensure focused element is visible on screen
+   */
+  ensureElementVisible(element) {
+    if (!element) return;
+
+    // Use smooth scrolling to bring element into view
+    element.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'nearest'
+    });
+
+    // For carousel items, also scroll the carousel container
+    if (element.classList.contains('movie-card')) {
+      const carousel = element.closest('.carousel-row');
+      if (carousel) {
+        this.scrollCarouselToElement(carousel, element);
+      }
+    }
+  }
+
+  /**
+   * Setup scroll management for carousels
+   */
+  setupScrollManagement() {
+    // Improve carousel scrolling behavior
+    const carousels = document.querySelectorAll('.carousel-row');
+    carousels.forEach(carousel => {
+      // Ensure smooth scrolling
+      carousel.style.scrollBehavior = 'smooth';
+
+      // Add scroll snap for better navigation
+      carousel.style.scrollSnapType = 'x mandatory';
+
+      // Ensure cards snap properly
+      const cards = carousel.querySelectorAll('.movie-card');
+      cards.forEach(card => {
+        card.style.scrollSnapAlign = 'start';
+        card.style.scrollSnapStop = 'normal';
+      });
+    });
+  }
+
+  /**
+   * Scroll carousel to show focused element
+   */
+  scrollCarouselToElement(carousel, element) {
+    if (!carousel || !element) return;
+
+    const carouselRect = carousel.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+
+    // Calculate if element is outside visible area
+    const isLeftOutside = elementRect.left < carouselRect.left;
+    const isRightOutside = elementRect.right > carouselRect.right;
+
+    if (isLeftOutside || isRightOutside) {
+      // Calculate scroll position to center the element
+      const elementCenter = element.offsetLeft + (element.offsetWidth / 2);
+      const carouselCenter = carousel.offsetWidth / 2;
+      const scrollPosition = elementCenter - carouselCenter;
+
+      carousel.scrollTo({
+        left: Math.max(0, scrollPosition),
+        behavior: 'smooth'
+      });
+    }
+  }
+
+  /**
+   * Enhanced remote control handling with better key mapping
+   */
+  handleEnhancedRemoteControl(e) {
+    // Enhanced key mappings for better TV experience
+    const enhancedKeyMap = {
+      // Standard navigation
+      'ArrowUp': 'ArrowUp',
+      'ArrowDown': 'ArrowDown',
+      'ArrowLeft': 'ArrowLeft',
+      'ArrowRight': 'ArrowRight',
+      'Enter': 'Enter',
+      'Escape': 'Escape',
+
+      // Fire TV specific
+      'KEYCODE_DPAD_UP': 'ArrowUp',
+      'KEYCODE_DPAD_DOWN': 'ArrowDown',
+      'KEYCODE_DPAD_LEFT': 'ArrowLeft',
+      'KEYCODE_DPAD_RIGHT': 'ArrowRight',
+      'KEYCODE_DPAD_CENTER': 'Enter',
+      'KEYCODE_BACK': 'Escape',
+
+      // Media controls
+      'MediaPlayPause': ' ',
+      'MediaPlay': ' ',
+      'MediaPause': ' ',
+      'MediaStop': 'Escape',
+      'MediaTrackNext': 'ArrowRight',
+      'MediaTrackPrevious': 'ArrowLeft',
+
+      // Menu controls
+      'Menu': 'm',
+      'Home': 'h',
+      'Back': 'Escape',
+
+      // Number keys for quick navigation
+      'Digit1': '1', 'Digit2': '2', 'Digit3': '3',
+      'Digit4': '4', 'Digit5': '5', 'Digit6': '6',
+      'Digit7': '7', 'Digit8': '8', 'Digit9': '9', 'Digit0': '0'
+    };
+
+    const mappedKey = enhancedKeyMap[e.key] || enhancedKeyMap[e.code];
+
+    if (mappedKey) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      console.log(`🎮 Enhanced remote: ${e.key}/${e.code} -> ${mappedKey}`);
+
+      // Create synthetic event
+      const syntheticEvent = new KeyboardEvent('keydown', {
+        key: mappedKey,
+        code: mappedKey,
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      });
+
+      document.dispatchEvent(syntheticEvent);
+      return true;
+    }
+
+    return false;
+  }
 
   /**
    * Refresh method for compatibility

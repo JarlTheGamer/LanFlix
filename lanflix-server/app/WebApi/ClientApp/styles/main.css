@@ -1608,3 +1608,175 @@ main {
     font-size: 0.8rem;
   }
 }
+/* 
+TV Navigation Focus Styles */
+/* These styles provide clear visual feedback for remote control navigation */
+
+/* General focus styles for TV navigation */
+.focused {
+  outline: 3px solid rgba(255, 255, 255, 0.8) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 255, 255, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+
+/* Hero carousel focus */
+.hero.focused {
+  outline: 4px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 4px;
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.4);
+}
+
+/* Menu item focus (already has some styles, enhancing for TV) */
+.menu-item.focused {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px) scale(1.05);
+}
+
+/* Profile button focus */
+.profile.focused {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 3px;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+  transform: translateY(-3px) scale(1.05);
+}
+
+/* Settings button focus */
+.settings-btn.focused,
+.notifications-btn.focused {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px) scale(1.1);
+}
+
+/* Tab focus */
+.tab.focused {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+/* Movie card focus */
+.movie-card.focused {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 3px;
+  box-shadow: 0 0 25px rgba(255, 255, 255, 0.4);
+  transform: scale(1.05) translateY(-5px);
+  z-index: 10;
+}
+
+/* Enhanced expanded card styles for TV */
+.movie-card.expanded {
+  transform: scale(1.1) translateY(-8px);
+  z-index: 15;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.movie-card.focused.expanded {
+  outline: 4px solid rgba(255, 255, 255, 0.95);
+  outline-offset: 4px;
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.5), 0 15px 50px rgba(0, 0, 0, 0.7);
+  transform: scale(1.15) translateY(-10px);
+}
+
+/* TV mode specific adjustments */
+body.tv-mode {
+  /* Ensure smooth scrolling for TV navigation */
+  scroll-behavior: smooth;
+}
+
+body.tv-mode .carousel-row {
+  /* Improve scrolling behavior for TV */
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+}
+
+body.tv-mode .movie-card {
+  /* Ensure cards snap properly during navigation */
+  scroll-snap-align: start;
+  scroll-snap-stop: normal;
+}
+
+/* Focus animations for better visual feedback */
+@keyframes focusPulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.1); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+
+.focused {
+  animation: focusPulse 2s infinite;
+}
+
+/* Disable focus animations on cards to avoid distraction */
+.movie-card.focused {
+  animation: none;
+}
+
+/* Search overlay focus styles */
+.search-overlay.focused {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+}
+
+/* Button focus styles for action buttons */
+.card-action-btn.focused,
+.browse-all-btn.focused {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px) scale(1.05);
+}
+
+/* Ensure focus styles work well with existing hover states */
+.focused:hover {
+  outline-color: rgba(255, 255, 255, 1);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 25px rgba(255, 255, 255, 0.4);
+}
+
+/* High contrast mode support for better accessibility */
+@media (prefers-contrast: high) {
+  .focused {
+    outline: 4px solid #ffffff;
+    outline-offset: 3px;
+    box-shadow: 0 0 0 2px #000000, 0 0 30px rgba(255, 255, 255, 0.6);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .focused {
+    animation: none;
+    transition: none;
+  }
+  
+  .movie-card.focused,
+  .movie-card.expanded {
+    transform: none;
+  }
+  
+  .menu-item.focused,
+  .profile.focused,
+  .settings-btn.focused,
+  .notifications-btn.focused {
+    transform: none;
+  }
+}
+
+/* Fire TV specific optimizations */
+body.fire-tv .focused {
+  outline-width: 4px;
+  outline-color: rgba(255, 165, 0, 0.9); /* Orange outline for Fire TV */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 0 25px rgba(255, 165, 0, 0.4);
+}
+
+/* Android TV specific optimizations */
+body.android-tv .focused {
+  outline-color: rgba(76, 175, 80, 0.9); /* Green outline for Android TV */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 0 25px rgba(76, 175, 80, 0.4);
+}

@@ -251,11 +251,35 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    // Handle back button only
+    // Handle remote control and keyboard input
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // Only handle back button for WebView navigation
-        if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
-            webView.goBack()
+        // Map remote control keys to web navigation
+        val jsCommand = when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowUp', bubbles: true}));"
+            KeyEvent.KEYCODE_DPAD_DOWN -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown', bubbles: true}));"
+            KeyEvent.KEYCODE_DPAD_LEFT -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowLeft', bubbles: true}));"
+            KeyEvent.KEYCODE_DPAD_RIGHT -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true}));"
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));"
+            KeyEvent.KEYCODE_BACK -> {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                    return true
+                } else {
+                    "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));"
+                }
+            }
+            KeyEvent.KEYCODE_MENU -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'm', bubbles: true}));"
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: ' ', bubbles: true}));"
+            KeyEvent.KEYCODE_MEDIA_PLAY -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: ' ', bubbles: true}));"
+            KeyEvent.KEYCODE_MEDIA_PAUSE -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: ' ', bubbles: true}));"
+            KeyEvent.KEYCODE_MEDIA_STOP -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));"
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true}));"
+            KeyEvent.KEYCODE_MEDIA_REWIND -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowLeft', bubbles: true}));"
+            else -> null
+        }
+        
+        if (jsCommand != null && jsCommand != "handled") {
+            webView.evaluateJavascript(jsCommand, null)
             return true
         }
         
