@@ -5,7 +5,6 @@ import searchModule from '../modules/search.js';
 import stateManager from '../modules/data.js';
 import { notificationBadge } from '../modules/notification-badge.js';
 import { checkFirstRun, isNativeApp } from '../modules/first-run.js';
-import tvNavigation from '../modules/tv-navigation.js';
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
@@ -41,9 +40,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     await contentDisplay.initialize();
     navigation.initialize();
-    
-    // Initialize TV navigation with navigation reference
-    tvNavigation.initialize(navigation.getTVNavigationReference());
     
     // Initialize search module
     searchModule.initialize();
