@@ -471,17 +471,6 @@ export class Navigation {
           this.focusedCardIndex = 0; // Reset to first card in new carousel
           this.updateFocus();
         }
-      } else if (e.key === 'Enter') {
-        // Handle Enter key on focused card
-        const currentCarousel = carousels[this.focusedCarouselIndex];
-        if (currentCarousel) {
-          const carouselCards = Array.from(currentCarousel.querySelectorAll('.movie-card'));
-          const focusedCard = carouselCards[this.focusedCardIndex];
-          if (focusedCard) {
-            // Simulate click on the focused card
-            focusedCard.click();
-          }
-        }
       }
     }
   }
@@ -567,12 +556,10 @@ export class Navigation {
     if (cardElements.length > 0) {
       const isTablet = window.innerWidth <= 768;
       const isMobile = window.innerWidth <= 480;
-      const isTV = this.isAndroidTV || document.body.classList.contains('tv-mode');
 
-      // Adjust card sizes for TV
-      const cardWidth = isTV ? 200 : (isMobile ? 120 : isTablet ? 140 : 180);
-      const expandedCardWidth = isTV ? 520 : (isMobile ? 320 : isTablet ? 380 : 480);
-      const gap = isTV ? 20 : (isMobile ? 12 : 16);
+      const cardWidth = isMobile ? 120 : isTablet ? 140 : 180;
+      const expandedCardWidth = isMobile ? 320 : isTablet ? 380 : 480;
+      const gap = isMobile ? 12 : 16;
 
       let offset = 0;
       for (let i = 0; i < this.focusedCardIndex; i++) {
@@ -581,19 +568,7 @@ export class Navigation {
         offset += (isExpanded ? expandedCardWidth : cardWidth) + gap;
       }
 
-      // For TV, ensure the focused card is more centered
-      if (isTV) {
-        const viewportWidth = carousel.offsetWidth;
-        const focusedCard = cardElements[this.focusedCardIndex];
-        if (focusedCard) {
-          const cardCenter = offset + (focusedCard.classList.contains('expanded') ? expandedCardWidth : cardWidth) / 2;
-          const viewportCenter = viewportWidth / 2;
-          offset = Math.max(0, cardCenter - viewportCenter);
-        }
-      }
-
       carousel.style.transform = `translateX(-${offset}px)`;
-      carousel.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
     }
   }
 }
