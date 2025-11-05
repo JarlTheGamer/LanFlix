@@ -121,20 +121,6 @@ export class VideoPlayer {
       console.log('🔥 Fire TV detected - applying specific settings');
       this.videoElement.setAttribute('preload', 'metadata'); // Less aggressive preloading
       this.videoElement.removeAttribute('crossorigin'); // Remove CORS for Fire TV
-      
-      // Additional Fire TV video fixes
-      this.videoElement.setAttribute('x-webkit-airplay', 'allow');
-      this.videoElement.setAttribute('webkit-playsinline', 'true');
-      this.videoElement.setAttribute('playsinline', 'true');
-      this.videoElement.style.width = '100%';
-      this.videoElement.style.height = '100%';
-      this.videoElement.style.objectFit = 'contain';
-      this.videoElement.style.backgroundColor = 'black';
-      
-      // Force video to be visible
-      this.videoElement.style.display = 'block';
-      this.videoElement.style.visibility = 'visible';
-      this.videoElement.style.opacity = '1';
     } else {
       this.videoElement.setAttribute('preload', 'auto');
       this.videoElement.setAttribute('crossorigin', 'anonymous');
