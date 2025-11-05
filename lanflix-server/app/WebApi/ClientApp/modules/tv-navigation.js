@@ -45,9 +45,12 @@ export class TVNavigation {
    * Initialize TV navigation
    */
   initialize(navigationInstance = null) {
+    // Always initialize for debugging - we can disable later if needed
+    console.log('TV Navigation initializing...', { isTV: this.isTV, userAgent: navigator.userAgent });
+
     if (!this.isTV) {
-      console.log('Not a TV platform, skipping TV navigation');
-      return;
+      console.log('Not detected as TV platform, but initializing anyway for testing');
+      // Don't return - continue with initialization for testing
     }
 
     console.log('🎮 TV platform detected - enabling remote control navigation');
@@ -57,11 +60,20 @@ export class TVNavigation {
 
     // Add TV mode class and platform-specific classes
     document.body.classList.add('tv-mode');
+    document.body.classList.add('keyboard-active'); // Force keyboard navigation
 
     if (this.isFireTV) {
       document.body.classList.add('fire-tv');
     } else if (this.detectAndroidTV()) {
       document.body.classList.add('android-tv');
+    }
+
+    // Force the navigation to start with focus if we have a navigation instance
+    if (navigationInstance) {
+      setTimeout(() => {
+        console.log('Forcing initial focus update');
+        navigationInstance.updateFocus();
+      }, 100);
     }
 
     // Setup remote control event listeners
@@ -527,4 +539,26 @@ export class TVNavigation {
   }
 }
 
-export default new TVNavigation();
+const tvNavigation = new TVNavigation();
+
+// Add global debug method
+window.enableTVNavigation = () => {
+  console.log('Manually enabling TV navigation');
+  document.body.classList.add('tv-mode');
+  document.body.classList.add('keyboard-active');
+  if (tvNavigation.navigation) {
+    tvNavigation.navigation.updateFocus();
+  }
+};
+
+// Add global debug method to check status
+window.checkTVNavigation = () => {
+  console.log('TV Navigation Status:', {
+    isTV: tvNavigation.isTV,
+    userAgent: navigator.userAgent,
+    hasNavigation: !!tvNavigation.navigation,
+    bodyClasses: Array.from(document.body.classList)
+  });
+};
+
+export default tvNavigation;

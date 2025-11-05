@@ -58,6 +58,20 @@ export class Navigation {
   }
 
   /**
+   * Manually enable keyboard navigation (for debugging)
+   */
+  enableKeyboardNavigation() {
+    console.log('Manually enabling keyboard navigation');
+    document.body.classList.add('keyboard-active');
+    const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
+    menuButtons.forEach((btn) => btn.classList.remove('active'));
+    if (menuButtons[this.focusedMenuIndex]) {
+      menuButtons[this.focusedMenuIndex].classList.add('active');
+    }
+    this.updateFocus();
+  }
+
+  /**
    * Setup listener for server status messages
    */
   setupServerStatusListener() {
@@ -255,24 +269,30 @@ export class Navigation {
   }
 
   setupKeyboardNavigation() {
-    // Only enable keyboard navigation for non-touch devices or Android TV
-    if (!this.isTouchDevice || this.isAndroidTV) {
-      const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
+    // Always enable keyboard navigation - let users use it if they want
+    // We'll detect TV mode separately
+    const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
+    
+    // Set up keyboard event listener
+    document.addEventListener('keydown', (e) => this.handleKeyboard(e));
+
+    // Add support for Android TV remote control buttons
+    if (this.isAndroidTV) {
+      this.setupRemoteControlSupport();
+    }
+
+    // Check if we should start with focus enabled
+    const shouldStartFocused = !this.isTouchDevice || this.isAndroidTV || document.body.classList.contains('tv-mode');
+    
+    if (shouldStartFocused) {
+      console.log('Starting with keyboard navigation enabled');
       menuButtons.forEach((btn) => btn.classList.remove('active'));
       if (menuButtons[this.focusedMenuIndex]) {
         menuButtons[this.focusedMenuIndex].classList.add('active');
       }
-
-      document.addEventListener('keydown', (e) => this.handleKeyboard(e));
-
-      // Add support for Android TV remote control buttons
-      if (this.isAndroidTV) {
-        this.setupRemoteControlSupport();
-      }
-
       this.updateFocus();
     } else {
-      // For touch devices, ensure touch interactions work smoothly
+      // For touch devices, set up touch navigation but allow keyboard activation
       this.setupTouchNavigation();
     }
   }
@@ -330,9 +350,18 @@ export class Navigation {
   }
 
   handleKeyboard(e) {
-    // Skip keyboard navigation on touch devices (unless Android TV)
-    if (this.isTouchDevice && !this.isAndroidTV) {
-      return;
+    console.log('🎮 Key pressed:', e.key, 'Touch device:', this.isTouchDevice, 'Android TV:', this.isAndroidTV, 'Keyboard active:', document.body.classList.contains('keyboard-active'));
+    
+    // If this is the first keyboard interaction on a touch device, activate navigation
+    if (this.isTouchDevice && !this.isAndroidTV && !document.body.classList.contains('keyboard-active')) {
+      console.log('First keyboard interaction detected - activating navigation');
+      document.body.classList.add('keyboard-active');
+      const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
+      menuButtons.forEach((btn) => btn.classList.remove('active'));
+      if (menuButtons[this.focusedMenuIndex]) {
+        menuButtons[this.focusedMenuIndex].classList.add('active');
+      }
+      this.updateFocus();
     }
 
     // Prevent default for arrow keys to avoid page scrolling
@@ -492,11 +521,15 @@ export class Navigation {
   }
 
   updateFocus() {
+    console.log('🎯 Updating focus - element:', this.focusedElement, 'menu index:', this.focusedMenuIndex);
+    
     const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
     const tabs = Array.from(document.querySelectorAll('.tab'));
     const cards = () => Array.from(document.querySelectorAll('.movie-card'));
     const profileButton = document.querySelector('.profile');
     const settingsButton = document.querySelector('.settings-btn');
+    
+    console.log('Found elements:', { menuButtons: menuButtons.length, tabs: tabs.length, cards: cards().length });
 
     const allHeros = document.querySelectorAll('.hero');
     allHeros.forEach(h => h.classList.remove('focused'));

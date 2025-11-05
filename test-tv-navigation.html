@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Navigation Test</title>
+    <style>
+        body {
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        
+        .test-menu {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .test-item {
+            padding: 10px 20px;
+            background: #333;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        
+        .test-item.focused {
+            outline: 3px solid yellow !important;
+            outline-offset: 2px;
+            background: #555;
+        }
+        
+        .test-item.active {
+            background: #666;
+        }
+        
+        .debug-info {
+            margin: 20px 0;
+            padding: 10px;
+            background: #222;
+            border-radius: 5px;
+        }
+        
+        .instructions {
+            margin: 20px 0;
+            padding: 15px;
+            background: #1a1a1a;
+            border-left: 4px solid #0066cc;
+        }
+    </style>
+</head>
+<body>
+    <h1>TV Navigation Test Page</h1>
+    
+    <div class="instructions">
+        <h3>Instructions:</h3>
+        <p>1. Open browser console (F12)</p>
+        <p>2. Try pressing arrow keys - you should see console logs</p>
+        <p>3. If navigation doesn't work, run: <code>enableTestNavigation()</code> in console</p>
+        <p>4. Use Left/Right arrows to navigate between buttons</p>
+        <p>5. Press Enter to "click" focused button</p>
+    </div>
+    
+    <div class="test-menu">
+        <button class="test-item active" data-index="0">Home</button>
+        <button class="test-item" data-index="1">Movies</button>
+        <button class="test-item" data-index="2">TV Shows</button>
+        <button class="test-item" data-index="3">My List</button>
+        <button class="test-item" data-index="4">Settings</button>
+    </div>
+    
+    <div class="debug-info">
+        <h3>Debug Info:</h3>
+        <div id="debug-output">Press any key to start...</div>
+    </div>
+    
+    <script>
+        let focusedIndex = 0;
+        const items = document.querySelectorAll('.test-item');
+        const debugOutput = document.getElementById('debug-output');
+        
+        function updateDebugInfo() {
+            debugOutput.innerHTML = `
+                <p>Focused Index: ${focusedIndex}</p>
+                <p>User Agent: ${navigator.userAgent}</p>
+                <p>Touch Device: ${('ontouchstart' in window)}</p>
+                <p>Body Classes: ${Array.from(document.body.classList).join(', ') || 'none'}</p>
+                <p>Last Key: ${window.lastKey || 'none'}</p>
+            `;
+        }
+        
+        function updateFocus() {
+            items.forEach((item, index) => {
+                item.classList.remove('focused', 'active');
+                if (index === focusedIndex) {
+                    item.classList.add('focused', 'active');
+                }
+            });
+            updateDebugInfo();
+        }
+        
+        function handleKeyboard(e) {
+            window.lastKey = e.key;
+            console.log('Key pressed:', e.key, 'Code:', e.code);
+            
+            switch(e.key) {
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    focusedIndex = focusedIndex > 0 ? focusedIndex - 1 : items.length - 1;
+                    updateFocus();
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    focusedIndex = focusedIndex < items.length - 1 ? focusedIndex + 1 : 0;
+                    updateFocus();
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    console.log('Selected:', items[focusedIndex].textContent);
+                    alert(`Selected: ${items[focusedIndex].textContent}`);
+                    break;
+            }
+        }
+        
+        // Enable navigation
+        function enableTestNavigation() {
+            console.log('Enabling test navigation...');
+            document.body.classList.add('tv-mode', 'keyboard-active');
+            updateFocus();
+            console.log('Test navigation enabled. Try arrow keys.');
+        }
+        
+        // Set up event listeners
+        document.addEventListener('keydown', handleKeyboard);
+        
+        // Auto-enable after a short delay
+        setTimeout(() => {
+            enableTestNavigation();
+        }, 500);
+        
+        // Make function globally available
+        window.enableTestNavigation = enableTestNavigation;
+        
+        // Initial update
+        updateDebugInfo();
+        
+        console.log('Test page loaded. Use arrow keys to navigate, Enter to select.');
+        console.log('If navigation doesn\'t work, run: enableTestNavigation()');
+    </script>
+</body>
+</html>
