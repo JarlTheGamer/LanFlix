@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -12,16 +13,32 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.lanflix.webview.databinding.ActivityMainBinding
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
-    
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var webView: WebView
     private lateinit var swipeRefresh: SwipeRefreshLayout
-    
+
+    private val isAmazonFireTv: Boolean by lazy {
+        val manufacturer = Build.MANUFACTURER.orEmpty()
+        val model = Build.MODEL.orEmpty()
+        val product = Build.PRODUCT.orEmpty()
+        val device = Build.DEVICE.orEmpty()
+
+        manufacturer.equals("Amazon", ignoreCase = true) &&
+            (model.startsWith("AFT", ignoreCase = true) ||
+                product.startsWith("AFT", ignoreCase = true) ||
+                device.startsWith("AFT", ignoreCase = true))
+    }
+
     // Default server URL - change this to your server address
     private val serverUrl = "http://192.168.178.13:5037" // Change to your server IP
-    
+    private val serverHost: String? by lazy {
+        runCatching { Uri.parse(serverUrl).host?.lowercase(Locale.US) }.getOrNull()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -78,8 +95,7 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
         
-        // Enable hardware acceleration on the WebView
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        applyLayerTypeForUrl(serverUrl)
         
         // Set initial scale for better display - use 0 for automatic scaling
         webView.setInitialScale(0)
@@ -98,6 +114,7 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+                applyLayerTypeForUrl(url)
                 binding.progressBar.visibility = View.VISIBLE
             }
             
@@ -202,14 +219,17 @@ class MainActivity : AppCompatActivity() {
                 
                 // Handle external links
                 if (url.startsWith("http://") || url.startsWith("https://")) {
-                    if (!url.contains(Uri.parse(serverUrl).host ?: "")) {
+                    val parsed = runCatching { Uri.parse(url) }.getOrNull()
+                    val host = parsed?.host?.lowercase(Locale.US)
+                    val isExternalHost = serverHost != null && host != null && host != serverHost
+
+                    if (isExternalHost && parsed != null) {
                         // Open external links in browser
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        startActivity(intent)
+                        startActivity(Intent(Intent.ACTION_VIEW, parsed))
                         return true
                     }
                 }
-                
+
                 return false
             }
         }
@@ -241,6 +261,42 @@ class MainActivity : AppCompatActivity() {
     private fun setupSwipeRefresh() {
         // Disable pull-to-refresh to prevent accidental refreshes
         swipeRefresh.isEnabled = false
+    }
+
+    // Fire TV renders the HTML player surface as a blank rectangle if the WebView
+    // is forced onto the hardware layer. Keep the performance hint enabled for
+    // navigation screens, but fall back to the default layer when the dedicated
+    // player page is loading so the video element can composite correctly.
+    private fun applyLayerTypeForUrl(url: String?) {
+        val targetLayerType = when {
+            isAmazonFireTv && isVideoPlaybackUrl(url) -> View.LAYER_TYPE_NONE
+            else -> View.LAYER_TYPE_HARDWARE
+        }
+
+        if (webView.layerType != targetLayerType) {
+            webView.setLayerType(targetLayerType, null)
+        }
+    }
+
+    private fun isVideoPlaybackUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+
+        val parsedUrl = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+
+        val hostMatches = serverHost == null || parsedUrl.host?.lowercase(Locale.US) == serverHost
+        if (!hostMatches) return false
+
+        val path = parsedUrl.path?.lowercase(Locale.US).orEmpty()
+        val pathSegments = parsedUrl.pathSegments.map { it.lowercase(Locale.US) }
+        val fragment = parsedUrl.fragment?.lowercase(Locale.US).orEmpty()
+        val pageQuery = parsedUrl.getQueryParameter("page")?.lowercase(Locale.US).orEmpty()
+
+        if (pathSegments.any { it.contains("player") }) return true
+        if (path.contains("player")) return true
+        if (fragment.contains("player")) return true
+        if (pageQuery.contains("player")) return true
+
+        return false
     }
     
     private fun loadWebApp() {
