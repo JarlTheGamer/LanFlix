@@ -618,3 +618,46 @@
     justify-content: center;
   }
 }
+/* 
+TV Navigation Focus Styles */
+.tv-mode .modal-focused {
+  outline: 3px solid #e50914 !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.3) !important;
+  transform: scale(1.05) !important;
+  transition: all 0.2s ease !important;
+}
+
+.tv-mode .modal-btn.modal-focused {
+  background: #f40612 !important;
+  transform: scale(1.1) !important;
+}
+
+.tv-mode .modal-btn.secondary.modal-focused {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+.tv-mode .season-tab.modal-focused {
+  background: rgba(229, 9, 20, 0.4) !important;
+  color: #fff !important;
+  border-left: 3px solid #e50914 !important;
+  transform: translateX(4px) !important;
+}
+
+.tv-mode .episode-card-horizontal.modal-focused {
+  background: rgba(229, 9, 20, 0.2) !important;
+  transform: translateX(8px) scale(1.02) !important;
+  border-left: 4px solid #e50914 !important;
+}
+
+.tv-mode .episode-card-horizontal.modal-focused .episode-play-btn {
+  opacity: 1 !important;
+  transform: translate(-50%, -50%) scale(1.2) !important;
+}
+
+/* Ensure focus is visible even when hovering */
+.tv-mode .modal-focused:hover {
+  outline: 3px solid #e50914 !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.3) !important;
+}

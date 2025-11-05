@@ -7,8 +7,9 @@ import apiClient from './api-client.js';
 import stateManager from './data.js';
 
 export class ContentModal {
-    constructor(profileManager) {
+    constructor(profileManager, navigation = null) {
         this.profileManager = profileManager;
+        this.navigation = navigation;
         this.modal = null;
         this.currentContent = null;
     }
@@ -59,6 +60,11 @@ export class ContentModal {
             // Show modal with animation
             requestAnimationFrame(() => {
                 this.modal.classList.add('visible');
+                
+                // Initialize TV navigation if available
+                if (this.navigation && this.navigation.isAndroidTV) {
+                    this.navigation.initializeModalNavigation();
+                }
             });
 
             // Setup close handlers

@@ -10,13 +10,19 @@ export class Navigation {
     this.focusedCarouselIndex = 0; // Track which carousel is focused
     this.lastMenuIndex = 1;
 
+    // Modal navigation state
+    this.modalFocusedElement = 'actions'; // 'actions', 'seasons', 'episodes'
+    this.modalFocusedActionIndex = 0;
+    this.modalFocusedSeasonIndex = 0;
+    this.modalFocusedEpisodeIndex = 0;
+
     // Page transition state
     this.isTransitioning = false;
     this.transitionDuration = 300; // ms
 
     // Detect if device has touch capability
     this.isTouchDevice = this.detectTouchDevice();
-    
+
     // Detect if running on Android TV
     this.isAndroidTV = this.detectAndroidTV();
   }
@@ -36,10 +42,10 @@ export class Navigation {
    */
   detectAndroidTV() {
     const userAgent = navigator.userAgent.toLowerCase();
-    
+
     // Fire TV specific detection
     const isFireTV = userAgent.includes('aftm') || userAgent.includes('aftb') || userAgent.includes('afts') || userAgent.includes('aftkmst12');
-    
+
     // General TV detection
     const isTV = (
       isFireTV ||
@@ -55,10 +61,10 @@ export class Navigation {
     );
 
     console.log('TV Detection:', { userAgent, isTV, isFireTV });
-    
+
     // Store Fire TV detection for later use
     this.isFireTV = isFireTV;
-    
+
     return isTV;
   }
 
@@ -67,7 +73,7 @@ export class Navigation {
     this.setupTabs();
     this.setupKeyboardNavigation();
     this.setupServerStatusListener();
-    
+
     // Initialize TV navigation if on TV platform
     if (this.isAndroidTV) {
       this.initializeTVNavigation();
@@ -79,18 +85,18 @@ export class Navigation {
    */
   initializeTVNavigation() {
     console.log('🎮 TV platform detected - enabling remote control navigation');
-    
+
     // Add TV mode class for styling
     document.body.classList.add('tv-mode');
-    
+
     // Setup remote control event listeners
     this.setupRemoteControlListeners();
-    
+
     // Force focus to be visible immediately
     this.focusedElement = 'menu';
     this.focusedMenuIndex = 1; // Start on Home
     this.updateFocus();
-    
+
     // Ensure the active menu item is properly set
     const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
     menuButtons.forEach((btn) => btn.classList.remove('active'));
@@ -390,7 +396,7 @@ export class Navigation {
     // Enable keyboard navigation for non-touch devices or TV platforms
     if (!this.isTouchDevice || this.isAndroidTV) {
       console.log('Setting up keyboard navigation for TV/desktop');
-      
+
       const menuButtons = Array.from(document.querySelectorAll('.menu-item'));
       menuButtons.forEach((btn) => btn.classList.remove('active'));
       if (menuButtons[this.focusedMenuIndex]) {
@@ -420,7 +426,7 @@ export class Navigation {
   setupTouchNavigation() {
     // Disable focus styles on touch devices
     document.body.classList.add('touch-device');
-    
+
     // Add CSS to hide focus indicators on touch devices
     const style = document.createElement('style');
     style.textContent = `
@@ -452,6 +458,13 @@ export class Navigation {
     // If profile selection is active, let profile manager handle it
     if (this.profileManager.profileSelectionActive) {
       this.profileManager.handleKeyboard(e);
+      return;
+    }
+
+    // Check if modal is open and handle modal navigation
+    const modal = document.getElementById('content-modal');
+    if (modal && modal.classList.contains('visible')) {
+      this.handleModalKeyboard(e);
       return;
     }
 
@@ -580,6 +593,19 @@ export class Navigation {
           this.focusedCardIndex = 0; // Reset to first card in new carousel
           this.updateFocus();
         }
+      } else if (e.key === 'Enter') {
+        // Open modal for focused card
+        const currentCarousel = carousels[this.focusedCarouselIndex];
+        if (currentCarousel) {
+          const carouselCards = Array.from(currentCarousel.querySelectorAll('.movie-card'));
+          const focusedCard = carouselCards[this.focusedCardIndex];
+          if (focusedCard) {
+            const contentId = focusedCard.dataset.contentId;
+            const contentType = focusedCard.dataset.contentType;
+            const isDiscovery = focusedCard.dataset.isDiscovery === 'true';
+            this.contentDisplay.contentModal.show(contentId, contentType, isDiscovery);
+          }
+        }
       }
     }
   }
@@ -679,5 +705,178 @@ export class Navigation {
 
       carousel.style.transform = `translateX(-${offset}px)`;
     }
+  }
+
+  /**
+   * Handle keyboard navigation within the modal
+   */
+  handleModalKeyboard(e) {
+    const modal = document.getElementById('content-modal');
+    if (!modal) return;
+
+    // Close modal on Escape
+    if (e.key === 'Escape') {
+      const closeBtn = modal.querySelector('.modal-close');
+      if (closeBtn) {
+        closeBtn.click();
+      }
+      return;
+    }
+
+    // Get modal elements
+    const actionButtons = Array.from(modal.querySelectorAll('.modal-actions .modal-btn'));
+    const seasonTabs = Array.from(modal.querySelectorAll('.season-tab'));
+    const episodeCards = Array.from(modal.querySelectorAll('.season-episodes.active .episode-card-horizontal'));
+
+    // Handle navigation based on current focused element
+    if (this.modalFocusedElement === 'actions') {
+      if (e.key === 'ArrowLeft') {
+        this.modalFocusedActionIndex = this.modalFocusedActionIndex > 0 
+          ? this.modalFocusedActionIndex - 1 
+          : actionButtons.length - 1;
+        this.updateModalFocus();
+      } else if (e.key === 'ArrowRight') {
+        this.modalFocusedActionIndex = this.modalFocusedActionIndex < actionButtons.length - 1 
+          ? this.modalFocusedActionIndex + 1 
+          : 0;
+        this.updateModalFocus();
+      } else if (e.key === 'ArrowDown') {
+        // Move to seasons if available, otherwise episodes
+        if (seasonTabs.length > 0) {
+          this.modalFocusedElement = 'seasons';
+          this.modalFocusedSeasonIndex = 0;
+        } else if (episodeCards.length > 0) {
+          this.modalFocusedElement = 'episodes';
+          this.modalFocusedEpisodeIndex = 0;
+        }
+        this.updateModalFocus();
+      } else if (e.key === 'Enter') {
+        if (actionButtons[this.modalFocusedActionIndex]) {
+          actionButtons[this.modalFocusedActionIndex].click();
+        }
+      }
+    } else if (this.modalFocusedElement === 'seasons') {
+      if (e.key === 'ArrowUp') {
+        this.modalFocusedElement = 'actions';
+        this.updateModalFocus();
+      } else if (e.key === 'ArrowDown') {
+        if (episodeCards.length > 0) {
+          this.modalFocusedElement = 'episodes';
+          this.modalFocusedEpisodeIndex = 0;
+          this.updateModalFocus();
+        }
+      } else if (e.key === 'ArrowLeft') {
+        this.modalFocusedSeasonIndex = this.modalFocusedSeasonIndex > 0 
+          ? this.modalFocusedSeasonIndex - 1 
+          : seasonTabs.length - 1;
+        this.updateModalFocus();
+      } else if (e.key === 'ArrowRight') {
+        this.modalFocusedSeasonIndex = this.modalFocusedSeasonIndex < seasonTabs.length - 1 
+          ? this.modalFocusedSeasonIndex + 1 
+          : 0;
+        this.updateModalFocus();
+      } else if (e.key === 'Enter') {
+        if (seasonTabs[this.modalFocusedSeasonIndex]) {
+          seasonTabs[this.modalFocusedSeasonIndex].click();
+          // After clicking season tab, focus on first episode
+          setTimeout(() => {
+            this.modalFocusedElement = 'episodes';
+            this.modalFocusedEpisodeIndex = 0;
+            this.updateModalFocus();
+          }, 100);
+        }
+      }
+    } else if (this.modalFocusedElement === 'episodes') {
+      if (e.key === 'ArrowUp') {
+        if (this.modalFocusedEpisodeIndex > 0) {
+          this.modalFocusedEpisodeIndex--;
+          this.updateModalFocus();
+        } else if (seasonTabs.length > 0) {
+          this.modalFocusedElement = 'seasons';
+          this.updateModalFocus();
+        } else {
+          this.modalFocusedElement = 'actions';
+          this.updateModalFocus();
+        }
+      } else if (e.key === 'ArrowDown') {
+        if (this.modalFocusedEpisodeIndex < episodeCards.length - 1) {
+          this.modalFocusedEpisodeIndex++;
+          this.updateModalFocus();
+        }
+      } else if (e.key === 'Enter') {
+        const focusedEpisode = episodeCards[this.modalFocusedEpisodeIndex];
+        if (focusedEpisode) {
+          // Try to click play button first, then download button
+          const playBtn = focusedEpisode.querySelector('.episode-play-btn');
+          const downloadBtn = focusedEpisode.querySelector('.episode-download-btn');
+          
+          if (playBtn) {
+            playBtn.click();
+          } else if (downloadBtn) {
+            downloadBtn.click();
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Update focus styling in modal
+   */
+  updateModalFocus() {
+    const modal = document.getElementById('content-modal');
+    if (!modal) return;
+
+    // Remove all existing focus classes
+    modal.querySelectorAll('.modal-focused').forEach(el => {
+      el.classList.remove('modal-focused');
+    });
+
+    // Add focus to current element
+    if (this.modalFocusedElement === 'actions') {
+      const actionButtons = modal.querySelectorAll('.modal-actions .modal-btn');
+      if (actionButtons[this.modalFocusedActionIndex]) {
+        actionButtons[this.modalFocusedActionIndex].classList.add('modal-focused');
+      }
+    } else if (this.modalFocusedElement === 'seasons') {
+      const seasonTabs = modal.querySelectorAll('.season-tab');
+      if (seasonTabs[this.modalFocusedSeasonIndex]) {
+        seasonTabs[this.modalFocusedSeasonIndex].classList.add('modal-focused');
+      }
+    } else if (this.modalFocusedElement === 'episodes') {
+      const episodeCards = modal.querySelectorAll('.season-episodes.active .episode-card-horizontal');
+      if (episodeCards[this.modalFocusedEpisodeIndex]) {
+        episodeCards[this.modalFocusedEpisodeIndex].classList.add('modal-focused');
+        
+        // Scroll episode into view if needed
+        const episodesContainer = modal.querySelector('.episodes-list-vertical');
+        if (episodesContainer) {
+          const focusedEpisode = episodeCards[this.modalFocusedEpisodeIndex];
+          const containerRect = episodesContainer.getBoundingClientRect();
+          const episodeRect = focusedEpisode.getBoundingClientRect();
+          
+          if (episodeRect.bottom > containerRect.bottom) {
+            focusedEpisode.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          } else if (episodeRect.top < containerRect.top) {
+            focusedEpisode.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Initialize modal navigation when modal opens
+   */
+  initializeModalNavigation() {
+    this.modalFocusedElement = 'actions';
+    this.modalFocusedActionIndex = 0;
+    this.modalFocusedSeasonIndex = 0;
+    this.modalFocusedEpisodeIndex = 0;
+    
+    // Set initial focus after a short delay to ensure modal is rendered
+    setTimeout(() => {
+      this.updateModalFocus();
+    }, 100);
   }
 }

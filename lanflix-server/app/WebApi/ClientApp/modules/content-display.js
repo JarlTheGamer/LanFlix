@@ -3,9 +3,9 @@ import apiClient from './api-client.js';
 import ContentModal from './content-modal.js';
 
 export class ContentDisplay {
-  constructor(profileManager) {
+  constructor(profileManager, navigation = null) {
     this.profileManager = profileManager;
-    this.contentModal = new ContentModal(profileManager);
+    this.contentModal = new ContentModal(profileManager, navigation);
     this.currentCategory = 'home';
     this.currentHeroIndex = 0;
     this.activeAmbilightLayer = 1;

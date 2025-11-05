@@ -22,8 +22,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Create instances
     const profileManager = new ProfileManager();
-    const contentDisplay = new ContentDisplay(profileManager);
-    const navigation = new Navigation(contentDisplay, profileManager);
+    const navigation = new Navigation(null, profileManager); // Will be set after contentDisplay creation
+    const contentDisplay = new ContentDisplay(profileManager, navigation);
+    
+    // Set the contentDisplay reference in navigation
+    navigation.contentDisplay = contentDisplay;
 
     // Initialize modules
     await profileManager.initialize();
