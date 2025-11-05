@@ -23,14 +23,11 @@ body {
   position: relative;
   width: 100vw;
   height: 100vh;
-  background: #000 !important;
-  background-color: #000 !important;
+  background: #000;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: none;
-  /* Fire TV specific fixes */
-  overflow: hidden;
 }
 
 .player-container.show-cursor {
@@ -41,13 +38,7 @@ body {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  background: #000 !important;
-  background-color: #000 !important;
-  /* Fire TV specific fixes */
-  opacity: 1 !important;
-  visibility: visible !important;
-  display: block !important;
-  z-index: 1;
+  background: #000;
 }
 
 /* Ensure video plays inline on mobile */
@@ -523,53 +514,4 @@ TV Navigation Focus Styles */
 .tv-mode .center-play-button svg {
   width: 50px;
   height: 50px;
-}
-
-/* Fire TV specific fixes for white screen issue */
-@media screen and (-webkit-min-device-pixel-ratio: 0) {
-  /* WebKit/Fire TV specific styles */
-  .player-container {
-    background: #000000 !important;
-    background-color: #000000 !important;
-  }
-  
-  .video-element {
-    background: #000000 !important;
-    background-color: #000000 !important;
-    -webkit-background-clip: padding-box !important;
-    background-clip: padding-box !important;
-  }
-}
-
-/* Fire TV user agent specific styles */
-body {
-  background: #000000 !important;
-  background-color: #000000 !important;
-}
-
-html {
-  background: #000000 !important;
-  background-color: #000000 !important;
-}
-
-/* Additional Fire TV video element fixes */
-video {
-  background: #000000 !important;
-  background-color: #000000 !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-/* Prevent any white overlays */
-* {
-  background-color: transparent;
-}
-
-.player-container * {
-  background-color: transparent;
-}
-
-.player-container,
-.video-element {
-  background-color: #000000 !important;
 }

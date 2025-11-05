@@ -72,9 +72,6 @@
     // Initialize player
     await player.initialize(contentId, contentType, episodeId, startPosition);
 
-    // Apply Fire TV specific styling early to prevent white screen
-    applyEarlyFireTVFixes();
-
     // Setup TV remote control mapping
     setupTVRemoteControl();
 
@@ -166,57 +163,6 @@
           }, 0);
         }
       }, true);
-    }
-
-    // Apply early Fire TV fixes to prevent white screen
-    function applyEarlyFireTVFixes() {
-      const userAgent = navigator.userAgent.toLowerCase();
-      const isFireTV = userAgent.includes('aftm') || userAgent.includes('aftb') || userAgent.includes('afts');
-      
-      if (isFireTV) {
-        console.log('🔥 Fire TV detected - applying early white screen prevention');
-        
-        // Add Fire TV class immediately
-        document.body.classList.add('fire-tv-mode');
-        
-        // Force black backgrounds immediately
-        document.body.style.backgroundColor = '#000000';
-        document.documentElement.style.backgroundColor = '#000000';
-        
-        // Apply to player container
-        const playerContainer = document.querySelector('.player-container');
-        if (playerContainer) {
-          playerContainer.style.backgroundColor = '#000000';
-          playerContainer.style.background = '#000000';
-        }
-        
-        // Apply to video element
-        const videoElement = document.getElementById('video-player');
-        if (videoElement) {
-          videoElement.style.backgroundColor = '#000000';
-          videoElement.style.background = '#000000';
-          videoElement.style.opacity = '1';
-          videoElement.style.visibility = 'visible';
-        }
-        
-        // Inject early Fire TV CSS
-        const earlyStyle = document.createElement('style');
-        earlyStyle.innerHTML = `
-          .fire-tv-mode,
-          .fire-tv-mode * {
-            background-color: #000000 !important;
-          }
-          .fire-tv-mode .player-container,
-          .fire-tv-mode .video-element,
-          .fire-tv-mode #video-player {
-            background: #000000 !important;
-            background-color: #000000 !important;
-            opacity: 1 !important;
-            visibility: visible !important;
-          }
-        `;
-        document.head.appendChild(earlyStyle);
-      }
     }
 
     // Cleanup on page unload
