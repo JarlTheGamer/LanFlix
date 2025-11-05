@@ -280,11 +280,7 @@
   <script type="module">
     import { appConfig } from '../modules/app-config.js';
     import apiClient from '../modules/api-client.js';
-    import tvNavigation from '../modules/tv-navigation.js';
     import { serverDiscovery } from '../modules/server-discovery.js';
-    
-    // Initialize TV navigation
-    tvNavigation.initialize();
 
     // Load current configuration
     const config = appConfig.getAll();

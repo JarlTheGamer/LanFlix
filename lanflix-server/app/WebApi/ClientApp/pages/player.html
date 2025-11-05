@@ -1,31 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Player - Flix</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="../styles/player.css">
-  
+
   <!-- Google Cast SDK -->
   <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
 </head>
+
 <body>
   <div class="player-container">
-    <video 
-      id="video-player" 
-      class="video-element"
-      playsinline
-      webkit-playsinline
-      preload="auto"
-      crossorigin="anonymous"
-    ></video>
+    <video id="video-player" class="video-element" playsinline webkit-playsinline preload="auto"
+      crossorigin="anonymous"></video>
     <div id="player-controls" class="player-controls"></div>
     <button id="back-button" class="back-button" title="Back">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" />
       </svg>
     </button>
   </div>
@@ -34,7 +32,6 @@
     import VideoPlayer from '../modules/video-player.js';
     import apiClient from '../modules/api-client.js';
     import stateManager from '../modules/data.js';
-    import tvNavigation from '../modules/tv-navigation.js';
 
     // Get URL parameters
     const urlParams = new URLSearchParams(window.location.search);
@@ -49,7 +46,7 @@
 
     // Get current profile from state manager
     const profileId = stateManager.currentProfileId;
-    
+
     if (!profileId) {
       console.error('No profile selected, redirecting to profiles page');
       alert('Please select a profile first');
@@ -75,8 +72,7 @@
     // Initialize player
     await player.initialize(contentId, contentType, episodeId, startPosition);
 
-    // Initialize TV navigation for player controls
-    tvNavigation.initialize();
+    // TV navigation is now handled by the main navigation module
 
     // Back button handler
     document.getElementById('back-button').addEventListener('click', () => {
@@ -90,4 +86,5 @@
     });
   </script>
 </body>
+
 </html>
