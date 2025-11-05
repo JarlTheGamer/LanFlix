@@ -4,6 +4,7 @@
  */
 
 import apiClient from './api-client.js';
+import PlayerNavigation from './player-navigation.js';
 
 export class VideoPlayer {
   constructor(videoElement, profileId) {
@@ -40,6 +41,9 @@ export class VideoPlayer {
     // Initialization state
     this.isInitialized = false;
     this.isDestroyed = false;
+
+    // TV Navigation
+    this.playerNavigation = new PlayerNavigation(this);
   }
 
   /**
@@ -73,6 +77,9 @@ export class VideoPlayer {
 
       // Detect playback mode and setup stream (with retries for Fire TV)
       await this.setupStreamWithRetry(startPosition);
+
+      // Initialize TV navigation
+      this.playerNavigation.initialize();
 
       this.isInitialized = true;
       console.log('✅ Video player initialized successfully');
@@ -717,6 +724,11 @@ export class VideoPlayer {
 
     this.controlsVisible = true;
 
+    // Notify navigation system
+    if (this.playerNavigation) {
+      this.playerNavigation.onControlsVisibilityChange(true);
+    }
+
     // Clear existing timeout
     if (this.controlsTimeout) {
       clearTimeout(this.controlsTimeout);
@@ -753,6 +765,11 @@ export class VideoPlayer {
     }
 
     this.controlsVisible = false;
+
+    // Notify navigation system
+    if (this.playerNavigation) {
+      this.playerNavigation.onControlsVisibilityChange(false);
+    }
 
     // Clear timeout
     if (this.controlsTimeout) {
@@ -1074,6 +1091,13 @@ export class VideoPlayer {
       return;
     }
 
+    // Let TV navigation handle TV platform controls
+    if (this.playerNavigation && this.playerNavigation.isTVPlatform) {
+      // TV navigation will handle the event
+      return;
+    }
+
+    // Handle desktop/web keyboard controls
     switch (event.key) {
       case ' ':
       case 'k':
@@ -1251,6 +1275,11 @@ export class VideoPlayer {
     const spinner = document.getElementById('player-loading-spinner');
     if (spinner) {
       spinner.remove();
+    }
+
+    // Destroy TV navigation
+    if (this.playerNavigation) {
+      this.playerNavigation.destroy();
     }
 
     // Mark as destroyed
