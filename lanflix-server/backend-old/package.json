@@ -1,6 +1,6 @@
 {
   "name": "lanflix-server",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "Lanflix streaming media server backend",
   "main": "dist/app.js",
   "bin": "dist/app.js",
