@@ -20,6 +20,15 @@ export class ContentDisplay {
     this.ambilightLayer1 = document.getElementById('ambilight-layer-1');
     this.ambilightLayer2 = document.getElementById('ambilight-layer-2');
     this.topNav = document.querySelector('.top-nav');
+
+    // Swipe functionality properties
+    this.swipeStartX = 0;
+    this.swipeStartY = 0;
+    this.swipeEndX = 0;
+    this.swipeEndY = 0;
+    this.isSwipeActive = false;
+    this.swipeThreshold = 50; // Minimum distance for a swipe
+    this.swipeTimeout = null;
   }
 
   async initialize() {
