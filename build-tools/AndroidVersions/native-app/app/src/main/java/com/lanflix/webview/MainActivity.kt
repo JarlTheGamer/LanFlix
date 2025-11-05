@@ -78,17 +78,8 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
         
-        // Hardware acceleration - disable for Fire TV to fix video rendering issues
-        val isFireTV = android.os.Build.MODEL.contains("AFT", ignoreCase = true) || 
-                      android.os.Build.MANUFACTURER.equals("Amazon", ignoreCase = true)
-        
-        if (isFireTV) {
-            // Use software rendering for Fire TV to fix video display issues
-            webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-        } else {
-            // Enable hardware acceleration on other devices
-            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        }
+        // Enable hardware acceleration on the WebView
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         
         // Set initial scale for better display - use 0 for automatic scaling
         webView.setInitialScale(0)
