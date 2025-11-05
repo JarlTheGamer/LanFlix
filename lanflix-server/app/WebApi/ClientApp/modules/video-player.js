@@ -81,6 +81,13 @@ export class VideoPlayer {
       // Initialize TV navigation
       this.playerNavigation.initialize();
 
+      // Start Fire TV white screen monitoring if on Fire TV
+      const userAgent = navigator.userAgent.toLowerCase();
+      const isFireTV = userAgent.includes('aftm') || userAgent.includes('aftb') || userAgent.includes('afts');
+      if (isFireTV) {
+        this.startFireTVMonitoring();
+      }
+
       this.isInitialized = true;
       console.log('✅ Video player initialized successfully');
 
@@ -116,11 +123,24 @@ export class VideoPlayer {
     this.videoElement.setAttribute('playsinline', '');
     this.videoElement.setAttribute('webkit-playsinline', '');
     
-    // Fire TV specific settings
+    // Fire TV specific settings to prevent white screen
     if (isFireTV) {
-      console.log('🔥 Fire TV detected - applying specific settings');
-      this.videoElement.setAttribute('preload', 'metadata'); // Less aggressive preloading
+      console.log('🔥 Fire TV detected - applying specific settings to prevent white screen');
+      this.videoElement.setAttribute('preload', 'none'); // Minimal preloading for Fire TV
       this.videoElement.removeAttribute('crossorigin'); // Remove CORS for Fire TV
+      
+      // Force black background and prevent white screen
+      this.videoElement.style.backgroundColor = '#000000';
+      this.videoElement.style.background = '#000000';
+      
+      // Fire TV specific video attributes
+      this.videoElement.setAttribute('x-webkit-airplay', 'deny');
+      this.videoElement.setAttribute('disableremoteplayback', '');
+      
+      // Ensure proper video rendering on Fire TV
+      this.videoElement.style.objectFit = 'contain';
+      this.videoElement.style.objectPosition = 'center';
+      
     } else {
       this.videoElement.setAttribute('preload', 'auto');
       this.videoElement.setAttribute('crossorigin', 'anonymous');
@@ -132,6 +152,9 @@ export class VideoPlayer {
       this.videoElement.setAttribute('disablepictureinpicture', '');
       // Ensure controls are disabled (we handle them ourselves)
       this.videoElement.removeAttribute('controls');
+      
+      // Additional TV-specific styling to prevent white screen
+      this.videoElement.style.backgroundColor = '#000000';
     }
 
     // Ensure audio is enabled
@@ -258,6 +281,9 @@ export class VideoPlayer {
     console.log('🔥 Attempting Fire TV fallback initialization...');
     
     try {
+      // Apply Fire TV specific styling to prevent white screen
+      this.applyFireTVStyling();
+      
       // Simplified Fire TV initialization
       const streamUrl = this.getStreamUrl(startPosition);
       console.log('🔗 Fire TV fallback stream URL:', streamUrl);
@@ -279,6 +305,94 @@ export class VideoPlayer {
       console.error('❌ Fire TV fallback initialization failed:', error);
       this.showNotification('Failed to initialize video player on Fire TV. Please check your network connection.');
       throw error;
+    }
+  }
+
+  /**
+   * Apply Fire TV specific styling to prevent white screen
+   */
+  applyFireTVStyling() {
+    console.log('🔥 Applying Fire TV specific styling to prevent white screen');
+    
+    // Force black background on all relevant elements
+    const elements = [
+      document.body,
+      document.documentElement,
+      document.querySelector('.player-container'),
+      this.videoElement
+    ];
+    
+    elements.forEach(element => {
+      if (element) {
+        element.style.backgroundColor = '#000000';
+        element.style.background = '#000000';
+        element.style.opacity = '1';
+        element.style.visibility = 'visible';
+      }
+    });
+    
+    // Add Fire TV specific CSS class
+    document.body.classList.add('fire-tv-mode');
+    
+    // Inject Fire TV specific CSS
+    const fireTVStyle = document.createElement('style');
+    fireTVStyle.innerHTML = `
+      .fire-tv-mode * {
+        background-color: transparent !important;
+      }
+      .fire-tv-mode .player-container,
+      .fire-tv-mode .video-element,
+      .fire-tv-mode video {
+        background: #000000 !important;
+        background-color: #000000 !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+      }
+      .fire-tv-mode body,
+      .fire-tv-mode html {
+        background: #000000 !important;
+        background-color: #000000 !important;
+      }
+    `;
+    document.head.appendChild(fireTVStyle);
+  }
+
+  /**
+   * Start Fire TV monitoring to prevent white screen issues
+   */
+  startFireTVMonitoring() {
+    console.log('🔥 Starting Fire TV white screen monitoring');
+    
+    // Monitor every 2 seconds during playback
+    this.fireTVMonitorInterval = setInterval(() => {
+      if (this.isPlaying && !this.isDestroyed) {
+        this.checkAndFixFireTVWhiteScreen();
+      }
+    }, 2000);
+  }
+
+  /**
+   * Check and fix Fire TV white screen issues
+   */
+  checkAndFixFireTVWhiteScreen() {
+    // Check if video element is properly styled
+    const videoStyle = window.getComputedStyle(this.videoElement);
+    const containerStyle = window.getComputedStyle(document.querySelector('.player-container'));
+    
+    // Fix if background is not black
+    if (videoStyle.backgroundColor !== 'rgb(0, 0, 0)' || 
+        containerStyle.backgroundColor !== 'rgb(0, 0, 0)') {
+      
+      console.log('🔥 Fire TV: Detected potential white screen, applying fix');
+      this.applyFireTVStyling();
+    }
+    
+    // Ensure video is visible
+    if (videoStyle.opacity !== '1' || videoStyle.visibility !== 'visible') {
+      console.log('🔥 Fire TV: Video element not visible, fixing');
+      this.videoElement.style.opacity = '1';
+      this.videoElement.style.visibility = 'visible';
+      this.videoElement.style.display = 'block';
     }
   }
 
@@ -507,6 +621,26 @@ export class VideoPlayer {
     this.videoElement.addEventListener('playing', () => {
       console.log('▶️ Video playing (buffering complete)');
       this.hideLoadingSpinner();
+      
+      // Fire TV specific fix for white screen after playback starts
+      const userAgent = navigator.userAgent.toLowerCase();
+      const isFireTV = userAgent.includes('aftm') || userAgent.includes('aftb') || userAgent.includes('afts');
+      
+      if (isFireTV) {
+        console.log('🔥 Fire TV: Ensuring video visibility after playback starts');
+        // Force video element to be visible and properly styled
+        this.videoElement.style.backgroundColor = '#000000';
+        this.videoElement.style.opacity = '1';
+        this.videoElement.style.visibility = 'visible';
+        this.videoElement.style.display = 'block';
+        
+        // Ensure container is also properly styled
+        const container = document.querySelector('.player-container');
+        if (container) {
+          container.style.backgroundColor = '#000000';
+          container.style.background = '#000000';
+        }
+      }
     });
 
     // Error handling
@@ -1262,6 +1396,11 @@ export class VideoPlayer {
     // Clear timeouts
     if (this.controlsTimeout) {
       clearTimeout(this.controlsTimeout);
+    }
+
+    // Clear Fire TV monitoring
+    if (this.fireTVMonitorInterval) {
+      clearInterval(this.fireTVMonitorInterval);
     }
 
     // Remove event listeners (they'll be cleaned up when elements are removed)
