@@ -95,7 +95,29 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
         
-        applyLayerTypeForUrl(serverUrl)
+        // Force hardware acceleration only on devices that need the hint. Fire TV
+        // devices (model identifiers start with "AFT") already run the WebView with
+        // hardware acceleration by default, but explicitly forcing the layer causes
+        // the video element to render as a blank surface while audio continues to
+        // play. Leaving the layer type untouched lets the platform pick the
+        // appropriate pipeline without giving up hardware acceleration performance.
+        val manufacturer = Build.MANUFACTURER.orEmpty()
+        val model = Build.MODEL.orEmpty()
+        val product = Build.PRODUCT.orEmpty()
+        val device = Build.DEVICE.orEmpty()
+        val isAmazonFireTv = manufacturer.equals("Amazon", ignoreCase = true) &&
+            (model.startsWith("AFT", ignoreCase = true) ||
+                product.startsWith("AFT", ignoreCase = true) ||
+                device.startsWith("AFT", ignoreCase = true))
+
+        if (isAmazonFireTv) {
+            // LAYER_TYPE_NONE keeps hardware acceleration enabled when the hosting
+            // window is hardware accelerated, but avoids the blank video surface seen
+            // on Fire TV when forcing LAYER_TYPE_HARDWARE.
+            webView.setLayerType(View.LAYER_TYPE_NONE, null)
+        } else {
+            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        }
         
         // Set initial scale for better display - use 0 for automatic scaling
         webView.setInitialScale(0)
