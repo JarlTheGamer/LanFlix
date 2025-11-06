@@ -94,6 +94,13 @@ build-tools/AndroidVersions/WebUI/app/build/
 build-tools/AndroidVersions/WebUI/.gradle/
 build-tools/AndroidVersions/WebUI/local.properties
 
+# Current native-app build files
+build-tools/AndroidVersions/native-app/build/
+build-tools/AndroidVersions/native-app/app/build/
+build-tools/AndroidVersions/native-app/.gradle/
+build-tools/AndroidVersions/native-app/local.properties
+build-tools/AndroidVersions/native-app/gradle.properties
+
 # Android Studio
 *.iml
 .idea/

@@ -113,6 +113,9 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
         
+        // Add JavaScript interface for native app integration
+        webView.addJavascriptInterface(WebAppInterface(this, updateManager), "Android")
+        
         // Force hardware acceleration only on devices that need the hint. Fire TV
         // devices (model identifiers start with "AFT") already run the WebView with
         // hardware acceleration by default, but explicitly forcing the layer causes
