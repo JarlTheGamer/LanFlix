@@ -74,33 +74,100 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // Update checking functionality
-async function checkForUpdates() {
+async function checkForUpdates(options = {}) {
+  const { silent = false } = options;
   try {
-    // Get current version
     const currentVersion = getCurrentVersion();
     const currentVersionCode = getVersionCode(currentVersion);
-    
-    // Check with server
+
     const response = await fetch(`/api/app/update-check?currentVersion=${currentVersionCode}&platform=android`);
-    
+
     if (!response.ok) {
       throw new Error('Failed to check for updates');
     }
 
     const updateInfo = await response.json();
-    
-    if (updateInfo.versionCode && updateInfo.versionCode > currentVersionCode) {
-      // Update available
-      showUpdateDialog(updateInfo, currentVersion);
+
+    if (hasUpdateAvailable(updateInfo, currentVersionCode)) {
+      const modalData = mapUpdateInfoToModal(updateInfo, currentVersion);
+      appUpdater.showUpdateNotification(modalData);
     } else {
-      // No update available
-      showNoUpdateMessage();
+      if (!silent) {
+        appUpdater.showNoUpdateMessage();
+      }
     }
-    
   } catch (error) {
     console.error('Error checking for updates:', error);
-    alert('Failed to check for updates. Please check your internet connection and try again.');
+    if (!silent) {
+      appUpdater.showErrorMessage('Failed to check for updates. Please check your internet connection and try again.');
+    }
   }
+}
+
+function hasUpdateAvailable(updateInfo, currentVersionCode) {
+  if (!updateInfo || updateInfo.hasUpdate === false) {
+    return false;
+  }
+
+  if (typeof updateInfo.versionCode === 'number') {
+    return updateInfo.versionCode > currentVersionCode;
+  }
+
+  return false;
+}
+
+function mapUpdateInfoToModal(updateInfo, currentVersion) {
+  const versionName = updateInfo.versionName || updateInfo.version || `v${updateInfo.versionCode}`;
+  const releaseNotes = buildReleaseNotes(updateInfo);
+  const downloadUrl = updateInfo.downloadUrl || updateInfo.htmlUrl || 'https://github.com/JarlTheGamer/Applications./releases/latest';
+
+  return {
+    version: versionName,
+    currentVersion,
+    releaseNotes,
+    downloadUrl,
+    htmlUrl: updateInfo.htmlUrl || downloadUrl
+  };
+}
+
+function buildReleaseNotes(updateInfo) {
+  const notes = updateInfo.releaseNotes && updateInfo.releaseNotes.trim().length > 0
+    ? updateInfo.releaseNotes
+    : 'Bug fixes and performance improvements.';
+
+  const extraDetails = [];
+
+  if (typeof updateInfo.fileSize === 'number' && updateInfo.fileSize > 0) {
+    extraDetails.push(`Download size: ${formatFileSize(updateInfo.fileSize)}`);
+  }
+
+  if (updateInfo.mandatory) {
+    extraDetails.push('This is a mandatory update.');
+  }
+
+  if (updateInfo.checksum) {
+    extraDetails.push(`Checksum: ${updateInfo.checksum}`);
+  }
+
+  if (extraDetails.length === 0) {
+    return notes;
+  }
+
+  return `${notes}\n\n${extraDetails.map(detail => `- ${detail}`).join('\n')}`;
+}
+
+function formatFileSize(bytes) {
+  const megabytes = bytes / (1024 * 1024);
+  if (megabytes >= 1) {
+    return `${megabytes.toFixed(2)} MB`;
+  }
+
+  const kilobytes = bytes / 1024;
+  if (kilobytes >= 1) {
+    return `${kilobytes.toFixed(0)} KB`;
+  }
+
+  return `${bytes} B`;
 }
 
 function getCurrentVersion() {
@@ -133,73 +200,9 @@ function getVersionCode(versionName) {
 
 function isNativeApp() {
   // Detect if running in native app
-  return window.Android !== undefined || 
+  return window.Android !== undefined ||
          navigator.userAgent.includes('LanflixApp') ||
          window.location.protocol === 'file:';
-}
-
-function showUpdateDialog(updateInfo, currentVersion) {
-  const sizeMB = updateInfo.fileSize ? Math.round(updateInfo.fileSize / (1024 * 1024)) : 15;
-  
-  let message = `🎉 Update Available!\n\n`;
-  message += `Current Version: ${currentVersion}\n`;
-  message += `Latest Version: ${updateInfo.versionName}\n`;
-  message += `Download Size: ${sizeMB} MB\n\n`;
-  
-  if (updateInfo.releaseNotes) {
-    message += `What's New:\n${updateInfo.releaseNotes}\n\n`;
-  }
-  
-  if (updateInfo.mandatory) {
-    message += `⚠️ This is a mandatory update.\n\n`;
-  }
-  
-  message += `Would you like to update now?`;
-  
-  if (confirm(message)) {
-    triggerUpdate(updateInfo);
-  }
-}
-
-function showNoUpdateMessage() {
-  alert('✅ You\'re up to date!\n\nYou have the latest version of Lanflix installed.');
-}
-
-function triggerUpdate(updateInfo) {
-  if (isNativeApp()) {
-    // Native app update
-    if (window.Android && window.Android.triggerUpdate) {
-      try {
-        window.Android.triggerUpdate();
-        return;
-      } catch (e) {
-        console.log('Failed to trigger native update:', e);
-      }
-    }
-    
-    // Fallback: Show update instructions for native app
-    let message = `📱 Native App Update\n\n`;
-    message += `To update your Lanflix app:\n`;
-    message += `1. The update will download automatically\n`;
-    message += `2. You'll see a notification when ready\n`;
-    message += `3. Tap the notification to install\n\n`;
-    message += `The update process will begin shortly...`;
-    
-    alert(message);
-    
-    // Try to trigger update via navigation (if UpdateActivity integration exists)
-    setTimeout(() => {
-      window.location.href = `lanflix://update?version=${updateInfo.versionName}&url=${encodeURIComponent(updateInfo.downloadUrl)}`;
-    }, 1000);
-    
-  } else {
-    // Web app - redirect to download
-    if (updateInfo.downloadUrl) {
-      window.open(updateInfo.downloadUrl, '_blank');
-    } else {
-      alert('Please visit our website to download the latest version.');
-    }
-  }
 }
 
 // Auto-check for updates on page load (for native app)
@@ -207,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (isNativeApp()) {
     // Check for updates 3 seconds after page load
     setTimeout(() => {
-      checkForUpdates().catch(console.error);
+      checkForUpdates({ silent: true }).catch(console.error);
     }, 3000);
   }
 });
