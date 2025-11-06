@@ -7,12 +7,17 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.webkit.*
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.lanflix.webview.databinding.ActivityMainBinding
+import com.lanflix.webview.ota.UpdateManager
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
@@ -20,6 +25,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var webView: WebView
     private lateinit var swipeRefresh: SwipeRefreshLayout
+    private lateinit var updateManager: UpdateManager
 
     private val isAmazonFireTv: Boolean by lazy {
         val manufacturer = Build.MANUFACTURER.orEmpty()
@@ -44,9 +50,21 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
+        setupUpdateManager()
         setupWebView()
         setupSwipeRefresh()
         loadWebApp()
+        
+        // Check for updates on app start (after a delay)
+        lifecycleScope.launch {
+            kotlinx.coroutines.delay(3000) // Wait 3 seconds after app start
+            updateManager.checkForUpdateManually(showNoUpdateDialog = false)
+        }
+    }
+    
+    private fun setupUpdateManager() {
+        updateManager = UpdateManager(this)
+        updateManager.schedulePeriodicUpdateCheck()
     }
     
     @SuppressLint("SetJavaScriptEnabled")
@@ -364,7 +382,32 @@ class MainActivity : AppCompatActivity() {
         return super.onKeyDown(keyCode, event)
     }
     
-
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+    
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_check_update -> {
+                lifecycleScope.launch {
+                    val hasUpdate = updateManager.checkForUpdateManually(showNoUpdateDialog = true)
+                    if (!hasUpdate) {
+                        // Show no update available message
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "You're running the latest version!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                true
+            }
+            R.id.action_refresh -> {
+                webView.reload()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
     
     override fun onDestroy() {
         super.onDestroy()
