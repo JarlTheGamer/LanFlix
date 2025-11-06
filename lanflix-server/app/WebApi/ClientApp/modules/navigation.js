@@ -443,6 +443,63 @@ export class Navigation {
   }
 
 
+  /**
+   * Get the current navigation bar height
+   */
+  getNavigationHeight() {
+    const nav = document.querySelector('.top-nav');
+    return nav ? nav.offsetHeight : 0;
+  }
+
+  /**
+   * Smoothly scroll the current page to ensure an element is visible.
+   * On TV platforms we keep focused elements in view while navigating.
+   *
+   * @param {Element} element - The element that should be visible
+   * @param {Object} options
+   * @param {'start'|'center'} [options.align='start'] - Preferred alignment within the viewport
+   * @param {number} [options.offset=24] - Additional offset applied after alignment
+   * @param {'auto'|'smooth'} [options.behavior='smooth'] - Scroll behavior
+   */
+  scrollElementIntoView(element, { align = 'start', offset = 24, behavior = 'smooth' } = {}) {
+    if (!this.isAndroidTV || !element) {
+      return;
+    }
+
+    const rects = element.getClientRects();
+    if (!rects.length) {
+      return;
+    }
+
+    const navHeight = this.getNavigationHeight();
+    const rect = rects[0];
+    const scrollContainer = document.scrollingElement || document.documentElement || document.body;
+    const currentScroll = window.pageYOffset || scrollContainer.scrollTop || 0;
+    let targetScrollTop = currentScroll;
+
+    if (align === 'center') {
+      const viewportHeight = Math.max(window.innerHeight - navHeight, 1);
+      const elementCenter = rect.top + currentScroll + rect.height / 2;
+      const targetCenter = currentScroll + navHeight + (viewportHeight / 2) - offset;
+      targetScrollTop = elementCenter - targetCenter + currentScroll;
+    } else {
+      targetScrollTop = rect.top + currentScroll - navHeight - offset;
+    }
+
+    const maxScroll = (scrollContainer.scrollHeight || document.body.scrollHeight) - window.innerHeight;
+    targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScroll));
+
+    if (Math.abs(targetScrollTop - currentScroll) < 4) {
+      return;
+    }
+
+    try {
+      window.scrollTo({ top: targetScrollTop, behavior });
+    } catch (err) {
+      window.scrollTo(0, targetScrollTop);
+    }
+  }
+
 
   handleKeyboard(e) {
     // Skip keyboard navigation on touch devices (unless Android TV)
@@ -644,6 +701,11 @@ export class Navigation {
       if (focusedHero) {
         focusedHero.classList.add('focused');
       }
+
+      const heroStage = document.querySelector('.hero-stage');
+      if (heroStage) {
+        this.scrollElementIntoView(heroStage, { align: 'start', offset: 32 });
+      }
     } else if (this.focusedElement === 'menu') {
       if (menuButtons[this.focusedMenuIndex]) {
         menuButtons[this.focusedMenuIndex].classList.add('focused');
@@ -655,6 +717,8 @@ export class Navigation {
     } else if (this.focusedElement === 'tabs') {
       if (tabs[this.focusedTabIndex]) {
         tabs[this.focusedTabIndex].classList.add('focused');
+        const tabSection = tabs[this.focusedTabIndex].closest('.spotlight') || tabs[this.focusedTabIndex].closest('section');
+        this.scrollElementIntoView(tabSection || tabs[this.focusedTabIndex], { align: 'start', offset: 32 });
       }
     } else if (this.focusedElement === 'cards') {
       const carousels = this.getCarousels();
@@ -678,6 +742,9 @@ export class Navigation {
           }
 
           this.updateMovieCarousel(currentCarousel);
+
+          const section = focusedCard.closest('.spotlight') || focusedCard.closest('section') || currentCarousel;
+          this.scrollElementIntoView(section, { align: 'center', offset: 40 });
         }
       }
     }
@@ -757,24 +824,36 @@ export class Navigation {
       }
     } else if (this.modalFocusedElement === 'seasons') {
       if (e.key === 'ArrowUp') {
-        this.modalFocusedElement = 'actions';
-        this.updateModalFocus();
+        if (this.modalFocusedSeasonIndex > 0) {
+          this.modalFocusedSeasonIndex--;
+          this.updateModalFocus();
+        } else {
+          this.modalFocusedElement = 'actions';
+          this.updateModalFocus();
+        }
       } else if (e.key === 'ArrowDown') {
-        if (episodeCards.length > 0) {
+        if (this.modalFocusedSeasonIndex < seasonTabs.length - 1) {
+          this.modalFocusedSeasonIndex++;
+          this.updateModalFocus();
+        } else if (episodeCards.length > 0) {
           this.modalFocusedElement = 'episodes';
           this.modalFocusedEpisodeIndex = 0;
           this.updateModalFocus();
         }
       } else if (e.key === 'ArrowLeft') {
-        this.modalFocusedSeasonIndex = this.modalFocusedSeasonIndex > 0 
-          ? this.modalFocusedSeasonIndex - 1 
-          : seasonTabs.length - 1;
-        this.updateModalFocus();
+        if (seasonTabs.length > 1) {
+          this.modalFocusedSeasonIndex = this.modalFocusedSeasonIndex > 0
+            ? this.modalFocusedSeasonIndex - 1
+            : seasonTabs.length - 1;
+          this.updateModalFocus();
+        }
       } else if (e.key === 'ArrowRight') {
-        this.modalFocusedSeasonIndex = this.modalFocusedSeasonIndex < seasonTabs.length - 1 
-          ? this.modalFocusedSeasonIndex + 1 
-          : 0;
-        this.updateModalFocus();
+        if (seasonTabs.length > 1) {
+          this.modalFocusedSeasonIndex = this.modalFocusedSeasonIndex < seasonTabs.length - 1
+            ? this.modalFocusedSeasonIndex + 1
+            : 0;
+          this.updateModalFocus();
+        }
       } else if (e.key === 'Enter') {
         if (seasonTabs[this.modalFocusedSeasonIndex]) {
           seasonTabs[this.modalFocusedSeasonIndex].click();
