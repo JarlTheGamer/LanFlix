@@ -63,8 +63,20 @@ try {
     
     Pop-Location
     
-    # Find the built APK
-    $ApkPath = Join-Path $AndroidDir "app\build\outputs\apk\$BuildType\app-$BuildType-unsigned.apk"
+    # Find the built APK (try signed first, then unsigned as fallback)
+    $SignedApkPath = Join-Path $AndroidDir "app\build\outputs\apk\$BuildType\app-$BuildType.apk"
+    $UnsignedApkPath = Join-Path $AndroidDir "app\build\outputs\apk\$BuildType\app-$BuildType-unsigned.apk"
+    
+    if (Test-Path $SignedApkPath) {
+        $ApkPath = $SignedApkPath
+        Write-Host "Using signed APK: $ApkPath" -ForegroundColor Green
+    } elseif (Test-Path $UnsignedApkPath) {
+        $ApkPath = $UnsignedApkPath
+        Write-Host "WARNING: Using unsigned APK: $ApkPath" -ForegroundColor Yellow
+        Write-Host "This APK may not install on devices. Consider setting up proper signing." -ForegroundColor Yellow
+    } else {
+        throw "No APK found at $SignedApkPath or $UnsignedApkPath"
+    }
     
     if (!(Test-Path $ApkPath)) {
         throw "APK not found at $ApkPath"
