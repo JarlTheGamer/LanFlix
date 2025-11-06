@@ -356,9 +356,18 @@ export class AppUpdater {
    */
   async startUpdate(updateInfo) {
     const isAndroid = /android/i.test(navigator.userAgent);
+    const hasNativeBridge = typeof window !== 'undefined' && window.Android && typeof window.Android.triggerUpdate === 'function';
     const isCapacitor = window.Capacitor !== undefined;
 
-    if (isAndroid && isCapacitor) {
+    if (isAndroid && hasNativeBridge) {
+      try {
+        window.Android.triggerUpdate();
+        this.hideUpdateNotification();
+      } catch (error) {
+        console.error('Failed to trigger native update:', error);
+        this.openDownloadPage(updateInfo);
+      }
+    } else if (isAndroid && isCapacitor) {
       // Android app - download and install APK
       await this.updateAndroidApp(updateInfo);
     } else {
