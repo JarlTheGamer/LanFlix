@@ -409,53 +409,18 @@ export class AppUpdater {
    */
   async startUpdate(updateInfo) {
     const isAndroid = /android/i.test(navigator.userAgent);
-    const nativeBridge = typeof window !== 'undefined' ? window.Android : undefined;
+    const hasNativeBridge = typeof window !== 'undefined' && window.Android && typeof window.Android.triggerUpdate === 'function';
     const isCapacitor = window.Capacitor !== undefined;
 
-    if (isAndroid && nativeBridge) {
-      const payload = {
-        versionName: updateInfo.version,
-        versionCode: updateInfo.versionCode,
-        downloadUrl: updateInfo.downloadUrl,
-        releaseNotes: updateInfo.releaseNotes,
-        fileSize: updateInfo.downloadSize || 0
-      };
-
+    if (isAndroid && hasNativeBridge) {
       try {
-        const triggerWithInfo = nativeBridge.triggerUpdateWithInfo;
-        if (triggerWithInfo !== undefined) {
-          if (typeof triggerWithInfo === 'function') {
-            triggerWithInfo.call(nativeBridge, JSON.stringify(payload));
-          } else {
-            nativeBridge.triggerUpdateWithInfo(JSON.stringify(payload));
-          }
-          this.hideUpdateNotification();
-          return;
-        }
-      } catch (error) {
-        console.error('Failed to trigger native update with metadata:', error);
-      }
-
-      try {
-        const triggerBasic = nativeBridge.triggerUpdate;
-        if (triggerBasic !== undefined) {
-          if (typeof triggerBasic === 'function') {
-            triggerBasic.call(nativeBridge);
-          } else {
-            nativeBridge.triggerUpdate();
-          }
-          this.hideUpdateNotification();
-          return;
-        }
+        window.Android.triggerUpdate();
+        this.hideUpdateNotification();
       } catch (error) {
         console.error('Failed to trigger native update:', error);
+        this.openDownloadPage(updateInfo);
       }
-
-      this.showErrorMessage('Failed to start the native updater. Please try again from settings.');
-      return;
-    }
-
-    if (isAndroid && isCapacitor) {
+    } else if (isAndroid && isCapacitor) {
       // Android app - download and install APK
       await this.updateAndroidApp(updateInfo);
       return;
