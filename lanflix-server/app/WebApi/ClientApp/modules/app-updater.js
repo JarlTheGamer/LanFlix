@@ -410,26 +410,9 @@ export class AppUpdater {
   async startUpdate(updateInfo) {
     const isAndroid = /android/i.test(navigator.userAgent);
     const hasNativeBridge = typeof window !== 'undefined' && window.Android && typeof window.Android.triggerUpdate === 'function';
-    const canSendUpdateInfo = hasNativeBridge && typeof window.Android.triggerUpdateWithInfo === 'function';
     const isCapacitor = window.Capacitor !== undefined;
 
-    if (isAndroid && canSendUpdateInfo) {
-      try {
-        const payload = {
-          versionName: updateInfo.version,
-          versionCode: updateInfo.versionCode,
-          downloadUrl: updateInfo.downloadUrl,
-          releaseNotes: updateInfo.releaseNotes,
-          fileSize: updateInfo.downloadSize || 0
-        };
-
-        window.Android.triggerUpdateWithInfo(JSON.stringify(payload));
-        this.hideUpdateNotification();
-      } catch (error) {
-        console.error('Failed to trigger native update with metadata:', error);
-        this.openDownloadPage(updateInfo);
-      }
-    } else if (isAndroid && hasNativeBridge) {
+    if (isAndroid && hasNativeBridge) {
       try {
         window.Android.triggerUpdate();
         this.hideUpdateNotification();
