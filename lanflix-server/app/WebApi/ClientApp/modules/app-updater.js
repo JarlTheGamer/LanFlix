@@ -409,51 +409,16 @@ export class AppUpdater {
    */
   async startUpdate(updateInfo) {
     const isAndroid = /android/i.test(navigator.userAgent);
-    const hasNativeBridge = typeof window !== 'undefined' && window.Android;
-    const hasTriggerWithInfo = hasNativeBridge && (typeof window.Android.triggerUpdateWithInfo === 'function' || 'triggerUpdateWithInfo' in window.Android);
-    const hasBasicTrigger = hasNativeBridge && (typeof window.Android.triggerUpdate === 'function' || 'triggerUpdate' in window.Android);
+    const hasNativeBridge = typeof window !== 'undefined' && window.Android && typeof window.Android.triggerUpdate === 'function';
     const isCapacitor = window.Capacitor !== undefined;
 
-    if (isAndroid && hasTriggerWithInfo) {
+    if (isAndroid && hasNativeBridge) {
       try {
-        const payload = {
-          versionName: updateInfo.version,
-          versionCode: updateInfo.versionCode,
-          downloadUrl: updateInfo.downloadUrl,
-          releaseNotes: updateInfo.releaseNotes,
-          fileSize: updateInfo.downloadSize || 0
-        };
-
-        const bridge = window.Android;
-        if (typeof bridge.triggerUpdateWithInfo === 'function') {
-          bridge.triggerUpdateWithInfo(JSON.stringify(payload));
-        } else {
-          // Some Android bridges expose @JavascriptInterface methods as plain
-          // objects instead of callable functions. Invoking the property still
-          // routes through the interface even if typeof !== 'function'.
-          bridge.triggerUpdateWithInfo(JSON.stringify(payload));
-        }
+        window.Android.triggerUpdate();
         this.hideUpdateNotification();
-        return;
-      } catch (error) {
-        console.error('Failed to trigger native update with metadata:', error);
-        // Fall back to the basic native hook below
-      }
-    }
-
-    if (isAndroid && hasBasicTrigger) {
-      try {
-        const bridge = window.Android;
-        if (typeof bridge.triggerUpdate === 'function') {
-          bridge.triggerUpdate();
-        } else {
-          bridge.triggerUpdate();
-        }
-        this.hideUpdateNotification();
-        return;
       } catch (error) {
         console.error('Failed to trigger native update:', error);
-        // Fall through to Capacitor / browser flows below
+        this.openDownloadPage(updateInfo);
       }
     } else if (isAndroid && isCapacitor) {
       // Android app - download and install APK
