@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.webkit.JavascriptInterface
 import androidx.lifecycle.lifecycleScope
+import com.lanflix.webview.ota.UpdateInfo
 import com.lanflix.webview.ota.UpdateManager
 import kotlinx.coroutines.launch
 import org.json.JSONObject
