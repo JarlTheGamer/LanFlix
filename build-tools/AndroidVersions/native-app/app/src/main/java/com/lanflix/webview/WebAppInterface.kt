@@ -5,8 +5,10 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.webkit.JavascriptInterface
 import androidx.lifecycle.lifecycleScope
+import com.lanflix.webview.ota.UpdateInfo
 import com.lanflix.webview.ota.UpdateManager
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 class WebAppInterface(private val context: Context, private val updateManager: UpdateManager) {
     
@@ -79,6 +81,81 @@ class WebAppInterface(private val context: Context, private val updateManager: U
                 }
             }
         }
+    }
+
+    @JavascriptInterface
+    fun triggerUpdateWithInfo(updateJson: String?) {
+        if (context !is MainActivity) {
+            triggerUpdate()
+            return
+        }
+
+        if (updateJson.isNullOrBlank()) {
+            triggerUpdate()
+            return
+        }
+
+        context.lifecycleScope.launch {
+            try {
+                val payload = JSONObject(updateJson)
+                val versionName = payload.optString("versionName")
+                val downloadUrl = payload.optString("downloadUrl")
+
+                if (versionName.isBlank() || downloadUrl.isBlank()) {
+                    triggerUpdate()
+                    return@launch
+                }
+
+                var versionCode = payload.optInt("versionCode")
+                if (versionCode <= 0) {
+                    versionCode = deriveVersionCode(versionName)
+                }
+
+                val updateInfo = UpdateInfo(
+                    versionName = versionName,
+                    versionCode = versionCode,
+                    downloadUrl = downloadUrl,
+                    releaseNotes = payload.optString("releaseNotes").takeIf { it.isNotBlank() },
+                    mandatory = payload.optBoolean("mandatory", false),
+                    fileSize = payload.optLong("fileSize", 0L),
+                    checksum = payload.optString("checksum").takeIf { it.isNotBlank() }
+                )
+
+                updateManager.startUpdateFromWeb(updateInfo)
+
+                context.runOnUiThread {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Preparing update...",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Exception) {
+                context.runOnUiThread {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Failed to start native update",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                triggerUpdate()
+            }
+        }
+    }
+
+    private fun deriveVersionCode(versionName: String): Int {
+        return runCatching {
+            if (versionName == "4.0.0") {
+                return@runCatching 4
+            }
+
+            val parts = versionName.split('.')
+            val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
+            val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+
+            major * 10 + minor
+        }.getOrDefault(0)
     }
     
     @JavascriptInterface

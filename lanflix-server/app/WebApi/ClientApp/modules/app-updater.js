@@ -98,12 +98,16 @@ export class AppUpdater {
       if (this.isNewerVersion(latestVersion, currentVersion)) {
         console.log(`✨ Update available: ${latestVersion} (current: ${currentVersion})`);
         
+        const downloadAsset = this.getDownloadAsset(release);
+
         const updateInfo = {
           version: latestVersion,
           currentVersion: currentVersion,
+          versionCode: this.getVersionCode(latestVersion),
           releaseNotes: release.body || 'No release notes available',
           publishedAt: release.published_at,
-          downloadUrl: this.getDownloadUrl(release),
+          downloadUrl: downloadAsset.url,
+          downloadSize: downloadAsset.size,
           htmlUrl: release.html_url
         };
 
@@ -148,7 +152,7 @@ export class AppUpdater {
   /**
    * Get appropriate download URL based on platform
    */
-  getDownloadUrl(release) {
+  getDownloadAsset(release) {
     const assets = release.assets || [];
     
     // Detect platform
@@ -160,26 +164,75 @@ export class AppUpdater {
     // Find appropriate asset
     if (isAndroid) {
       const apk = assets.find(a => a.name.endsWith('.apk'));
-      if (apk) return apk.browser_download_url;
+      if (apk) {
+        return {
+          url: apk.browser_download_url,
+          size: apk.size || 0,
+          fileName: apk.name || ''
+        };
+      }
     }
 
     if (isWindows) {
       const exe = assets.find(a => a.name.endsWith('.exe') || a.name.includes('windows'));
-      if (exe) return exe.browser_download_url;
+      if (exe) {
+        return {
+          url: exe.browser_download_url,
+          size: exe.size || 0,
+          fileName: exe.name || ''
+        };
+      }
     }
 
     if (isMac) {
       const dmg = assets.find(a => a.name.endsWith('.dmg') || a.name.includes('mac'));
-      if (dmg) return dmg.browser_download_url;
+      if (dmg) {
+        return {
+          url: dmg.browser_download_url,
+          size: dmg.size || 0,
+          fileName: dmg.name || ''
+        };
+      }
     }
 
     if (isLinux) {
       const appImage = assets.find(a => a.name.endsWith('.AppImage') || a.name.includes('linux'));
-      if (appImage) return appImage.browser_download_url;
+      if (appImage) {
+        return {
+          url: appImage.browser_download_url,
+          size: appImage.size || 0,
+          fileName: appImage.name || ''
+        };
+      }
     }
 
     // Fallback to release page
-    return release.html_url;
+    return {
+      url: release.html_url,
+      size: 0,
+      fileName: ''
+    };
+  }
+
+  getVersionCode(version) {
+    try {
+      if (!version) {
+        return 0;
+      }
+
+      const parts = version.split('.').map(part => parseInt(part, 10) || 0);
+      const major = parts[0] || 0;
+      const minor = parts[1] || 0;
+
+      if (version === '4.0.0') {
+        return 4;
+      }
+
+      return major * 10 + minor;
+    } catch (error) {
+      console.warn('Failed to calculate version code:', error);
+      return 0;
+    }
   }
 
   /**
@@ -356,15 +409,60 @@ export class AppUpdater {
    */
   async startUpdate(updateInfo) {
     const isAndroid = /android/i.test(navigator.userAgent);
+    const hasNativeBridge = typeof window !== 'undefined' && window.Android;
+    const hasTriggerWithInfo = hasNativeBridge && (typeof window.Android.triggerUpdateWithInfo === 'function' || 'triggerUpdateWithInfo' in window.Android);
+    const hasBasicTrigger = hasNativeBridge && (typeof window.Android.triggerUpdate === 'function' || 'triggerUpdate' in window.Android);
     const isCapacitor = window.Capacitor !== undefined;
 
-    if (isAndroid && isCapacitor) {
+    if (isAndroid && hasTriggerWithInfo) {
+      try {
+        const payload = {
+          versionName: updateInfo.version,
+          versionCode: updateInfo.versionCode,
+          downloadUrl: updateInfo.downloadUrl,
+          releaseNotes: updateInfo.releaseNotes,
+          fileSize: updateInfo.downloadSize || 0
+        };
+
+        const bridge = window.Android;
+        if (typeof bridge.triggerUpdateWithInfo === 'function') {
+          bridge.triggerUpdateWithInfo(JSON.stringify(payload));
+        } else {
+          // Some Android bridges expose @JavascriptInterface methods as plain
+          // objects instead of callable functions. Invoking the property still
+          // routes through the interface even if typeof !== 'function'.
+          bridge.triggerUpdateWithInfo(JSON.stringify(payload));
+        }
+        this.hideUpdateNotification();
+        return;
+      } catch (error) {
+        console.error('Failed to trigger native update with metadata:', error);
+        // Fall back to the basic native hook below
+      }
+    }
+
+    if (isAndroid && hasBasicTrigger) {
+      try {
+        const bridge = window.Android;
+        if (typeof bridge.triggerUpdate === 'function') {
+          bridge.triggerUpdate();
+        } else {
+          bridge.triggerUpdate();
+        }
+        this.hideUpdateNotification();
+        return;
+      } catch (error) {
+        console.error('Failed to trigger native update:', error);
+        // Fall through to Capacitor / browser flows below
+      }
+    } else if (isAndroid && isCapacitor) {
       // Android app - download and install APK
       await this.updateAndroidApp(updateInfo);
-    } else {
-      // Web app or other platforms - open download page
-      this.openDownloadPage(updateInfo);
+      return;
     }
+
+    // Web app or other platforms - open download page
+    this.openDownloadPage(updateInfo);
   }
 
   /**

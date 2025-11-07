@@ -69,6 +69,15 @@ class UpdateManager(private val context: Context) {
             false
         }
     }
+
+    fun startUpdateFromWeb(updateInfo: UpdateInfo) {
+        val skippedVersion = prefs.getInt(PREF_SKIP_VERSION, 0)
+        if (!updateInfo.mandatory && updateInfo.versionCode == skippedVersion) {
+            return
+        }
+
+        launchUpdateScreen(updateInfo)
+    }
     
     private fun showUpdateDialog(updateInfo: UpdateInfo) {
         val context = this.context
