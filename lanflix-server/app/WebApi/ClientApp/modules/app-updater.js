@@ -423,10 +423,11 @@ export class AppUpdater {
     } else if (isAndroid && isCapacitor) {
       // Android app - download and install APK
       await this.updateAndroidApp(updateInfo);
-    } else {
-      // Web app or other platforms - open download page
-      this.openDownloadPage(updateInfo);
+      return;
     }
+
+    // Web app or other platforms - open download page
+    this.openDownloadPage(updateInfo);
   }
 
   /**
