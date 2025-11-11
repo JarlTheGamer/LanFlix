@@ -12,6 +12,7 @@ import com.lanflix.webview.ota.DownloadState
 import com.lanflix.webview.ota.UpdateDownloader
 import com.lanflix.webview.ota.UpdateInfo
 import com.lanflix.webview.ota.UpdateInstaller
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat
 
@@ -108,7 +109,7 @@ class UpdateActivity : AppCompatActivity() {
             loadingProgressBar.visibility = View.VISIBLE
         }
 
-        lifecycleScope.launch {
+        lifecycleScope.launch(Dispatchers.Main) {
             updateDownloader.downloadUpdate(info).collect { state ->
                 handleDownloadState(state)
             }
@@ -116,68 +117,71 @@ class UpdateActivity : AppCompatActivity() {
     }
 
     private fun handleDownloadState(state: DownloadState) {
-        when (state) {
-            is DownloadState.Starting -> {
-                binding.apply {
-                    statusTextView.text = "Starting download..."
-                    loadingProgressBar.visibility = View.VISIBLE
-                }
-            }
-
-            is DownloadState.Progress -> {
-                binding.apply {
-                    statusTextView.text = "Downloading update..."
-                    progressBar.progress = state.percentage
-                    progressTextView.text = "${state.percentage}%"
-                    
-                    val downloadedMB = state.bytesDownloaded / (1024 * 1024f)
-                    val totalMB = state.totalBytes / (1024 * 1024f)
-                    val format = DecimalFormat("#.#")
-                    
-                    downloadInfoTextView.text = if (state.totalBytes > 0) {
-                        "${format.format(downloadedMB)} MB / ${format.format(totalMB)} MB"
-                    } else {
-                        "${format.format(downloadedMB)} MB downloaded"
-                    }
-                    
-                    loadingProgressBar.visibility = View.GONE
-                }
-            }
-
-            is DownloadState.Success -> {
-                downloadedApkFile = state.file
-                binding.apply {
-                    statusTextView.text = "Download complete!"
-                    progressBar.progress = 100
-                    progressTextView.text = "100%"
-                    loadingProgressBar.visibility = View.GONE
-                    
-                    // Check if we can install automatically
-                    if (updateInstaller.canInstallPackages()) {
-                        statusTextView.text = "Ready to install"
-                        actionButton.text = "Install Update"
-                        actionButton.visibility = View.VISIBLE
-                    } else {
-                        statusTextView.text = "Installation permission required"
-                        actionButton.text = "Grant Permission"
-                        actionButton.visibility = View.VISIBLE
+        // Ensure UI updates happen on the main thread
+        runOnUiThread {
+            when (state) {
+                is DownloadState.Starting -> {
+                    binding.apply {
+                        statusTextView.text = "Starting download..."
+                        loadingProgressBar.visibility = View.VISIBLE
                     }
                 }
-            }
 
-            is DownloadState.Error -> {
-                binding.apply {
-                    statusTextView.text = "Download failed"
-                    downloadInfoTextView.text = state.message
-                    loadingProgressBar.visibility = View.GONE
-                    actionButton.text = "Try Again"
-                    actionButton.visibility = View.VISIBLE
+                is DownloadState.Progress -> {
+                    binding.apply {
+                        statusTextView.text = "Downloading update..."
+                        progressBar.progress = state.percentage
+                        progressTextView.text = "${state.percentage}%"
+                        
+                        val downloadedMB = state.bytesDownloaded / (1024 * 1024f)
+                        val totalMB = state.totalBytes / (1024 * 1024f)
+                        val format = DecimalFormat("#.#")
+                        
+                        downloadInfoTextView.text = if (state.totalBytes > 0) {
+                            "${format.format(downloadedMB)} MB / ${format.format(totalMB)} MB"
+                        } else {
+                            "${format.format(downloadedMB)} MB downloaded"
+                        }
+                        
+                        loadingProgressBar.visibility = View.GONE
+                    }
                 }
-                
-                Toast.makeText(this, "Download failed: ${state.message}", Toast.LENGTH_LONG).show()
-            }
 
-            else -> {}
+                is DownloadState.Success -> {
+                    downloadedApkFile = state.file
+                    binding.apply {
+                        statusTextView.text = "Download complete!"
+                        progressBar.progress = 100
+                        progressTextView.text = "100%"
+                        loadingProgressBar.visibility = View.GONE
+                        
+                        // Check if we can install automatically
+                        if (updateInstaller.canInstallPackages()) {
+                            statusTextView.text = "Ready to install"
+                            actionButton.text = "Install Update"
+                            actionButton.visibility = View.VISIBLE
+                        } else {
+                            statusTextView.text = "Installation permission required"
+                            actionButton.text = "Grant Permission"
+                            actionButton.visibility = View.VISIBLE
+                        }
+                    }
+                }
+
+                is DownloadState.Error -> {
+                    binding.apply {
+                        statusTextView.text = "Download failed"
+                        downloadInfoTextView.text = state.message
+                        loadingProgressBar.visibility = View.GONE
+                        actionButton.text = "Try Again"
+                        actionButton.visibility = View.VISIBLE
+                    }
+                    
+                    Toast.makeText(this@UpdateActivity, "Download failed: ${state.message}", Toast.LENGTH_LONG).show()
+                }
+
+                else -> {}
+            }
         }
     }
 

@@ -6,7 +6,6 @@
 export class AppUpdater {
   constructor() {
     this.currentVersion = '1.2.6'; // Will be read from package.json
-    this.updateCheckUrl = 'https://api.github.com/repos/JarlTheGamer/Applications./releases/latest';
     this.checkInterval = 24 * 60 * 60 * 1000; // Check once per day
     this.lastCheckKey = 'lanflix_last_update_check';
     this.skipVersionKey = 'lanflix_skip_version';
@@ -66,69 +65,16 @@ export class AppUpdater {
   }
 
   /**
-   * Check for updates from GitHub releases
+   * Check for updates from server API (not GitHub)
+   * Note: This is now handled by settings-main.js using /api/app/update-check
+   * This method is kept for compatibility but should not be used directly
    */
   async checkForUpdates(showNoUpdateMessage = true) {
-    try {
-      console.log('🔍 Checking for updates...');
-      
-      const response = await fetch(this.updateCheckUrl, {
-        headers: { 'Accept': 'application/vnd.github.v3+json' }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to check for updates');
-      }
-
-      const release = await response.json();
-      const latestVersion = release.tag_name.replace('v', '');
-      const currentVersion = this.currentVersion.replace('v', '');
-
-      // Save last check time
-      localStorage.setItem(this.lastCheckKey, Date.now().toString());
-
-      // Check if user skipped this version
-      const skippedVersion = localStorage.getItem(this.skipVersionKey);
-      if (skippedVersion === latestVersion) {
-        console.log('User skipped this version');
-        return null;
-      }
-
-      // Compare versions
-      if (this.isNewerVersion(latestVersion, currentVersion)) {
-        console.log(`✨ Update available: ${latestVersion} (current: ${currentVersion})`);
-        
-        const downloadAsset = this.getDownloadAsset(release);
-
-        const updateInfo = {
-          version: latestVersion,
-          currentVersion: currentVersion,
-          versionCode: this.getVersionCode(latestVersion),
-          releaseNotes: release.body || 'No release notes available',
-          publishedAt: release.published_at,
-          downloadUrl: downloadAsset.url,
-          downloadSize: downloadAsset.size,
-          htmlUrl: release.html_url
-        };
-
-        // Show update notification
-        this.showUpdateNotification(updateInfo);
-        
-        return updateInfo;
-      } else {
-        console.log('✅ App is up to date');
-        if (showNoUpdateMessage) {
-          this.showNoUpdateMessage();
-        }
-        return null;
-      }
-    } catch (error) {
-      console.error('Failed to check for updates:', error);
-      if (showNoUpdateMessage) {
-        this.showErrorMessage('Failed to check for updates. Please try again later.');
-      }
-      return null;
+    console.log('⚠️ Direct update check called - this should be handled by settings page');
+    if (showNoUpdateMessage) {
+      this.showNoUpdateMessage();
     }
+    return null;
   }
 
   /**
@@ -149,70 +95,7 @@ export class AppUpdater {
     return false;
   }
 
-  /**
-   * Get appropriate download URL based on platform
-   */
-  getDownloadAsset(release) {
-    const assets = release.assets || [];
-    
-    // Detect platform
-    const isAndroid = /android/i.test(navigator.userAgent);
-    const isWindows = /windows/i.test(navigator.userAgent);
-    const isMac = /mac/i.test(navigator.userAgent);
-    const isLinux = /linux/i.test(navigator.userAgent) && !isAndroid;
 
-    // Find appropriate asset
-    if (isAndroid) {
-      const apk = assets.find(a => a.name.endsWith('.apk'));
-      if (apk) {
-        return {
-          url: apk.browser_download_url,
-          size: apk.size || 0,
-          fileName: apk.name || ''
-        };
-      }
-    }
-
-    if (isWindows) {
-      const exe = assets.find(a => a.name.endsWith('.exe') || a.name.includes('windows'));
-      if (exe) {
-        return {
-          url: exe.browser_download_url,
-          size: exe.size || 0,
-          fileName: exe.name || ''
-        };
-      }
-    }
-
-    if (isMac) {
-      const dmg = assets.find(a => a.name.endsWith('.dmg') || a.name.includes('mac'));
-      if (dmg) {
-        return {
-          url: dmg.browser_download_url,
-          size: dmg.size || 0,
-          fileName: dmg.name || ''
-        };
-      }
-    }
-
-    if (isLinux) {
-      const appImage = assets.find(a => a.name.endsWith('.AppImage') || a.name.includes('linux'));
-      if (appImage) {
-        return {
-          url: appImage.browser_download_url,
-          size: appImage.size || 0,
-          fileName: appImage.name || ''
-        };
-      }
-    }
-
-    // Fallback to release page
-    return {
-      url: release.html_url,
-      size: 0,
-      fileName: ''
-    };
-  }
 
   getVersionCode(version) {
     try {
@@ -409,115 +292,42 @@ export class AppUpdater {
    */
   async startUpdate(updateInfo) {
     const isAndroid = /android/i.test(navigator.userAgent);
-    const hasNativeBridge = typeof window !== 'undefined' && window.Android && typeof window.Android.triggerUpdate === 'function';
-    const isCapacitor = window.Capacitor !== undefined;
+    const hasNativeBridge = typeof window !== 'undefined' && window.Android;
 
+    // ONLY support native Android app updates - no web fallback
     if (isAndroid && hasNativeBridge) {
-      try {
+      // Prepare update info for native app
+      const nativeUpdateInfo = {
+        versionName: updateInfo.version,
+        versionCode: updateInfo.versionCode || this.getVersionCode(updateInfo.version),
+        downloadUrl: updateInfo.downloadUrl,
+        releaseNotes: updateInfo.releaseNotes || '',
+        mandatory: false,
+        fileSize: updateInfo.downloadSize || 0,
+        checksum: updateInfo.checksum || ''
+      };
+
+      // Trigger native update with full info
+      if (typeof window.Android.triggerUpdateWithInfo === 'function') {
+        window.Android.triggerUpdateWithInfo(JSON.stringify(nativeUpdateInfo));
+        this.hideUpdateNotification();
+        console.log('✅ Native OTA update started - UpdateActivity will show progress');
+      } else if (typeof window.Android.triggerUpdate === 'function') {
         window.Android.triggerUpdate();
         this.hideUpdateNotification();
-      } catch (error) {
-        console.error('Failed to trigger native update:', error);
-        this.openDownloadPage(updateInfo);
-      }
-    } else if (isAndroid && isCapacitor) {
-      // Android app - download and install APK
-      await this.updateAndroidApp(updateInfo);
-      return;
-    }
-
-    // Web app or other platforms - open download page
-    this.openDownloadPage(updateInfo);
-  }
-
-  /**
-   * Update Android app (Capacitor)
-   */
-  async updateAndroidApp(updateInfo) {
-    try {
-      // Show progress modal
-      this.showUpdateProgress();
-
-      // For Capacitor apps, we can use the Browser plugin to open the download
-      if (window.Capacitor && window.Capacitor.Plugins.Browser) {
-        await window.Capacitor.Plugins.Browser.open({ url: updateInfo.downloadUrl });
+        console.log('✅ Native OTA update started');
       } else {
-        // Fallback to regular link
-        window.open(updateInfo.downloadUrl, '_blank');
+        console.error('❌ Native update bridge not available');
+        this.showErrorMessage('Update system not available. Please contact support.');
       }
-
-      this.hideUpdateProgress();
-      this.showUpdateInstructions();
-    } catch (error) {
-      console.error('Failed to update Android app:', error);
-      this.hideUpdateProgress();
-      this.showErrorMessage('Failed to start update. Please download manually from the website.');
+    } else {
+      // Not a native Android app - updates not supported
+      console.warn('Updates are only available in the native Android app');
+      this.showErrorMessage('Updates are only available in the native Android app.');
     }
   }
 
-  /**
-   * Open download page for web/desktop
-   */
-  openDownloadPage(updateInfo) {
-    window.open(updateInfo.downloadUrl, '_blank');
-    this.hideUpdateNotification();
-    
-    // Show instructions
-    setTimeout(() => {
-      this.showUpdateInstructions();
-    }, 500);
-  }
 
-  /**
-   * Show update progress
-   */
-  showUpdateProgress() {
-    const modal = document.createElement('div');
-    modal.id = 'update-progress-modal';
-    modal.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.9);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10001;
-    `;
-
-    modal.innerHTML = `
-      <div style="text-align: center; color: white;">
-        <div style="font-size: 48px; margin-bottom: 20px;">⬇️</div>
-        <h2 style="font-size: 24px; margin-bottom: 10px;">Downloading Update...</h2>
-        <p style="color: #999;">Please wait while we download the latest version</p>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-  }
-
-  /**
-   * Hide update progress
-   */
-  hideUpdateProgress() {
-    const modal = document.getElementById('update-progress-modal');
-    if (modal) modal.remove();
-  }
-
-  /**
-   * Show update instructions
-   */
-  showUpdateInstructions() {
-    const isAndroid = /android/i.test(navigator.userAgent);
-    
-    const message = isAndroid
-      ? 'The APK file is downloading. Once complete, open it to install the update.'
-      : 'The download has started. Once complete, install the update and restart the app.';
-
-    this.showInfoMessage(message);
-  }
 
   /**
    * Show "no update available" message
