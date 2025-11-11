@@ -103,6 +103,11 @@ public class RadarrClient : IRadarrClient
     {
         try
         {
+            // Get subtitle settings from server settings
+            using var scope = _serviceProvider.CreateScope();
+            var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
+            var settings = await settingsService.GetSettingsAsync(cancellationToken);
+            
             var payload = new
             {
                 tmdbId = request.TmdbId,
@@ -117,7 +122,9 @@ public class RadarrClient : IRadarrClient
                 minimumAvailability = "released",
                 addOptions = new
                 {
-                    searchForMovie = request.SearchForMovie
+                    searchForMovie = request.SearchForMovie,
+                    // Enable subtitle search if auto-download is enabled
+                    searchForSubtitles = settings.ExternalApis.Subtitles.AutoDownload
                 }
             };
 
@@ -128,7 +135,8 @@ public class RadarrClient : IRadarrClient
             response.EnsureSuccessStatusCode();
 
             var movie = await response.Content.ReadFromJsonAsync<RadarrMovie>(_jsonOptions, cancellationToken);
-            _logger.LogInformation("Movie added to Radarr: {Title}", request.Title);
+            _logger.LogInformation("Movie added to Radarr: {Title} (Subtitle auto-download: {SubtitleEnabled})", 
+                request.Title, settings.ExternalApis.Subtitles.AutoDownload);
 
             return movie ?? throw new InvalidOperationException("Failed to deserialize Radarr response");
         }

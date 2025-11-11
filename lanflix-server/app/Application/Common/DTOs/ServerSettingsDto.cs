@@ -58,6 +58,7 @@ public class ExternalApisSettings
     public ExternalServiceSettings Sonarr { get; set; } = new();
     public ExternalServiceSettings Radarr { get; set; } = new();
     public ExternalServiceSettings Prowlarr { get; set; } = new();
+    public SubtitleSettings Subtitles { get; set; } = new();
 }
 
 public class TmdbSettings
@@ -70,4 +71,17 @@ public class ExternalServiceSettings
 {
     public string Url { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
+}
+
+public class SubtitleSettings
+{
+    /// <summary>
+    /// Preferred subtitle language for automatic downloads (ISO 639-2 code, e.g., "eng", "spa", "fra")
+    /// </summary>
+    public string PreferredLanguage { get; set; } = "eng";
+    
+    /// <summary>
+    /// Whether to automatically download subtitles when downloading content
+    /// </summary>
+    public bool AutoDownload { get; set; } = true;
 }

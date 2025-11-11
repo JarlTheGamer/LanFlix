@@ -103,6 +103,11 @@ public class SonarrClient : ISonarrClient
     {
         try
         {
+            // Get subtitle settings from server settings
+            using var scope = _serviceProvider.CreateScope();
+            var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
+            var settings = await settingsService.GetSettingsAsync(cancellationToken);
+            
             var payload = new
             {
                 tvdbId = request.TvdbId,
@@ -117,7 +122,9 @@ public class SonarrClient : ISonarrClient
                 monitored = request.Monitored,
                 addOptions = new
                 {
-                    searchForMissingEpisodes = request.SearchForMissingEpisodes
+                    searchForMissingEpisodes = request.SearchForMissingEpisodes,
+                    // Enable subtitle search if auto-download is enabled
+                    searchForSubtitles = settings.ExternalApis.Subtitles.AutoDownload
                 }
             };
 
@@ -128,7 +135,8 @@ public class SonarrClient : ISonarrClient
             response.EnsureSuccessStatusCode();
 
             var series = await response.Content.ReadFromJsonAsync<SonarrSeries>(_jsonOptions, cancellationToken);
-            _logger.LogInformation("Series added to Sonarr: {Title}", request.Title);
+            _logger.LogInformation("Series added to Sonarr: {Title} (Subtitle auto-download: {SubtitleEnabled})", 
+                request.Title, settings.ExternalApis.Subtitles.AutoDownload);
 
             return series ?? throw new InvalidOperationException("Failed to deserialize Sonarr response");
         }
