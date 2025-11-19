@@ -84,4 +84,9 @@ public class SubtitleSettings
     /// Whether to automatically download subtitles when downloading content
     /// </summary>
     public bool AutoDownload { get; set; } = true;
+
+    /// <summary>
+    /// Bazarr configuration for subtitle downloads
+    /// </summary>
+    public ExternalServiceSettings Bazarr { get; set; } = new();
 }

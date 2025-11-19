@@ -19,6 +19,10 @@ async function loadSettings() {
     const radarrKey = settings.externalApis?.radarr?.apiKey || '';
     const prowlarrUrl = settings.externalApis?.prowlarr?.url || '';
     const prowlarrKey = settings.externalApis?.prowlarr?.apiKey || '';
+    const bazarrUrl = settings.externalApis?.subtitles?.bazarr?.url || '';
+    const bazarrKey = settings.externalApis?.subtitles?.bazarr?.apiKey || '';
+    const subtitleLanguage = settings.externalApis?.subtitles?.preferredLanguage || 'eng';
+    const autoDownloadSubtitles = settings.externalApis?.subtitles?.autoDownload !== false;
 
     console.log('Setting form values:', {
       moviesPath,
@@ -29,7 +33,11 @@ async function loadSettings() {
       radarrUrl,
       radarrKey: radarrKey ? '***' : '(empty)',
       prowlarrUrl,
-      prowlarrKey: prowlarrKey ? '***' : '(empty)'
+      prowlarrKey: prowlarrKey ? '***' : '(empty)',
+      bazarrUrl,
+      bazarrKey: bazarrKey ? '***' : '(empty)',
+      subtitleLanguage,
+      autoDownloadSubtitles
     });
 
     document.getElementById('movies-path').value = moviesPath;
@@ -43,6 +51,12 @@ async function loadSettings() {
     document.getElementById('radarr-key').value = radarrKey;
     document.getElementById('prowlarr-url').value = prowlarrUrl;
     document.getElementById('prowlarr-key').value = prowlarrKey;
+    document.getElementById('bazarr-url').value = bazarrUrl;
+    document.getElementById('bazarr-key').value = bazarrKey;
+
+    // Subtitle settings
+    document.getElementById('subtitle-language').value = subtitleLanguage;
+    document.getElementById('auto-download-subtitles').checked = autoDownloadSubtitles;
 
     // Metadata settings (not stored in backend yet)
     document.getElementById('auto-metadata').checked = true;
@@ -170,6 +184,14 @@ async function saveSettings() {
         prowlarr: {
           url: document.getElementById('prowlarr-url').value || '',
           apiKey: document.getElementById('prowlarr-key').value || ''
+        },
+        subtitles: {
+          preferredLanguage: document.getElementById('subtitle-language').value || 'eng',
+          autoDownload: document.getElementById('auto-download-subtitles').checked,
+          bazarr: {
+            url: document.getElementById('bazarr-url').value || '',
+            apiKey: document.getElementById('bazarr-key').value || ''
+          }
         }
       }
     };

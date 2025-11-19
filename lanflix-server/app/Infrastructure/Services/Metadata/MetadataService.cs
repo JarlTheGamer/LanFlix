@@ -19,6 +19,8 @@ public class MetadataService : IMetadataService
     private readonly IApplicationDbContext _dbContext;
     private readonly ILogger<MetadataService> _logger;
     private readonly HttpClient _httpClient;
+    private readonly ISettingsService _settingsService;
+    private readonly IBazarrClient _bazarrClient;
     private const string ImageBaseUrl = "https://image.tmdb.org/t/p";
     private const string PosterSize = "w500";
     private const string BackdropSize = "w1280";
@@ -28,12 +30,16 @@ public class MetadataService : IMetadataService
         ITmdbClient tmdbClient,
         IApplicationDbContext dbContext,
         ILogger<MetadataService> logger,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        ISettingsService settingsService,
+        IBazarrClient bazarrClient)
     {
         _tmdbClient = tmdbClient;
         _dbContext = dbContext;
         _logger = logger;
         _httpClient = httpClientFactory.CreateClient();
+        _settingsService = settingsService;
+        _bazarrClient = bazarrClient;
     }
 
     /// <summary>
@@ -145,6 +151,20 @@ public class MetadataService : IMetadataService
                 var imageBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
                 await File.WriteAllBytesAsync(backdropFilePath, imageBytes, cancellationToken);
                 _logger.LogInformation("Saved backdrop to {Path}", backdropFilePath);
+            }
+
+            // Download subtitles if auto-download is enabled
+            var settings = await _settingsService.GetSettingsAsync(cancellationToken);
+            if (settings.ExternalApis.Subtitles.AutoDownload)
+            {
+                try
+                {
+                    await DownloadSubtitlesAsync(contentId, mediaFolderPath, settings.ExternalApis.Subtitles.PreferredLanguage, cancellationToken);
+                }
+                catch (Exception subEx)
+                {
+                    _logger.LogWarning(subEx, "Failed to download subtitles for content {ContentId}, but continuing", contentId);
+                }
             }
         }
         catch (Exception ex)
@@ -641,5 +661,89 @@ public class MetadataService : IMetadataService
         
         _logger.LogDebug("Generated search variations for '{FolderName}': {Variations}", folderName, string.Join(", ", finalVariations));
         return finalVariations;
+    }
+
+    /// <summary>
+    /// Download subtitles for content in the specified language using Bazarr
+    /// </summary>
+    public async Task DownloadSubtitlesAsync(
+        int contentId,
+        string mediaFolderPath,
+        string languageCode,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Downloading subtitles for content {ContentId} in language {Language}", contentId, languageCode);
+
+            // Get content from database
+            var content = await _dbContext.Contents.FindAsync(new object[] { contentId }, cancellationToken);
+            if (content == null)
+            {
+                _logger.LogWarning("Content {ContentId} not found, cannot download subtitles", contentId);
+                return;
+            }
+
+            // Check if subtitle files already exist
+            var subtitleExtensions = new[] { ".srt", ".ass", ".ssa", ".sub", ".vtt" };
+            var existingSubtitles = Directory.GetFiles(mediaFolderPath, "*.*", SearchOption.AllDirectories)
+                .Where(f => subtitleExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                .ToList();
+
+            if (existingSubtitles.Any())
+            {
+                _logger.LogInformation("Subtitles already exist for content {ContentId}: {Count} files found", contentId, existingSubtitles.Count);
+                return;
+            }
+
+            // Check if Bazarr is configured
+            var settings = await _settingsService.GetSettingsAsync(cancellationToken);
+            if (string.IsNullOrEmpty(settings.ExternalApis.Subtitles.Bazarr.Url))
+            {
+                _logger.LogWarning("Bazarr is not configured. Skipping subtitle download for content {ContentId}", contentId);
+                return;
+            }
+
+            // Test Bazarr connection
+            var isConnected = await _bazarrClient.TestConnectionAsync(cancellationToken);
+            if (!isConnected)
+            {
+                _logger.LogWarning("Cannot connect to Bazarr. Skipping subtitle download for content {ContentId}", contentId);
+                return;
+            }
+
+            // Find video files in the media folder
+            var videoExtensions = new[] { ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v" };
+            var videoFiles = Directory.GetFiles(mediaFolderPath, "*.*", SearchOption.AllDirectories)
+                .Where(f => videoExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                .ToList();
+
+            if (!videoFiles.Any())
+            {
+                _logger.LogWarning("No video files found in {Path} for content {ContentId}", mediaFolderPath, contentId);
+                return;
+            }
+
+            // Download subtitles for each video file
+            foreach (var videoFile in videoFiles)
+            {
+                try
+                {
+                    await _bazarrClient.SearchAndDownloadSubtitlesAsync(videoFile, languageCode, cancellationToken);
+                    _logger.LogInformation("Subtitle download triggered for: {VideoFile}", videoFile);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to download subtitles for video file: {VideoFile}", videoFile);
+                }
+            }
+
+            _logger.LogInformation("Subtitle download completed for content {ContentId}", contentId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to download subtitles for content {ContentId}", contentId);
+            throw;
+        }
     }
 }

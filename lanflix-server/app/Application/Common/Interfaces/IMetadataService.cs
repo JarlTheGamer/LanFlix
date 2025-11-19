@@ -75,4 +75,13 @@ public interface IMetadataService
         int tmdbId,
         string seriesFolder,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Download subtitles for content in the specified language
+    /// </summary>
+    Task DownloadSubtitlesAsync(
+        int contentId,
+        string mediaFolderPath,
+        string languageCode,
+        CancellationToken cancellationToken = default);
 }
