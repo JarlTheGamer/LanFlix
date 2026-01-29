@@ -1,210 +1,70 @@
 # Lanflix Build Guide
 
+This guide describes how to build the Lanflix media server from source.
+
 ## Architecture Overview
 
-Lanflix uses a unified server architecture where:
-- **Backend (Node.js/TypeScript)** serves both the API and web UI
-- **Frontend (Vite)** builds to static files that the backend serves
-- **Android App (Capacitor)** connects to the server
+Lanflix is built using a modern decoupled architecture:
+- **Backend**: C# 12 / .NET 9 Web API
+- **Frontend**: Vanilla JS (ESNext) with Vite, built to static files
+- **Database**: SQLite (managed with Entity Framework Core)
+- **Containerization**: Multi-stage Docker build with FFmpeg support
 
-This is similar to how Jellyfin, Plex, and Emby work.
+## Prerequisites
 
-## Project Structure
+- **.NET SDK 9.0+**
+- **Node.js 18+** & **npm**
+- **FFmpeg** (Required for server runtime)
 
-```
-lanflix/
-├── server/            # Server components
-│   ├── backend/      # Node.js/TypeScript API server
-│   │   ├── src/      # Source code
-│   │   ├── dist/     # Compiled JavaScript
-│   │   └── public/   # Frontend build (generated)
-│   └── frontend/     # Vite web UI
-│       ├── src/      # Source code
-│       └── dist/     # Build output
-├── build-tools/      # Build and packaging tools
-│   ├── android/      # Android app (native)
-│   ├── server/       # Server installer scripts
-│   └── scripts/      # Build automation
-├── scripts/          # Release scripts
-└── docs/            # Documentation
+## Building the Server
+
+We provide a robust PowerShell script to handle the entire build process.
+
+```powershell
+# From the project root
+.\lanflix-server\build.ps1 -Clean
 ```
 
-## Development Setup
+This script will:
+1. Verify all prerequisites.
+2. Build the **Frontend** (`lanflix-server/app/WebApi/ClientApp`) into static assets.
+3. Publish the **Backend** (`lanflix-server/app/WebApi`).
+4. Package everything into a self-contained `publish/` directory.
 
-### Prerequisites
-- Node.js 18+ and npm
-- For Android: Android Studio, Java JDK
+## Build Artifacts
 
-### Backend Development
+After a successful build, the `publish/` directory will contain:
+- `Lanflix.WebApi.exe` - The main server executable.
+- `wwwroot/` - The compiled web interface.
+- `config/` - Default configuration files.
+- All required .NET runtime dependencies.
+
+## Manual Build Steps
+
+If you cannot use the PowerShell script, you can build manually:
+
+### 1. Build Frontend
 ```bash
-cd server/backend
+cd lanflix-server/app/WebApi/ClientApp
 npm install
-npm run dev
+npm run build
 ```
-Server runs on http://localhost:8080
 
-### Frontend Development
+### 2. Publish Backend
 ```bash
-cd server/frontend
-npm install
-npm run dev
-```
-Dev server runs on http://localhost:5173
-
-## Building for Production
-
-### Build Everything
-```bash
-npm run build:all
+cd lanflix-server/app/WebApi
+dotnet publish -c Release -o ../../publish
 ```
 
-This will:
-1. Build frontend to `server/frontend/dist`
-2. Copy frontend build to `server/backend/public`
-3. Compile backend TypeScript to `server/backend/dist`
-4. Build Android APK
+## Docker Build
 
-### Build Server Only
-```bash
-npm run build:server
-```
-
-### Build Android App Only
-```bash
-npm run build:android
-```
-
-### Build Server Installer
-```bash
-npm run build:installer
-```
-
-Creates a portable ZIP with the server ready to distribute.
-
-## Running the Production Server
-
-After building:
+You can also build using Docker, which packages FFmpeg and all dependencies automatically.
 
 ```bash
-cd server/backend
-npm start
+cd lanflix-server/app
+docker compose build
+docker compose up -d
 ```
 
-The server will:
-- Serve the web UI at `http://localhost:8080`
-- Provide API at `http://localhost:8080/api`
-- Be accessible from other devices on your network
-
-## Android App Configuration
-
-The Android app needs to know where your server is:
-
-1. First run will show configuration screen
-2. Enter your server IP (e.g., `http://192.168.1.100:8080`)
-3. App will connect and work like the web UI
-
-## Creating a Windows Installer
-
-### Automated Build
-```bash
-npm run build:installer
-```
-
-This creates:
-- `dist/lanflix-server-portable.zip` - Ready to distribute
-- `dist/lanflix-server/` - Extracted distribution folder
-
-The package includes:
-- Compiled backend
-- Built frontend
-- `start-server.bat` - Start script
-- `install-service.bat` - Windows service installer
-- `README.txt` - User instructions
-- `.env` - Configuration file
-
-## Deployment Options
-
-### Option 1: Manual Installation
-1. Build the server
-2. Copy backend folder to target machine
-3. Run `npm install --production`
-4. Run `start-server.bat`
-
-### Option 2: Docker (Future)
-```dockerfile
-FROM node:18
-WORKDIR /app
-COPY backend/ .
-RUN npm install --production
-EXPOSE 8080
-CMD ["node", "dist/app.js"]
-```
-
-### Option 3: Windows Service
-Use NSSM or similar to run as a service
-
-## Configuration
-
-### Server Configuration
-Edit `server/backend/.env`:
-```env
-PORT=8080
-MEDIA_ROOT_PATH=D:/Movies
-DATABASE_PATH=./data/lanflix.db
-```
-
-### Android App Configuration
-First run configuration or edit in app settings:
-- Server URL
-- Connection timeout
-- Cache settings
-
-## Troubleshooting
-
-### Frontend not showing
-- Check `server/backend/public/` exists and has files
-- Run `npm run build:server` again
-
-### Android app can't connect
-- Ensure server is running
-- Check firewall allows port 8080
-- Use IP address, not localhost
-- Ensure devices are on same network
-
-### Port already in use
-- Change PORT in `server/backend/.env`
-- Update Android app server URL
-
-## Android App
-
-The Android app is a native Kotlin app located in `build-tools/android/`.
-
-### Features
-- Search movies and TV shows
-- Browse trending and popular content
-- Connect to your Lanflix server
-- Material Design UI
-
-### Building
-```bash
-npm run build:android
-```
-
-Or directly:
-```bash
-cd build-tools/android
-gradlew assembleDebug
-```
-
-The APK will be in `build-tools/android/app/build/outputs/apk/debug/app-debug.apk`
-
-### Configuration
-On first launch, enter your server URL (e.g., `http://192.168.1.100:8080`)
-
-## Next Steps
-
-1. **Automated Installer**: Create proper Windows installer with Electron Builder
-2. **Service Installation**: Auto-install as Windows service
-3. **Auto-discovery**: Let Android app find servers on network
-4. **Updates**: Built-in update mechanism
-5. **Docker**: Containerized deployment option
+---
+*Note: Legacy Node.js build tools located in `build-tools/` are deprecated and should not be used.*

@@ -5,15 +5,15 @@ Complete REST API reference for Lanflix backend.
 ## Base URL
 
 ```
-http://localhost:3000/api
+http://localhost:5037/api
 ```
 
 ## Authentication
 
-Currently, Lanflix uses profile-based access without authentication. Future versions will include:
-- API key authentication
-- JWT tokens
-- OAuth2 support
+Lanflix uses a hybrid authentication system:
+- **JWT Bearer**: Used for API authorization and SignalR.
+- **Legacy Tokens**: Supported for backward compatibility with older clients.
+- **Profile-Based**: Access control via `ProfileId` headers for multi-user support.
 
 ## Response Format
 
