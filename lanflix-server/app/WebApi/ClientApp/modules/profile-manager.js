@@ -110,44 +110,23 @@ export class ProfileManager {
     try {
       // Collect history from up to 3 profiles to get a good mix
       const profilesToCheck = this.profiles.slice(0, 3);
-      console.log(`Fetching watch history for ${profilesToCheck.length} profiles:`, profilesToCheck.map(p => p.name));
-      
       const historyPromises = profilesToCheck.map(p => stateManager.getWatchHistory(p.id, false, 10));
 
       const histories = await Promise.all(historyPromises);
-      console.log('Watch histories received:', histories.map((h, i) => `Profile ${i}: ${h?.length || 0} items`));
-      
       const allHistoryItems = histories.flat(); // Flatten array of arrays
-      console.log(`Total history items: ${allHistoryItems.length}`);
 
       if (allHistoryItems.length > 0) {
         backdrops = allHistoryItems
           .map(item => {
-            // Use content object if available
             const content = item.content || item;
             
-            // Debug log to see what we're getting
-            if (backdrops.length < 3) {
-              console.log('Profile background - history item:', {
-                hasContent: !!content,
-                contentId: content?.id,
-                backdropUrl: content?.backdropUrl,
-                backdropPath: content?.backdropPath,
-                posterUrl: content?.posterUrl
-              });
-            }
-            
-            // For library content with an ID, try to use local backdrop first
-            if (content?.id) {
-              // Use the content ID to get the backdrop from the library
-              // This will serve the local image if it exists, otherwise fall back to TMDB
-              return content.backdropUrl || (content.backdropPath ? apiClient.getImageUrl(content.backdropPath, 'original') : null);
+            // Use backdropPath from content (TMDB path)
+            if (content?.backdropPath) {
+              return apiClient.getImageUrl(content.backdropPath, 'original');
             }
             return null;
           })
           .filter(url => url !== null);
-        
-        console.log(`Profile backgrounds: Found ${backdrops.length} backdrops from ${allHistoryItems.length} history items`);
       }
 
       // If history is empty (new install), fallback to Trending instead of Recently Added (as requested)
@@ -167,7 +146,7 @@ export class ProfileManager {
 
     // Fallback if no real content yet (or offline/fresh install)
     if (backdrops.length === 0) {
-      console.warn('No backdrops found from watch history - this should not happen if you have watched content');
+      console.warn('No backdrops found from watch history');
     }
 
     const rowCount = 20; // Reduced slightly for performance
