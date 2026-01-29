@@ -29,6 +29,13 @@ export class ContentDisplay {
     this.isSwipeActive = false;
     this.swipeThreshold = 50; // Minimum distance for a swipe
     this.swipeTimeout = null;
+
+    // Refresh content when page becomes visible (e.g., returning from player)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        this.refreshContent();
+      }
+    });
   }
 
   async initialize() {
@@ -176,6 +183,22 @@ export class ContentDisplay {
       }
       return item;
     });
+  }
+
+  /**
+   * Refresh content (called when page becomes visible)
+   */
+  async refreshContent() {
+    await this.loadContent();
+    
+    // Re-render the current view
+    if (this.currentCategory === 'home') {
+      await this.renderHomePage();
+    } else if (this.currentCategory === 'continue') {
+      await this.renderContinueWatching();
+    } else {
+      this.renderContentGrid();
+    }
   }
 
   async loadContent() {

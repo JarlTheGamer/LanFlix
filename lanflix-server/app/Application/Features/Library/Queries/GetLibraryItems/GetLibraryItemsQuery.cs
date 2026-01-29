@@ -5,7 +5,7 @@ using MediatR;
 
 namespace Lanflix.Application.Features.Library.Queries.GetLibraryItems;
 
-public class GetLibraryItemsQuery : IRequest<PaginatedList<ContentDto>>, ICacheableQuery
+public class GetLibraryItemsQuery : IRequest<PaginatedList<ContentDto>>
 {
     public ContentType? Type { get; set; }
     public int PageNumber { get; set; } = 1;
@@ -14,9 +14,4 @@ public class GetLibraryItemsQuery : IRequest<PaginatedList<ContentDto>>, ICachea
     public string? Genre { get; set; }
     public string? SortBy { get; set; } = "AddedAt";
     public bool SortDescending { get; set; } = true;
-
-    public string CacheKey => 
-        $"library:items:{Type}:{PageNumber}:{PageSize}:{SearchTerm}:{Genre}:{SortBy}:{SortDescending}";
-    
-    public TimeSpan? CacheExpiration => TimeSpan.FromMinutes(10);
 }

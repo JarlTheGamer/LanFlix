@@ -58,6 +58,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize notification badge
     notificationBadge.init();
 
+    // Refresh content when navigating back to this page (e.g., from player)
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted || performance.navigation.type === 2) {
+        // Page was loaded from cache (back button)
+        contentDisplay.refreshContent();
+      }
+    });
+
   } catch (error) {
     console.error('Failed to initialize application:', error);
     // Show error message to user

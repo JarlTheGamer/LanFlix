@@ -918,7 +918,8 @@ public class TranscodingController : ControllerBase
             }
 
             // Convert seconds to ticks (1 second = 10,000,000 ticks)
-            var positionTicks = (long)(request.ProgressSeconds * 10_000_000);
+            // Cast to long BEFORE multiplication to prevent 32-bit integer overflow (max ~214 seconds)
+            var positionTicks = (long)request.ProgressSeconds * 10_000_000L;
             
             // Calculate watched percentage
             var watchedPercentage = request.DurationSeconds.HasValue && request.DurationSeconds.Value > 0
