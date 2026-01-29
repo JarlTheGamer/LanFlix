@@ -8,4 +8,5 @@ public interface ISettingsService
     Task UpdateSettingsAsync(ServerSettingsDto settings, CancellationToken cancellationToken = default);
     Task UpdateSettingAsync(string key, string value, CancellationToken cancellationToken = default);
     Task<string?> GetSettingAsync(string key, CancellationToken cancellationToken = default);
+    Task EnsureConfigFileExistsAsync(CancellationToken cancellationToken = default);
 }

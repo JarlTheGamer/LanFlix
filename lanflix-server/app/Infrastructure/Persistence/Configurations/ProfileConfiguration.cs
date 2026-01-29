@@ -30,6 +30,9 @@ public class ProfileConfiguration : IEntityTypeConfiguration<Profile>
         builder.OwnsOne(p => p.Preferences, prefs =>
         {
             prefs.ToJson();
+            
+            // Explicitly own nested types to prevent them being treated as separate entities
+            prefs.OwnsOne(u => u.SubtitleAppearance);
         });
 
         // Relationships

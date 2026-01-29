@@ -72,7 +72,7 @@ export class ProfileManager {
       profilesBar.appendChild(profileItem);
     });
 
-    this.createBackgroundTiles();
+    await this.createBackgroundTiles();
     this.updateFocus();
 
     if (this.profiles.length > 0) {
@@ -99,22 +99,58 @@ export class ProfileManager {
     }
   }
 
-  createBackgroundTiles() {
+  async createBackgroundTiles() {
     const backgroundAnimation = document.getElementById('profile-background-animation');
 
     if (!backgroundAnimation) return;
 
-    // Use placeholder images for background tiles
-    const placeholderImages = [
-      'https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg',
-      'https://image.tmdb.org/t/p/w500/1M876KPjulVwppEpldhdc8V4o68.jpg',
-      'https://image.tmdb.org/t/p/w500/7vjaCdMw15FEbXyLQTVa04URsPm.jpg',
-      'https://image.tmdb.org/t/p/w500/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg',
-      'https://image.tmdb.org/t/p/w500/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg'
-    ];
+    // Fetch real content for backdrops
+    // We sort of iterate through profiles to get their watch history to make it personalized
+    let backdrops = [];
+    try {
+      // Collect history from up to 3 profiles to get a good mix
+      const profilesToCheck = this.profiles.slice(0, 3);
+      const historyPromises = profilesToCheck.map(p => stateManager.getWatchHistory(p.id, false, 10));
 
-    const rowCount = 25;
-    const tilesPerRow = 30;
+      const histories = await Promise.all(historyPromises);
+      const allHistoryItems = histories.flat(); // Flatten array of arrays
+
+      if (allHistoryItems.length > 0) {
+        backdrops = allHistoryItems
+          .filter(item => item.backdropPath)
+          .map(item => apiClient.getImageUrl(item.backdropPath, 'original'));
+      }
+
+      // If history is empty (new install), fallback to Trending instead of Recently Added (as requested)
+      if (backdrops.length === 0) {
+        console.log('No watch history found for backgrounds, using trending content');
+        const trending = await stateManager.getDiscoverContent(null); // null profile for generic trending
+        if (trending && trending.trending && trending.trending.length > 0) {
+          backdrops = trending.trending
+            .filter(item => item.backdropPath)
+            .map(item => apiClient.getImageUrl(item.backdropPath, 'original'));
+        }
+      }
+
+    } catch (error) {
+      console.warn('Failed to fetch history for profile background:', error);
+    }
+
+    // Fallback if no real content yet (or offline/fresh install)
+    if (backdrops.length === 0) {
+      // Keep a few reliable fallbacks just in case, but real data is preferred
+      backdrops = [
+        'https://image.tmdb.org/t/p/w1280/49WJfeN0moxb9IPfGn8AIqMGskD.jpg',
+        'https://image.tmdb.org/t/p/w1280/1M876KPjulVwppEpldhdc8V4o68.jpg',
+        'https://image.tmdb.org/t/p/w1280/7vjaCdMw15FEbXyLQTVa04URsPm.jpg'
+      ];
+    }
+
+    const rowCount = 20; // Reduced slightly for performance
+    const tilesPerRow = 15;
+
+    // Shuffle backdrops
+    backdrops.sort(() => Math.random() - 0.5);
 
     for (let row = 0; row < rowCount; row++) {
       const rowElement = document.createElement('div');
@@ -123,8 +159,11 @@ export class ProfileManager {
       for (let tile = 0; tile < tilesPerRow * 2; tile++) {
         const tileElement = document.createElement('div');
         tileElement.className = 'profile-background-tile';
-        const randomImage = placeholderImages[Math.floor(Math.random() * placeholderImages.length)];
-        tileElement.style.backgroundImage = `url(${randomImage})`;
+
+        const imageIndex = (row * tilesPerRow + tile) % backdrops.length;
+        const imageUrl = backdrops[imageIndex];
+
+        tileElement.style.backgroundImage = `url(${imageUrl})`;
         rowElement.appendChild(tileElement);
       }
 

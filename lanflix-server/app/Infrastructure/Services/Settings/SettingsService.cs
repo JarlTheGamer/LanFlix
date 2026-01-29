@@ -234,7 +234,8 @@ public class SettingsService : ISettingsService
 
     private async Task SaveSettingsToFileAsync(ServerSettingsDto settings)
     {
-        var configPath = Path.Combine(AppContext.BaseDirectory, "config", "lanflix.json");
+        var baseDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+        var configPath = Path.Combine(baseDir, "config", "lanflix.json");
         var directory = Path.GetDirectoryName(configPath);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
@@ -314,6 +315,24 @@ public class SettingsService : ISettingsService
         {
             _logger.LogError(ex, "Error getting setting: {Key}", key);
             return null;
+        }
+    }
+    public async Task EnsureConfigFileExistsAsync(CancellationToken cancellationToken = default)
+    {
+        var baseDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+        var configPath = Path.Combine(baseDir, "config", "lanflix.json");
+        if (File.Exists(configPath)) return;
+
+        _logger.LogInformation("Persistent config file not found. Creating from database settings...");
+        
+        try 
+        {
+            var settings = await GetSettingsAsync(cancellationToken);
+            await SaveSettingsToFileAsync(settings);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create initial persistent config file");
         }
     }
 }

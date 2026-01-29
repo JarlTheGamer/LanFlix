@@ -27,7 +27,8 @@ EmbeddedResourceExtractor.ExtractConfigFiles();
 var builder = WebApplication.CreateBuilder(args);
 
 // Add persistent configuration file (survives updates)
-var configDir = Path.Combine(AppContext.BaseDirectory, "config");
+var baseDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+var configDir = Path.Combine(baseDir, "config");
 Directory.CreateDirectory(configDir);
 builder.Configuration.AddJsonFile(Path.Combine(configDir, "lanflix.json"), optional: true, reloadOnChange: true);
 
@@ -720,6 +721,9 @@ try
             settingsService,
             folderLogger);
         await folderInitializer.InitializeAsync();
+        
+        // Ensure persistent config file exists
+        await settingsService.EnsureConfigFileExistsAsync();
     }
     
     app.Run();
