@@ -35,6 +35,31 @@ export class ContentModal {
                 ? await apiClient.getContentDetails(contentId, contentType, profileId)
                 : await apiClient.getLibraryItem(contentId, profileId);
 
+            // Fetch watch history for series to show episode progress
+            if (contentType === 'series' && !isDiscovery) {
+                try {
+                    const watchHistory = await apiClient.getWatchHistory(profileId, 200);
+                    // Filter for episodes of this series
+                    const seriesHistory = watchHistory.filter(h => h.contentId === contentId && h.episodeId);
+                    
+                    // Create a map of episodeId -> progress
+                    this.episodeProgressMap = new Map();
+                    seriesHistory.forEach(h => {
+                        const progressSeconds = h.positionTicks ? Math.floor(h.positionTicks / 10_000_000) : 0;
+                        this.episodeProgressMap.set(h.episodeId, {
+                            progressSeconds: progressSeconds,
+                            watchedPercentage: h.watchedPercentage || 0,
+                            completed: h.isCompleted || false
+                        });
+                    });
+                } catch (error) {
+                    console.error('Failed to fetch watch history:', error);
+                    this.episodeProgressMap = new Map();
+                }
+            } else {
+                this.episodeProgressMap = new Map();
+            }
+
             // Fetch season metadata for series (episodes loaded on demand)
             if (contentType === 'series' && isDiscovery) {
                 try {
@@ -158,7 +183,7 @@ export class ContentModal {
               ` : `
                 <button class="modal-btn primary" data-action="play">
                   <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                  Play
+                  ${content.watchProgress && !content.watchProgress.completed && content.watchProgress.progressSeconds > 30 ? 'Resume' : 'Play'}
                 </button>
               `}
               <button class="modal-btn secondary" data-action="watchlist">
@@ -392,15 +417,25 @@ export class ContentModal {
         const watched = episode.watched || false;
         const runtime = episode.runtime ? `${episode.runtime}m` : '';
 
+        // Get watch progress for this episode
+        const progress = this.episodeProgressMap?.get(episode.id);
+        const hasProgress = progress && progress.progressSeconds > 0 && !progress.completed;
+        const progressPercent = progress?.watchedPercentage || 0;
+
         episodeCard.innerHTML = `
           <div class="episode-thumbnail-horizontal">
             <img src="${stillUrl}" alt="Episode ${episode.episodeNumber}" />
-            ${watched ? '<div class="watched-badge">✓</div>' : ''}
+            ${progress?.completed ? '<div class="watched-badge">✓</div>' : ''}
             ${!isAvailable && isLibraryContent ? '<div class="unavailable-badge">Not Downloaded</div>' : ''}
             ${isAvailable && isLibraryContent ? `
               <button class="episode-play-btn">
                 <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
               </button>
+            ` : ''}
+            ${hasProgress ? `
+              <div class="episode-progress-bar">
+                <div class="episode-progress-fill" style="width: ${Math.min(progressPercent, 100)}%"></div>
+              </div>
             ` : ''}
           </div>
           <div class="episode-info-horizontal">
@@ -461,8 +496,13 @@ export class ContentModal {
                     alert('No episodes available to play. Please download episodes first.');
                 }
             } else {
-                // For movies, play directly
-                window.location.href = `player.html?contentId=${content.id}&type=${content.type}`;
+                // For movies, check for watch progress and resume if available
+                const startTime = content.watchProgress && !content.watchProgress.completed && content.watchProgress.progressSeconds > 30
+                    ? content.watchProgress.progressSeconds
+                    : 0;
+                
+                const url = `player.html?contentId=${content.id}&type=${content.type}${startTime > 0 ? `&startTime=${startTime}` : ''}`;
+                window.location.href = url;
             }
         });
 

@@ -39,6 +39,7 @@ public class GetWatchHistoryQueryHandler : IRequestHandler<GetWatchHistoryQuery,
                 PositionTicks = w.PositionTicks,
                 IsCompleted = w.IsCompleted,
                 LastWatchedAt = w.LastWatchedAt,
+                WatchedPercentage = w.WatchedPercentage,
                 Content = new ContentDto
                 {
                     Id = w.Content.Id,

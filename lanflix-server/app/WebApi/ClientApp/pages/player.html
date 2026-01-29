@@ -38,6 +38,7 @@
     const contentId = urlParams.get('contentId');
     const contentType = urlParams.get('type');
     const episodeId = urlParams.get('episodeId');
+    const urlStartTime = urlParams.get('startTime'); // Check if start time is in URL
 
     if (!contentId || !contentType) {
       alert('Invalid player parameters');
@@ -58,15 +59,23 @@
     const videoElement = document.getElementById('video-player');
     const player = new VideoPlayer(videoElement, profileId);
 
-    // Get watch progress
+    // Get watch progress (unless start time is explicitly provided in URL)
     let startPosition = 0;
-    try {
-      const content = await apiClient.getLibraryItem(contentId, profileId);
-      if (content && content.watchProgress && !content.watchProgress.completed) {
-        startPosition = content.watchProgress.progressSeconds || 0;
+    if (urlStartTime) {
+      // Use URL start time if provided (from Resume button)
+      startPosition = parseInt(urlStartTime, 10);
+      console.log('Using start time from URL:', startPosition);
+    } else {
+      // Otherwise, check for saved progress
+      try {
+        const content = await apiClient.getLibraryItem(contentId, profileId);
+        if (content && content.watchProgress && !content.watchProgress.completed) {
+          startPosition = content.watchProgress.progressSeconds || 0;
+          console.log('Loaded watch progress:', startPosition);
+        }
+      } catch (error) {
+        console.error('Failed to get watch progress:', error);
       }
-    } catch (error) {
-      console.error('Failed to get watch progress:', error);
     }
 
     // Initialize player

@@ -133,6 +133,44 @@ export class ContentDisplay {
     }
   }
 
+  /**
+   * Merge watch progress data with content items
+   */
+  mergeWatchProgress(items, watchHistory) {
+    if (!watchHistory || watchHistory.length === 0) return items;
+
+    // Create a map of contentId -> watch progress
+    const progressMap = new Map();
+    watchHistory.forEach(historyItem => {
+      const contentId = historyItem.contentId || (historyItem.content && historyItem.content.id);
+      if (contentId) {
+        // Convert PositionTicks to seconds
+        const progressSeconds = historyItem.positionTicks 
+          ? Math.floor(historyItem.positionTicks / 10_000_000)
+          : 0;
+
+        progressMap.set(contentId, {
+          progressSeconds: progressSeconds,
+          durationSeconds: historyItem.content?.runtime ? historyItem.content.runtime * 60 : null,
+          watchedPercentage: historyItem.watchedPercentage || 0,
+          completed: historyItem.isCompleted || false
+        });
+      }
+    });
+
+    // Merge progress into items
+    return items.map(item => {
+      const progress = progressMap.get(item.id);
+      if (progress) {
+        return {
+          ...item,
+          watchProgress: progress
+        };
+      }
+      return item;
+    });
+  }
+
   async loadContent() {
     if (this.isLoading) return;
     this.isLoading = true;
@@ -165,8 +203,11 @@ export class ContentDisplay {
             ...(discoverPreview.trending?.series || [])
           ].slice(0, 10);
 
+          // Merge watch progress with recently added items
+          const recentlyAddedWithProgress = this.mergeWatchProgress(recentlyAdded.items || [], watchHistory);
+
           this.contentData = {
-            recentlyAdded: recentlyAdded.items || [],
+            recentlyAdded: recentlyAddedWithProgress,
             discoverPreview: trendingItems,
             watchHistory: watchHistory
           };
@@ -214,8 +255,11 @@ export class ContentDisplay {
             (h.content && (h.content.type === 'episode' || h.content.type === 'series'))
           );
 
+          // Merge watch progress with series items
+          const seriesWithProgress = this.mergeWatchProgress(seriesData.items || [], watchHistory);
+
           this.contentData = {
-            series: seriesData.items || [],
+            series: seriesWithProgress,
             watchHistory: seriesHistory
           };
           break;
@@ -228,8 +272,11 @@ export class ContentDisplay {
             h.type === 'movie' || (h.content && h.content.type === 'movie')
           );
 
+          // Merge watch progress with movie items
+          const moviesWithProgress = this.mergeWatchProgress(moviesData.items || [], watchHistory);
+
           this.contentData = {
-            movies: moviesData.items || [],
+            movies: moviesWithProgress,
             watchHistory: movieHistory
           };
           break;
@@ -706,18 +753,21 @@ export class ContentDisplay {
       historyHub.className = 'movie-hub';
 
       history.forEach((historyItem, index) => {
-        // historyItem might be the content object itself if flattened, or wrapped.
-        // Adjust based on API response structure. Assuming flattened for now via simple map if needed,
-        // but let's handle the raw `WatchHistoryDto` structure: { content: ..., progressSeconds: ... }
-
+        // historyItem is WatchHistoryDto: { content: ..., positionTicks: ..., watchedPercentage: ... }
         let item = historyItem.content || historyItem;
 
+        // Convert PositionTicks to seconds (1 tick = 100 nanoseconds, so 10,000,000 ticks = 1 second)
+        const progressSeconds = historyItem.positionTicks 
+          ? Math.floor(historyItem.positionTicks / 10_000_000)
+          : 0;
+
         // Ensure progress is attached to the item for the card to render
-        if (!item.watchProgress && historyItem.progressSeconds) {
+        if (!item.watchProgress) {
           item.watchProgress = {
-            progressSeconds: historyItem.progressSeconds,
-            durationSeconds: historyItem.durationSeconds || item.runtime * 60,
-            completed: historyItem.completed
+            progressSeconds: progressSeconds,
+            durationSeconds: item.runtime ? item.runtime * 60 : null,
+            watchedPercentage: historyItem.watchedPercentage || 0,
+            completed: historyItem.isCompleted || false
           };
         }
 
@@ -954,10 +1004,18 @@ export class ContentDisplay {
     // Build meta array with only non-empty values
     const metaItems = [genres, year, duration, rating].filter(Boolean);
 
+    // Build progress bar HTML if watch progress exists
+    const progressBarHtml = item.watchProgress && item.watchProgress.progressSeconds > 0 && !item.watchProgress.completed
+      ? `<div class="watch-progress-bar">
+           <div class="watch-progress-fill" style="width: ${Math.min(item.watchProgress.watchedPercentage || 0, 100)}%"></div>
+         </div>`
+      : '';
+
     movieCard.innerHTML = `
       <div class="movie-poster-container">
         <img data-src="${posterUrl}" alt="${item.title}" class="movie-poster movie-poster-regular" loading="lazy" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 450'%3E%3Crect fill='%23333' width='300' height='450'/%3E%3C/svg%3E" />
         <img data-src="${backdropUrl}" alt="${item.title}" class="movie-poster movie-poster-expanded" loading="lazy" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1920 1080'%3E%3Crect fill='%23333' width='1920' height='1080'/%3E%3C/svg%3E" />
+        ${progressBarHtml}
       </div>
       <div class="movie-overlay"></div>
       <div class="movie-compact-title">${item.title}</div>

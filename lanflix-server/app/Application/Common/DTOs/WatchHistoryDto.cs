@@ -9,5 +9,6 @@ public class WatchHistoryDto
     public long PositionTicks { get; set; }
     public bool IsCompleted { get; set; }
     public DateTime LastWatchedAt { get; set; }
+    public double WatchedPercentage { get; set; }
     public ContentDto? Content { get; set; }
 }

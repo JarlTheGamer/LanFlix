@@ -1,6 +1,7 @@
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
 using Lanflix.Application.Features.Streaming.Services;
+using Lanflix.Domain.Entities;
 using Lanflix.Domain.ValueObjects;
 using Lanflix.Infrastructure.Services.FFmpeg;
 using Lanflix.Infrastructure.Services.Settings;
@@ -911,9 +912,57 @@ public class TranscodingController : ControllerBase
             _logger.LogInformation("Updating watch progress for content {ContentId}: {Progress}s / {Duration}s", 
                 contentId, request.ProgressSeconds, request.DurationSeconds);
 
-            // Here you would typically save to database
-            // For now, just log and return success
-            // TODO: Implement actual progress saving to database
+            if (request.ProfileId <= 0)
+            {
+                return BadRequest("Valid ProfileId is required");
+            }
+
+            // Convert seconds to ticks (1 second = 10,000,000 ticks)
+            var positionTicks = (long)(request.ProgressSeconds * 10_000_000);
+            
+            // Calculate watched percentage
+            var watchedPercentage = request.DurationSeconds.HasValue && request.DurationSeconds.Value > 0
+                ? ((double)request.ProgressSeconds / request.DurationSeconds.Value) * 100
+                : 0;
+
+            // Consider completed if watched > 90%
+            var isCompleted = watchedPercentage >= 90;
+
+            // Find existing watch history record
+            var watchHistory = await _context.WatchHistories
+                .FirstOrDefaultAsync(wh => 
+                    wh.ProfileId == request.ProfileId && 
+                    wh.ContentId == contentId &&
+                    (request.EpisodeId == null || wh.EpisodeId == request.EpisodeId));
+
+            if (watchHistory != null)
+            {
+                // Update existing record
+                watchHistory.PositionTicks = positionTicks;
+                watchHistory.WatchedPercentage = watchedPercentage;
+                watchHistory.IsCompleted = isCompleted;
+                watchHistory.LastWatchedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                // Create new record
+                watchHistory = new WatchHistory
+                {
+                    ProfileId = request.ProfileId,
+                    ContentId = contentId,
+                    EpisodeId = request.EpisodeId,
+                    PositionTicks = positionTicks,
+                    WatchedPercentage = watchedPercentage,
+                    IsCompleted = isCompleted,
+                    LastWatchedAt = DateTime.UtcNow
+                };
+                _context.WatchHistories.Add(watchHistory);
+            }
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Watch progress saved for content {ContentId}, profile {ProfileId}: {Percentage}%", 
+                contentId, request.ProfileId, watchedPercentage);
 
             return Ok(new { success = true });
         }

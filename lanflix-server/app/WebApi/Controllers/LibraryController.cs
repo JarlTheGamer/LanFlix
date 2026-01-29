@@ -327,6 +327,32 @@ public class LibraryController : ControllerBase
                 seasons = GetSeasonsFromEpisodes(episodes);
             }
 
+            // Get watch progress if profileId is provided
+            object? watchProgress = null;
+            if (profileId.HasValue)
+            {
+                var history = await _context.WatchHistories
+                    .Where(wh => wh.ProfileId == profileId.Value && wh.ContentId == id && wh.EpisodeId == null)
+                    .OrderByDescending(wh => wh.LastWatchedAt)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (history != null)
+                {
+                    // Convert ticks to seconds (1 tick = 100 nanoseconds, so 10,000,000 ticks = 1 second)
+                    var progressSeconds = (int)(history.PositionTicks / 10_000_000);
+                    var durationSeconds = enhancedMetadata?.Runtime != null ? enhancedMetadata.Runtime * 60 : null;
+
+                    watchProgress = new
+                    {
+                        progressSeconds = progressSeconds,
+                        durationSeconds = durationSeconds,
+                        watchedPercentage = history.WatchedPercentage,
+                        completed = history.IsCompleted,
+                        lastWatchedAt = history.LastWatchedAt
+                    };
+                }
+            }
+
             var result = new
             {
                 id = content.Id,
@@ -358,7 +384,10 @@ public class LibraryController : ControllerBase
                 episodes = episodes,
                 seasons = seasons,
                 numberOfSeasons = seasons?.Length,
-                numberOfEpisodes = episodes?.Length
+                numberOfEpisodes = episodes?.Length,
+
+                // Watch progress for this profile
+                watchProgress = watchProgress
             };
 
             return Ok(result);
