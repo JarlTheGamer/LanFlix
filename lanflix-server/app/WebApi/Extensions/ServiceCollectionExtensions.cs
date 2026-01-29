@@ -96,6 +96,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddLanflixCoreServices(this IServiceCollection services)
     {
         services.AddControllers();
+        services.AddMemoryCache();
         services.AddOpenApi();
         services.AddHttpContextAccessor();
         

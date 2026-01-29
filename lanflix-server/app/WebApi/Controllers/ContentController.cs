@@ -1,5 +1,6 @@
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lanflix.WebApi.Controllers;
@@ -13,6 +14,7 @@ public class ContentController : ControllerBase
     private readonly ISonarrClient _sonarrClient;
     private readonly IProwlarrClient _prowlarrClient;
     private readonly ISettingsService _settingsService;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<ContentController> _logger;
 
     public ContentController(
@@ -21,6 +23,7 @@ public class ContentController : ControllerBase
         IRadarrClient radarrClient,
         ISonarrClient sonarrClient,
         IProwlarrClient prowlarrClient,
+        IMemoryCache cache,
         ILogger<ContentController> logger)
     {
         _tmdbClient = tmdbClient;
@@ -28,6 +31,7 @@ public class ContentController : ControllerBase
         _radarrClient = radarrClient;
         _sonarrClient = sonarrClient;
         _prowlarrClient = prowlarrClient;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -44,64 +48,73 @@ public class ContentController : ControllerBase
         {
             _logger.LogInformation("Getting discover content: Page={Page}, ProfileId={ProfileId}", page, profileId);
 
-            // Get trending and popular content from TMDB
-            var trendingMoviesTask = _tmdbClient.GetTrendingAsync("movie", "week", cancellationToken);
-            var trendingTvTask = _tmdbClient.GetTrendingAsync("tv", "week", cancellationToken);
-            var popularMoviesTask = _tmdbClient.GetPopularMoviesAsync(page, cancellationToken);
-            var popularTvTask = _tmdbClient.GetPopularTvSeriesAsync(page, cancellationToken);
-
-            await Task.WhenAll(trendingMoviesTask, trendingTvTask, popularMoviesTask, popularTvTask);
-
-            // Set MediaType and normalize titles for frontend
-            var trendingMovies = trendingMoviesTask.Result.Results;
-            foreach (var movie in trendingMovies) 
-            {
-                movie.MediaType = "movie";
-                // Ensure title is set for movies (should already be set)
-                if (string.IsNullOrEmpty(movie.Title) && !string.IsNullOrEmpty(movie.Name))
-                    movie.Title = movie.Name;
-            }
+            var cacheKey = $"discover_content_p{page}";
             
-            var trendingSeries = trendingTvTask.Result.Results;
-            foreach (var series in trendingSeries) 
+            var response = await _cache.GetOrCreateAsync(cacheKey, async entry =>
             {
-                series.MediaType = "tv";
-                // Set title from name for TV series
-                if (string.IsNullOrEmpty(series.Title) && !string.IsNullOrEmpty(series.Name))
-                    series.Title = series.Name;
-            }
-            
-            var popularMovies = popularMoviesTask.Result.Results;
-            foreach (var movie in popularMovies) 
-            {
-                movie.MediaType = "movie";
-                // Ensure title is set for movies (should already be set)
-                if (string.IsNullOrEmpty(movie.Title) && !string.IsNullOrEmpty(movie.Name))
-                    movie.Title = movie.Name;
-            }
-            
-            var popularSeries = popularTvTask.Result.Results;
-            foreach (var series in popularSeries) 
-            {
-                series.MediaType = "tv";
-                // Set title from name for TV series
-                if (string.IsNullOrEmpty(series.Title) && !string.IsNullOrEmpty(series.Name))
-                    series.Title = series.Name;
-            }
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30);
+                
+                _logger.LogInformation("Getting discover content from source: Page={Page}", page);
 
-            var response = new
-            {
-                trending = new
+                // Get trending and popular content from TMDB
+                var trendingMoviesTask = _tmdbClient.GetTrendingAsync("movie", "week", cancellationToken);
+                var trendingTvTask = _tmdbClient.GetTrendingAsync("tv", "week", cancellationToken);
+                var popularMoviesTask = _tmdbClient.GetPopularMoviesAsync(page, cancellationToken);
+                var popularTvTask = _tmdbClient.GetPopularTvSeriesAsync(page, cancellationToken);
+
+                await Task.WhenAll(trendingMoviesTask, trendingTvTask, popularMoviesTask, popularTvTask);
+
+                // Set MediaType and normalize titles for frontend
+                var trendingMovies = trendingMoviesTask.Result.Results;
+                foreach (var movie in trendingMovies) 
                 {
-                    movies = trendingMovies,
-                    series = trendingSeries
-                },
-                popular = new
-                {
-                    movies = popularMovies,
-                    series = popularSeries
+                    movie.MediaType = "movie";
+                    // Ensure title is set for movies (should already be set)
+                    if (string.IsNullOrEmpty(movie.Title) && !string.IsNullOrEmpty(movie.Name))
+                        movie.Title = movie.Name;
                 }
-            };
+                
+                var trendingSeries = trendingTvTask.Result.Results;
+                foreach (var series in trendingSeries) 
+                {
+                    series.MediaType = "tv";
+                    // Set title from name for TV series
+                    if (string.IsNullOrEmpty(series.Title) && !string.IsNullOrEmpty(series.Name))
+                        series.Title = series.Name;
+                }
+                
+                var popularMovies = popularMoviesTask.Result.Results;
+                foreach (var movie in popularMovies) 
+                {
+                    movie.MediaType = "movie";
+                    // Ensure title is set for movies (should already be set)
+                    if (string.IsNullOrEmpty(movie.Title) && !string.IsNullOrEmpty(movie.Name))
+                        movie.Title = movie.Name;
+                }
+                
+                var popularSeries = popularTvTask.Result.Results;
+                foreach (var series in popularSeries) 
+                {
+                    series.MediaType = "tv";
+                    // Set title from name for TV series
+                    if (string.IsNullOrEmpty(series.Title) && !string.IsNullOrEmpty(series.Name))
+                        series.Title = series.Name;
+                }
+
+                return new
+                {
+                    trending = new
+                    {
+                        movies = trendingMovies,
+                        series = trendingSeries
+                    },
+                    popular = new
+                    {
+                        movies = popularMovies,
+                        series = popularSeries
+                    }
+                };
+            });
 
             return Ok(response);
         }
@@ -131,36 +144,50 @@ public class ContentController : ControllerBase
         {
             _logger.LogInformation("Getting popular content: Type={Type}, Page={Page}", type, page);
 
-            if (type == "movie")
+            var cacheKey = $"popular_{type}_p{page}";
+
+            var results = await _cache.GetOrCreateAsync(cacheKey, async entry =>
             {
-                var results = await _tmdbClient.GetPopularMoviesAsync(page, cancellationToken);
-                // Set MediaType and normalize titles for frontend
-                foreach (var movie in results.Results) 
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30);
+                
+                _logger.LogInformation("Getting popular content from source: Type={Type}, Page={Page}", type, page);
+
+                if (type == "movie")
                 {
-                    movie.MediaType = "movie";
-                    // Ensure title is set for movies (should already be set)
-                    if (string.IsNullOrEmpty(movie.Title) && !string.IsNullOrEmpty(movie.Name))
-                        movie.Title = movie.Name;
+                    var movieResults = await _tmdbClient.GetPopularMoviesAsync(page, cancellationToken);
+                    // Set MediaType and normalize titles for frontend
+                    foreach (var movie in movieResults.Results) 
+                    {
+                        movie.MediaType = "movie";
+                        // Ensure title is set for movies (should already be set)
+                        if (string.IsNullOrEmpty(movie.Title) && !string.IsNullOrEmpty(movie.Name))
+                            movie.Title = movie.Name;
+                    }
+                    return movieResults.Results as IEnumerable<object>;
                 }
-                return Ok(results.Results);
-            }
-            else if (type == "series" || type == "tv")
-            {
-                var results = await _tmdbClient.GetPopularTvSeriesAsync(page, cancellationToken);
-                // Set MediaType and normalize titles for frontend
-                foreach (var series in results.Results) 
+                else if (type == "series" || type == "tv")
                 {
-                    series.MediaType = "tv";
-                    // Set title from name for TV series
-                    if (string.IsNullOrEmpty(series.Title) && !string.IsNullOrEmpty(series.Name))
-                        series.Title = series.Name;
+                    var tvResults = await _tmdbClient.GetPopularTvSeriesAsync(page, cancellationToken);
+                    // Set MediaType and normalize titles for frontend
+                    foreach (var series in tvResults.Results) 
+                    {
+                        series.MediaType = "tv";
+                        // Set title from name for TV series
+                        if (string.IsNullOrEmpty(series.Title) && !string.IsNullOrEmpty(series.Name))
+                            series.Title = series.Name;
+                    }
+                    return tvResults.Results as IEnumerable<object>;
                 }
-                return Ok(results.Results);
-            }
-            else
+                
+                return null;
+            });
+
+            if (results == null)
             {
                 return BadRequest(new { error = "Invalid type. Must be 'movie' or 'series'" });
             }
+
+            return Ok(results);
         }
         catch (Exception ex)
         {

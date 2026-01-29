@@ -3,6 +3,7 @@ using Lanflix.Application.Features.Profiles.Commands.CreateProfile;
 using Lanflix.Application.Features.Profiles.Commands.UpdateProfile;
 using Lanflix.Application.Features.Profiles.Queries.GetProfiles;
 using Lanflix.Application.Features.Profiles.Queries.GetWatchHistory;
+using Lanflix.Application.Features.Profiles.Commands.ToggleWatchlist;
 using Lanflix.Application.Features.Profiles.Queries.GetWatchlist;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -121,7 +122,7 @@ public class ProfilesController : ControllerBase
     /// Get watchlist for a profile
     /// </summary>
     [HttpGet("{id:int}/watchlist")]
-    [OutputCache(Duration = 300)] // 5 minutes
+    [OutputCache(Duration = 300, Tags = new[] { "watchlist" })] // Added tag for invalidation
     [ProducesResponseType(typeof(List<ContentDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<List<ContentDto>>> GetWatchlist(
@@ -134,5 +135,37 @@ public class ProfilesController : ControllerBase
         var result = await _mediator.Send(query, cancellationToken);
 
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Add or remove content from profile's watchlist
+    /// </summary>
+    [HttpPost("{id:int}/watchlist/{contentId:int}")]
+    [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<bool>> ToggleWatchlist(
+        int id,
+        int contentId,
+        [FromServices] IOutputCacheStore cacheStore,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Toggling watchlist item: Profile={ProfileId}, Content={ContentId}", id, contentId);
+
+        var command = new ToggleWatchlistCommand
+        {
+            ProfileId = id,
+            ContentId = contentId
+        };
+        
+        var result = await _mediator.Send(command, cancellationToken);
+        
+        // Invalidate watchlist cache
+        // We can't easily invalidate just this profile's watchlist without dynamic tags,
+        // but since we tagged GetWatchlist with "watchlist", we can invalidate that.
+        // Ideally we'd use "watchlist-{id}" but attributes require constant strings.
+        // For now, evicting "watchlist" affects all profiles, which is acceptable but not optimal.
+        await cacheStore.EvictByTagAsync("watchlist", cancellationToken);
+
+        return Ok(new { inWatchlist = result });
     }
 }

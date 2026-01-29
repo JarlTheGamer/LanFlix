@@ -91,32 +91,13 @@ public class LibraryService : ILibraryService
         {
             _logger.LogInformation("Scanning movies folder: {Path}", moviesPath);
 
-            // Preload movies to optimize performance (avoid N+1 queries)
-            var allMovies = await _context.Contents
-                .Where(c => c.Type == ContentType.Movie)
-                .ToListAsync(cancellationToken);
-            
-            // Build in-memory lookups
-            // Windows file system is case-insensitive
-            var moviesByPath = new Dictionary<string, Content>(StringComparer.OrdinalIgnoreCase);
-            var moviesByTmdb = new Dictionary<int, Content>();
-
-            foreach (var m in allMovies)
-            {
-                if (!string.IsNullOrEmpty(m.FilePath))
-                    moviesByPath[m.FilePath] = m;
-                
-                if (!moviesByTmdb.ContainsKey(m.TmdbId))
-                    moviesByTmdb[m.TmdbId] = m;
-            }
-
             var directories = Directory.GetDirectories(moviesPath);
 
             foreach (var movieFolder in directories)
             {
                 try
                 {
-                    await ScanMovieFolderAsync(movieFolder, moviesByPath, moviesByTmdb, stats, cancellationToken);
+                    await ScanMovieFolderAsync(movieFolder, stats, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -140,30 +121,13 @@ public class LibraryService : ILibraryService
         {
             _logger.LogInformation("Scanning series folder: {Path}", seriesPath);
 
-            // Preload series to optimize performance (avoid N+1 queries)
-            var allSeries = await _context.Contents
-                .Where(c => c.Type == ContentType.Series)
-                .ToListAsync(cancellationToken);
-            
-            var seriesByPath = new Dictionary<string, Content>(StringComparer.OrdinalIgnoreCase);
-            var seriesByTmdb = new Dictionary<int, Content>();
-
-            foreach (var s in allSeries)
-            {
-                if (!string.IsNullOrEmpty(s.FilePath))
-                    seriesByPath[s.FilePath] = s;
-                
-                if (!seriesByTmdb.ContainsKey(s.TmdbId))
-                    seriesByTmdb[s.TmdbId] = s;
-            }
-
             var directories = Directory.GetDirectories(seriesPath);
 
             foreach (var seriesFolder in directories)
             {
                 try
                 {
-                    await ScanSingleSeriesFolderAsync(seriesFolder, seriesByPath, seriesByTmdb, stats, cancellationToken);
+                    await ScanSingleSeriesFolderAsync(seriesFolder, stats, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -185,83 +149,82 @@ public class LibraryService : ILibraryService
     {
         try
         {
-            _logger.LogInformation("Cleaning up missing content (Optimized)");
+            _logger.LogInformation("Cleaning up missing content");
 
-            // Get all content from database (projection to reduce memory)
-            var allContent = await _context.Contents
-                .Select(c => new { c.Id, c.Type, c.FilePath, c.Title })
-                .ToListAsync(cancellationToken);
+            // Get all content from database
+            var allContent = await _context.Contents.ToListAsync(cancellationToken);
+            var contentIdsToRemove = new List<int>();
 
-            var episodes = await _context.Episodes
-                 .Select(e => new { e.Id, e.FilePath, e.SeasonNumber, e.EpisodeNumber })
-                 .ToListAsync(cancellationToken);
-
-            var missingContentIds = new System.Collections.Concurrent.ConcurrentBag<int>();
-            var missingEpisodeIds = new System.Collections.Concurrent.ConcurrentBag<int>();
-
-            // Process content in parallel
-            await Parallel.ForEachAsync(allContent, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = cancellationToken }, async (content, ct) => 
+            foreach (var content in allContent)
             {
                 var shouldRemove = false;
+                var reason = "";
+
+                // Remove content with no file path
                 if (string.IsNullOrEmpty(content.FilePath))
                 {
                     shouldRemove = true;
+                    reason = "no file path";
                 }
                 else
                 {
+                    // Check if file/folder exists
                     var exists = content.Type == ContentType.Movie ? File.Exists(content.FilePath) : Directory.Exists(content.FilePath);
-                    if (!exists) shouldRemove = true;
+                    if (!exists)
+                    {
+                        shouldRemove = true;
+                        reason = $"{(content.Type == ContentType.Movie ? "file" : "folder")} no longer exists: {content.FilePath}";
+                    }
                 }
 
                 if (shouldRemove)
                 {
-                    missingContentIds.Add(content.Id);
+                    _logger.LogInformation("Removing content {Id} ({Title}) - {Reason}", content.Id, content.Title, reason);
+                    contentIdsToRemove.Add(content.Id);
+                    stats.Removed++;
                 }
-                
-                await Task.CompletedTask;
-            });
+            }
 
-             // Process episodes in parallel
-            await Parallel.ForEachAsync(episodes, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = cancellationToken }, async (episode, ct) => 
+            // Remove identified content using ExecuteDeleteAsync to bypass change tracker issues with owned JSON collections
+            if (contentIdsToRemove.Any())
+            {
+                // Remove related watch histories
+                await _context.WatchHistories
+                    .Where(w => contentIdsToRemove.Contains(w.ContentId))
+                    .ExecuteDeleteAsync(cancellationToken);
+                
+                // Remove related episodes
+                await _context.Episodes
+                     .Where(e => contentIdsToRemove.Contains(e.ContentId))
+                     .ExecuteDeleteAsync(cancellationToken);
+                
+                // Finally remove the content
+                await _context.Contents
+                    .Where(c => contentIdsToRemove.Contains(c.Id))
+                    .ExecuteDeleteAsync(cancellationToken);
+            }
+
+            // Also cleanup missing episodes (iterate and find IDs, then delete)
+            var episodes = await _context.Episodes.ToListAsync(cancellationToken);
+            var episodeIdsToRemove = new List<int>();
+            
+            foreach (var episode in episodes)
             {
                 if (!string.IsNullOrEmpty(episode.FilePath) && !File.Exists(episode.FilePath))
                 {
-                    missingEpisodeIds.Add(episode.Id);
+                    _logger.LogInformation("Removing missing episode: S{Season}E{Episode} at {Path}", 
+                        episode.SeasonNumber, episode.EpisodeNumber, episode.FilePath);
+                    episodeIdsToRemove.Add(episode.Id);
+                    stats.Removed++;
                 }
-                await Task.CompletedTask;
-            });
-
-            // Remove contents
-            if (!missingContentIds.IsEmpty)
-            {
-                var idsToRemove = missingContentIds.ToList();
-                _logger.LogInformation("Removing {Count} missing content items", idsToRemove.Count);
-                
-                // Fetch full entities for proper removal (cascade delete handling if not database-side)
-                var contentsToRemove = await _context.Contents
-                    .Where(c => idsToRemove.Contains(c.Id))
-                    .Include(c => c.WatchHistories)
-                    .ToListAsync(cancellationToken);
-
-                _context.Contents.RemoveRange(contentsToRemove);
-                stats.Removed += contentsToRemove.Count;
             }
-
-            // Remove episodes
-            if (!missingEpisodeIds.IsEmpty)
+            
+            if (episodeIdsToRemove.Any())
             {
-                var idsToRemove = missingEpisodeIds.ToList();
-                _logger.LogInformation("Removing {Count} missing episodes", idsToRemove.Count);
-                
-                var episodesToRemove = await _context.Episodes
-                    .Where(e => idsToRemove.Contains(e.Id))
-                    .ToListAsync(cancellationToken);
-
-                _context.Episodes.RemoveRange(episodesToRemove);
-                stats.Removed += episodesToRemove.Count;
+                await _context.Episodes
+                    .Where(e => episodeIdsToRemove.Contains(e.Id))
+                    .ExecuteDeleteAsync(cancellationToken);
             }
-
-            await _context.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -271,7 +234,7 @@ public class LibraryService : ILibraryService
         }
     }
 
-    private async Task ScanMovieFolderAsync(string movieFolder, Dictionary<string, Content> moviesByPath, Dictionary<int, Content> moviesByTmdb, LibraryScanResult stats, CancellationToken cancellationToken)
+    private async Task ScanMovieFolderAsync(string movieFolder, LibraryScanResult stats, CancellationToken cancellationToken)
     {
         var folderName = Path.GetFileName(movieFolder);
         
@@ -287,8 +250,9 @@ public class LibraryService : ILibraryService
             return;
         }
 
-        // Check if movie already exists in memory cache (avoids DB query)
-        moviesByPath.TryGetValue(videoFile, out var existing);
+        // Check if movie already exists in database
+        var existing = await _context.Contents
+            .FirstOrDefaultAsync(c => c.FilePath == videoFile, cancellationToken);
 
         if (existing != null)
         {
@@ -330,8 +294,9 @@ public class LibraryService : ILibraryService
             var metadataJson = (System.Text.Json.JsonElement)metadata;
             if (metadataJson.TryGetProperty("tmdbId", out var tmdbIdElement) && tmdbIdElement.TryGetInt32(out var tmdbId))
             {
-                // Check if we need to add/update content in database using memory cache
-                moviesByTmdb.TryGetValue(tmdbId, out var existingByTmdb);
+                // Check if we need to add/update content in database
+                var existingByTmdb = await _context.Contents
+                    .FirstOrDefaultAsync(c => c.TmdbId == tmdbId && c.Type == ContentType.Movie, cancellationToken);
 
                 if (existingByTmdb != null)
                 {
@@ -368,8 +333,6 @@ public class LibraryService : ILibraryService
                             {
                                 _logger.LogInformation("Updating file path in database: {OldPath} -> {NewPath}", existingByTmdb.FilePath, fullFilePath);
                                 existingByTmdb.FilePath = fullFilePath;
-                                // Update dictionary
-                                moviesByPath[fullFilePath] = existingByTmdb;
                             }
                             
                             await _context.SaveChangesAsync(cancellationToken);
@@ -392,7 +355,7 @@ public class LibraryService : ILibraryService
                 {
                     // Content doesn't exist, add it using the metadata
                     _logger.LogInformation("Found metadata for new movie, adding to library: TMDB ID {TmdbId}", tmdbId);
-                    await AddMovieToLibraryAsync(tmdbId, videoFile, movieFolder, moviesByTmdb, moviesByPath, stats, cancellationToken);
+                    await AddMovieToLibraryAsync(tmdbId, videoFile, movieFolder, stats, cancellationToken);
                 }
             }
             else
@@ -425,7 +388,7 @@ public class LibraryService : ILibraryService
                         _logger.LogInformation("Found TMDB match for {Title} ({Year}): {TmdbId}", title, year, movieMatch.Id);
                         
                         // Add to library using the addToLibrary pattern from old backend
-                        await AddMovieToLibraryAsync(movieMatch.Id, videoFile, movieFolder, moviesByTmdb, moviesByPath, stats, cancellationToken);
+                        await AddMovieToLibraryAsync(movieMatch.Id, videoFile, movieFolder, stats, cancellationToken);
                     }
                     else
                     {
@@ -449,12 +412,13 @@ public class LibraryService : ILibraryService
 
 
 
-    private async Task ScanSingleSeriesFolderAsync(string seriesFolder, Dictionary<string, Content> seriesByPath, Dictionary<int, Content> seriesByTmdb, LibraryScanResult stats, CancellationToken cancellationToken)
+    private async Task ScanSingleSeriesFolderAsync(string seriesFolder, LibraryScanResult stats, CancellationToken cancellationToken)
     {
         var folderName = Path.GetFileName(seriesFolder);
         
-        // Check if series already exists in database by file path (using cache)
-        seriesByPath.TryGetValue(seriesFolder, out var existingByPath);
+        // Check if series already exists in database by file path
+        var existingByPath = await _context.Contents
+            .FirstOrDefaultAsync(c => c.FilePath == seriesFolder && c.Type == ContentType.Series, cancellationToken);
 
         if (existingByPath != null)
         {
@@ -471,48 +435,85 @@ public class LibraryService : ILibraryService
         // Try to load metadata from folder
         var metadata = await _metadataService.LoadMetadataFromMediaFolderAsync(seriesFolder, cancellationToken);
         
-        // If no metadata, try to search TMDB by folder name
-        if (metadata == null)
+    // If metadata found, use it
+    if (metadata != null)
+    {
+        var metadataJson = (System.Text.Json.JsonElement)metadata;
+        if (metadataJson.TryGetProperty("tmdbId", out var tmdbIdElement) && tmdbIdElement.TryGetInt32(out var tmdbId))
         {
-            try
+             // Check if already exists in database by TMDB ID
+            var existingByTmdb = await _context.Contents
+                .FirstOrDefaultAsync(c => c.TmdbId == tmdbId && c.Type == ContentType.Series, cancellationToken);
+                
+            if (existingByTmdb != null)
             {
-                _logger.LogInformation("No metadata file found for {FolderName}, attempting to fetch from TMDB", folderName);
+                _logger.LogInformation("Series already exists (by TMDB): {Title}", existingByTmdb.Title);
                 
-                // Search for series using folder name
-                var searchResults = await _tmdbClient.SearchTvSeriesAsync(folderName, cancellationToken);
-                var seriesMatch = searchResults.Results.FirstOrDefault();
-                
-                if (seriesMatch != null)
+                 // Update file path if different
+                if (existingByTmdb.FilePath != seriesFolder)
                 {
-                    _logger.LogInformation("Found TMDB match for series {FolderName}: {TmdbId}", folderName, seriesMatch.Id);
-                    
-                    // Add to library
-                    await AddSeriesToLibraryAsync(seriesMatch.Id, seriesFolder, seriesByTmdb, seriesByPath, stats, cancellationToken);
+                    _logger.LogInformation("Updating existing series file path from {OldPath} to {NewPath}", existingByTmdb.FilePath, seriesFolder);
+                    existingByTmdb.FilePath = seriesFolder;
+                    existingByTmdb.UpdatedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync(cancellationToken);
+                    stats.Updated++;
                 }
-                else
-                {
-                    _logger.LogWarning("No TMDB match found for series: {FolderName}", folderName);
-                    stats.Errors.Add($"No TMDB match: {folderName}");
-                }
+
+                // Scan for new episodes
+                await ScanSeriesEpisodesAsync(existingByTmdb.Id, seriesFolder, cancellationToken);
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex, "Failed to fetch metadata for series {FolderName}", folderName);
-                stats.Errors.Add($"Failed to fetch metadata: {folderName}");
+                 // Add to library
+                _logger.LogInformation("Found metadata for new series, adding to library: TMDB ID {TmdbId}", tmdbId);
+                await AddSeriesToLibraryAsync(tmdbId, seriesFolder, stats, cancellationToken);
             }
         }
-        // TODO: Handle metadata case if implemented similar to Movies
     }
+    else
+    {
+        // If no metadata, try to search TMDB by folder name
+        try
+        {
+            _logger.LogInformation("No metadata file found for {FolderName}, attempting to fetch from TMDB", folderName);
+            
+            // Search for series using folder name
+            var searchResults = await _tmdbClient.SearchTvSeriesAsync(folderName, cancellationToken);
+            var seriesMatch = searchResults.Results.FirstOrDefault();
+            
+            if (seriesMatch != null)
+            {
+                _logger.LogInformation("Found TMDB match for series {FolderName}: {TmdbId}", folderName, seriesMatch.Id);
+                
+                // Add to library
+                await AddSeriesToLibraryAsync(seriesMatch.Id, seriesFolder, stats, cancellationToken);
+            }
+            else
+            {
+                _logger.LogWarning("No TMDB match found for series: {FolderName}", folderName);
+                stats.Errors.Add($"No TMDB match: {folderName}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch metadata for series {FolderName}", folderName);
+            stats.Errors.Add($"Failed to fetch metadata: {folderName}");
+        }
+    }
+    }
+
+
 
     /// <summary>
     /// Add movie to library (following old backend pattern)
     /// </summary>
-    private async Task AddMovieToLibraryAsync(int tmdbId, string filePath, string movieFolder, Dictionary<int, Content> moviesByTmdb, Dictionary<string, Content> moviesByPath, LibraryScanResult stats, CancellationToken cancellationToken)
+    private async Task AddMovieToLibraryAsync(int tmdbId, string filePath, string movieFolder, LibraryScanResult stats, CancellationToken cancellationToken)
     {
         try
         {
-            // Check if already exists using dictionary
-            moviesByTmdb.TryGetValue(tmdbId, out var existing);
+            // Check if already exists
+            var existing = await _context.Contents
+                .FirstOrDefaultAsync(c => c.TmdbId == tmdbId && c.Type == ContentType.Movie, cancellationToken);
 
             if (existing != null)
             {
@@ -564,10 +565,6 @@ public class LibraryService : ILibraryService
             _context.Contents.Add(content);
             await _context.SaveChangesAsync(cancellationToken);
 
-            // Update dictionaries
-            moviesByTmdb[tmdbId] = content;
-            moviesByPath[filePath] = content;
-
             // Save metadata to media folder (like old backend)
             await _metadataService.SaveMetadataToMediaFolderAsync(content.Id, movieFolder, cancellationToken);
 
@@ -584,10 +581,7 @@ public class LibraryService : ILibraryService
     /// <summary>
     /// Add series to library (following old backend pattern)
     /// </summary>
-    /// <summary>
-    /// Add series to library (following old backend pattern)
-    /// </summary>
-    private async Task AddSeriesToLibraryAsync(int tmdbId, string seriesFolder, Dictionary<int, Content> seriesByTmdb, Dictionary<string, Content> seriesByPath, LibraryScanResult stats, CancellationToken cancellationToken)
+    private async Task AddSeriesToLibraryAsync(int tmdbId, string seriesFolder, LibraryScanResult stats, CancellationToken cancellationToken)
     {
         try
         {
@@ -595,8 +589,9 @@ public class LibraryService : ILibraryService
             _logger.LogInformation("TMDB TV series search completed: {SeriesName}, Results: 1", Path.GetFileName(seriesFolder));
             _logger.LogInformation("Found TMDB match for series {SeriesName}: {TmdbId}", Path.GetFileName(seriesFolder), tmdbId);
             
-            // Check if already exists by TMDB ID and type (using dict)
-            seriesByTmdb.TryGetValue(tmdbId, out var existing);
+            // Check if already exists by TMDB ID and type (like old backend)
+            var existing = await _context.Contents
+                .FirstOrDefaultAsync(c => c.TmdbId == tmdbId && c.Type == ContentType.Series, cancellationToken);
 
             if (existing != null)
             {
@@ -609,11 +604,6 @@ public class LibraryService : ILibraryService
                     existing.FilePath = seriesFolder;
                     existing.UpdatedAt = DateTime.UtcNow;
                     await _context.SaveChangesAsync(cancellationToken);
-                    
-                    // Update cache
-                    if (seriesByPath.ContainsKey(seriesFolder)) seriesByPath.Remove(seriesFolder);
-                    seriesByPath[seriesFolder] = existing;
-                    
                     stats.Updated++;
                 }
                 
@@ -652,10 +642,6 @@ public class LibraryService : ILibraryService
             
             await _context.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Successfully added series to database: {Title} (TMDB: {TmdbId})", content.Title, tmdbId);
-
-            // Update dictionaries
-            seriesByTmdb[tmdbId] = content;
-            seriesByPath[seriesFolder] = content;
 
             // Save metadata to media folder (like old backend)
             await _metadataService.SaveMetadataToMediaFolderAsync(content.Id, seriesFolder, cancellationToken);
@@ -710,15 +696,6 @@ public class LibraryService : ILibraryService
                 return;
             }
 
-            // Preload existing episodes for this series to avoid N+1 lookups
-            var existingEpisodes = await _context.Episodes
-                .Where(e => e.ContentId == contentId)
-                .ToListAsync(cancellationToken);
-            
-            var episodesMap = existingEpisodes
-                .GroupBy(e => (e.SeasonNumber, e.EpisodeNumber))
-                .ToDictionary(g => g.Key, g => g.First());
-
             // Scan each season folder
             var seasonFolders = Directory.GetDirectories(seriesFolder)
                 .Where(d => Path.GetFileName(d).StartsWith("Season ", StringComparison.OrdinalIgnoreCase) ||
@@ -727,7 +704,7 @@ public class LibraryService : ILibraryService
 
             foreach (var seasonFolder in seasonFolders)
             {
-                await ScanSeasonFolderAsync(contentId, seasonFolder, seriesDetails, episodesMap, cancellationToken);
+                await ScanSeasonFolderAsync(contentId, seasonFolder, seriesDetails, cancellationToken);
             }
 
             // Also check for episodes directly in the series folder (flat structure)
@@ -737,7 +714,7 @@ public class LibraryService : ILibraryService
 
             if (episodeFiles.Any())
             {
-                await ScanFlatSeriesStructureAsync(contentId, seriesFolder, episodeFiles, seriesDetails, episodesMap, cancellationToken);
+                await ScanFlatSeriesStructureAsync(contentId, seriesFolder, episodeFiles, seriesDetails, cancellationToken);
             }
         }
         catch (Exception ex)
@@ -749,7 +726,7 @@ public class LibraryService : ILibraryService
     /// <summary>
     /// Scan a season folder for episodes
     /// </summary>
-    private async Task ScanSeasonFolderAsync(int contentId, string seasonFolder, TmdbTvSeriesDetails seriesDetails, Dictionary<(int, int), Episode> episodesMap, CancellationToken cancellationToken)
+    private async Task ScanSeasonFolderAsync(int contentId, string seasonFolder, TmdbTvSeriesDetails seriesDetails, CancellationToken cancellationToken)
     {
         try
         {
@@ -784,7 +761,7 @@ public class LibraryService : ILibraryService
 
             foreach (var episodeFile in episodeFiles)
             {
-                await ScanEpisodeFileAsync(contentId, episodeFile, seasonNumber, seasonDetails, seasonFolder, episodesMap, cancellationToken);
+                await ScanEpisodeFileAsync(contentId, episodeFile, seasonNumber, seasonDetails, seasonFolder, cancellationToken);
             }
         }
         catch (Exception ex)
@@ -796,7 +773,7 @@ public class LibraryService : ILibraryService
     /// <summary>
     /// Scan series with flat structure (episodes directly in series folder)
     /// </summary>
-    private async Task ScanFlatSeriesStructureAsync(int contentId, string seriesFolder, List<string> episodeFiles, TmdbTvSeriesDetails seriesDetails, Dictionary<(int, int), Episode> episodesMap, CancellationToken cancellationToken)
+    private async Task ScanFlatSeriesStructureAsync(int contentId, string seriesFolder, List<string> episodeFiles, TmdbTvSeriesDetails seriesDetails, CancellationToken cancellationToken)
     {
         try
         {
@@ -823,7 +800,7 @@ public class LibraryService : ILibraryService
                         _logger.LogWarning(ex, "Could not fetch season {Season} details from TMDB for series {TmdbId}", seasonNumber, seriesDetails.Id);
                     }
 
-                    await ScanEpisodeFileAsync(contentId, episodeFile, seasonNumber, seasonDetails, seriesFolder, episodesMap, cancellationToken);
+                    await ScanEpisodeFileAsync(contentId, episodeFile, seasonNumber, seasonDetails, seriesFolder, cancellationToken);
                 }
                 else
                 {
@@ -840,7 +817,7 @@ public class LibraryService : ILibraryService
     /// <summary>
     /// Scan individual episode file and add to database
     /// </summary>
-    private async Task ScanEpisodeFileAsync(int contentId, string episodeFile, int seasonNumber, TmdbSeasonDetails? seasonDetails, string seasonFolder, Dictionary<(int, int), Episode> episodesMap, CancellationToken cancellationToken)
+    private async Task ScanEpisodeFileAsync(int contentId, string episodeFile, int seasonNumber, TmdbSeasonDetails? seasonDetails, string seasonFolder, CancellationToken cancellationToken)
     {
         try
         {
@@ -859,8 +836,11 @@ public class LibraryService : ILibraryService
                 }
             }
 
-            // Check if episode already exists using map
-            episodesMap.TryGetValue((seasonNumber, episodeNumber), out var existingEpisode);
+            // Check if episode already exists
+            var existingEpisode = await _context.Episodes
+                .FirstOrDefaultAsync(e => e.ContentId == contentId && 
+                                        e.SeasonNumber == seasonNumber && 
+                                        e.EpisodeNumber == episodeNumber, cancellationToken);
 
             if (existingEpisode != null)
             {
@@ -870,9 +850,6 @@ public class LibraryService : ILibraryService
                     existingEpisode.FilePath = episodeFile;
                     await _context.SaveChangesAsync(cancellationToken);
                     _logger.LogDebug("Updated episode file path: S{Season}E{Episode}", seasonNumber, episodeNumber);
-                    
-                    // Update map
-                    episodesMap[(seasonNumber, episodeNumber)] = existingEpisode;
                 }
                 return;
             }
