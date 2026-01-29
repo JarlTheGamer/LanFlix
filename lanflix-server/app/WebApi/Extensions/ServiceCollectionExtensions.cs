@@ -4,9 +4,7 @@ using System.Threading.RateLimiting;
 using Lanflix.Application;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Infrastructure;
-using Lanflix.Infrastructure.Services.Authentication;
 using Lanflix.Infrastructure.Telemetry;
-using Lanflix.WebApi.Authentication;
 using Lanflix.WebApi.Authorization;
 using Lanflix.WebApi.Helpers;
 using Lanflix.WebApi.Services;
@@ -100,7 +98,6 @@ public static class ServiceCollectionExtensions
         services.AddControllers();
         services.AddOpenApi();
         services.AddHttpContextAccessor();
-        services.AddSingleton<ILegacyTokenService, LegacyTokenService>();
         
         return services;
     }
@@ -148,41 +145,39 @@ public static class ServiceCollectionExtensions
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
             options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
         })
-        .AddScheme<JwtBearerOptions, HybridJwtBearerHandler>(
-            JwtBearerDefaults.AuthenticationScheme,
-            options =>
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
             {
-                options.TokenValidationParameters = new TokenValidationParameters
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(configuration["Jwt:Key"] 
+                        ?? throw new InvalidOperationException("JWT Key not configured"))),
+                ValidateIssuer = true,
+                ValidIssuer = configuration["Jwt:Issuer"],
+                ValidateAudience = true,
+                ValidAudience = configuration["Jwt:Audience"],
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
+            };
+            
+            // Configure JWT authentication for SignalR
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
                 {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(configuration["Jwt:Key"] 
-                            ?? throw new InvalidOperationException("JWT Key not configured"))),
-                    ValidateIssuer = true,
-                    ValidIssuer = configuration["Jwt:Issuer"],
-                    ValidateAudience = true,
-                    ValidAudience = configuration["Jwt:Audience"],
-                    ValidateLifetime = true,
-                    ClockSkew = TimeSpan.Zero
-                };
-                
-                // Configure JWT authentication for SignalR
-                options.Events = new JwtBearerEvents
-                {
-                    OnMessageReceived = context =>
+                    var accessToken = context.Request.Query["access_token"];
+                    var path = context.HttpContext.Request.Path;
+                    
+                    if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
                     {
-                        var accessToken = context.Request.Query["access_token"];
-                        var path = context.HttpContext.Request.Path;
-                        
-                        if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
-                        {
-                            context.Token = accessToken;
-                        }
-                        
-                        return Task.CompletedTask;
+                        context.Token = accessToken;
                     }
-                };
-            });
+                    
+                    return Task.CompletedTask;
+                }
+            };
+        });
 
         return services;
     }

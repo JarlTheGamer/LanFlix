@@ -51,7 +51,6 @@ public static class DependencyInjection
         
         // Authentication Services
         services.AddScoped<ITokenService, TokenService>();
-        services.AddScoped<ILegacyTokenService, LegacyTokenService>();
         
         // External API Services (TmdbClient registered above with HttpClient)
         services.AddScoped<IRadarrClient, RadarrClient>();
