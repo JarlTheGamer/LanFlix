@@ -72,6 +72,52 @@
     // Initialize player
     await player.initialize(contentId, contentType, episodeId, startPosition);
 
+    // Handle Auto-Play Next
+    videoElement.addEventListener('ended', async () => {
+      console.log('🎬 Video ended - checking for next episode...');
+      if (contentType === 'episode' || contentType === 'series') {
+        // Show loading toast
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position: fixed; bottom: 80px; right: 40px; background: rgba(0,0,0,0.8); color: white; padding: 15px 25px; border-radius: 8px; z-index: 9999; font-family: "Poppins", sans-serif; display: flex; align-items: center; gap: 10px; border-left: 4px solid #e50914;';
+        toast.innerHTML = '<span>Loading next episode...</span>';
+        document.body.appendChild(toast);
+
+        try {
+          // We need seriesId to get the next episode. 
+          // Ideally we passed it or can get it from content details.
+          // If we don't have it, we try to fetch current content details.
+          let currentSeriesId = new URLSearchParams(window.location.search).get('seriesId');
+
+          if (!currentSeriesId) {
+            const currentEp = await apiClient.getContent(contentId);
+            if (currentEp) currentSeriesId = currentEp.seriesId;
+          }
+
+          if (currentSeriesId) {
+            const nextEp = await apiClient.getNextEpisode(currentSeriesId, contentId);
+            if (nextEp) {
+              toast.innerHTML = `<span>Playing next: <strong>${nextEp.title}</strong></span>`;
+              setTimeout(() => {
+                window.location.href = `player.html?contentId=${nextEp.id}&type=episode&seriesId=${currentSeriesId}`;
+              }, 2000);
+              return;
+            }
+          }
+
+          toast.innerHTML = '<span>No next episode found. Returning...</span>';
+          setTimeout(() => window.history.back(), 2000);
+
+        } catch (e) {
+          console.warn('Auto-play failed:', e);
+          toast.innerHTML = '<span>Auto-play failed. Returning...</span>';
+          setTimeout(() => window.history.back(), 2000);
+        }
+      } else {
+        // Movies just exit
+        setTimeout(() => window.history.back(), 1000);
+      }
+    });
+
     // Setup TV remote control mapping
     setupTVRemoteControl();
 

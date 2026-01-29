@@ -130,7 +130,7 @@ public class SettingsService : ISettingsService
 
     public async Task UpdateSettingsAsync(ServerSettingsDto settings, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Updating server settings to database");
+        _logger.LogInformation("Updating server settings to database and persistent config");
 
         try
         {
@@ -180,7 +180,7 @@ public class SettingsService : ISettingsService
             await UpsertSetting("Lanflix:Cache:Redis:InstanceName", settings.Cache.Redis.InstanceName);
             await UpsertSetting("Lanflix:Cache:Memory:SizeLimit", settings.Cache.Memory.SizeLimit.ToString());
 
-            // Only update API keys if they're not placeholders or empty (to prevent accidental overwrites)
+            // Only update API keys if they're not placeholders or empty
             if (!string.IsNullOrEmpty(settings.ExternalApis.Tmdb.ApiKey) && 
                 !settings.ExternalApis.Tmdb.ApiKey.StartsWith("${"))
             {
@@ -210,14 +210,59 @@ public class SettingsService : ISettingsService
             }
 
             await _context.SaveChangesAsync(cancellationToken);
+            
+            // --- PERSISTENCE TO FILE ---
+            // Save to config/lanflix.json so it survives updates
+            try 
+            {
+                await SaveSettingsToFileAsync(settings);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save settings to persistent config file");
+                // Don't throw, as DB save was successful
+            }
 
-            _logger.LogInformation("Server settings saved to database successfully");
+            _logger.LogInformation("Server settings saved to database and config file successfully");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating server settings");
             throw;
         }
+    }
+
+    private async Task SaveSettingsToFileAsync(ServerSettingsDto settings)
+    {
+        var configPath = Path.Combine(AppContext.BaseDirectory, "config", "lanflix.json");
+        var directory = Path.GetDirectoryName(configPath);
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
+
+        // Map DTO to the configuration structure expected by IConfiguration
+        // We recreate the object structure: Lanflix -> { MediaPaths, Transcoding, ... }
+        var configObject = new
+        {
+            Lanflix = new 
+            {
+                MediaPaths = settings.MediaPaths,
+                Transcoding = settings.Transcoding,
+                Streaming = settings.Streaming,
+                Cache = settings.Cache,
+                ExternalApis = new 
+                {
+                    Tmdb = settings.ExternalApis.Tmdb,
+                    Sonarr = settings.ExternalApis.Sonarr,
+                    Radarr = settings.ExternalApis.Radarr,
+                    Prowlarr = settings.ExternalApis.Prowlarr
+                }
+            }
+        };
+
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        var json = JsonSerializer.Serialize(configObject, options);
+        await File.WriteAllTextAsync(configPath, json);
+        _logger.LogDebug("Wrote persistent config to {Path}", configPath);
     }
 
     public async Task UpdateSettingAsync(string key, string value, CancellationToken cancellationToken = default)

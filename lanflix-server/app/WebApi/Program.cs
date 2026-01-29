@@ -26,6 +26,11 @@ EmbeddedResourceExtractor.ExtractConfigFiles();
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add persistent configuration file (survives updates)
+var configDir = Path.Combine(AppContext.BaseDirectory, "config");
+Directory.CreateDirectory(configDir);
+builder.Configuration.AddJsonFile(Path.Combine(configDir, "lanflix.json"), optional: true, reloadOnChange: true);
+
 // Configure Kestrel for HTTP/2 and HTTP/3 support
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {

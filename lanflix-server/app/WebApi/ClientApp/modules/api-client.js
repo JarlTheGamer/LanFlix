@@ -92,7 +92,7 @@ class ApiClient {
       if (!response.ok) {
         let errorData = {};
         const contentType = response.headers.get('content-type');
-        
+
         // Only try to parse JSON if the response is actually JSON
         if (contentType && contentType.includes('application/json')) {
           errorData = await response.json().catch(() => ({}));
@@ -108,13 +108,13 @@ class ApiClient {
             };
           }
         }
-        
+
         const errorMessage = errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`;
         const error = new Error(errorMessage);
         error.statusCode = response.status;
         error.code = errorData.error?.code || 'HTTP_ERROR';
         error.details = errorData.error?.details;
-        
+
         // Log detailed error information for debugging
         console.error(`API Error [${endpoint}]:`, {
           status: response.status,
@@ -122,7 +122,7 @@ class ApiClient {
           code: error.code,
           details: error.details
         });
-        
+
         throw error;
       }
 
@@ -400,11 +400,11 @@ class ApiClient {
   async queueDownload(id, profileId, type, title, year = null) {
     return this.request(`/content/${id}/queue`, {
       method: 'POST',
-      body: JSON.stringify({ 
-        ProfileId: profileId, 
-        Type: type, 
-        Title: title, 
-        Year: year 
+      body: JSON.stringify({
+        ProfileId: profileId,
+        Type: type,
+        Title: title,
+        Year: year
       })
     });
   }
@@ -567,6 +567,16 @@ class ApiClient {
     });
   }
 
+  /**
+   * GET /api/profiles/:id/history
+   * Get profile's watch history
+   */
+  async getWatchHistory(profileId, limit = 50) {
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit);
+    return this.request(`/profiles/${profileId}/history?${params.toString()}`);
+  }
+
   // ==================== CONTENT ENDPOINTS ====================
 
   /**
@@ -579,6 +589,45 @@ class ApiClient {
     if (profileId) params.append('profileId', profileId);
 
     return this.request(`/content/${contentId}?${params.toString()}`);
+  }
+
+  /**
+   * Get next episode for a series
+   */
+  async getNextEpisode(seriesId, currentEpisodeId) {
+    try {
+      // Get all episodes for the series
+      const episodes = await this.getSeriesEpisodes(seriesId);
+      if (!episodes || !episodes.length) return null;
+
+      // Flatten episodes from all seasons
+      let allEpisodes = [];
+      episodes.forEach(season => {
+        if (season.episodes && season.episodes.length) {
+          allEpisodes.push(...season.episodes);
+        }
+      });
+
+      // Sort by season and episode number
+      allEpisodes.sort((a, b) => {
+        if (a.seasonNumber !== b.seasonNumber) {
+          return a.seasonNumber - b.seasonNumber;
+        }
+        return a.episodeNumber - b.episodeNumber;
+      });
+
+      // Find current episode index
+      const currentIndex = allEpisodes.findIndex(e => e.id == currentEpisodeId || e.tmdbId == currentEpisodeId);
+
+      if (currentIndex !== -1 && currentIndex < allEpisodes.length - 1) {
+        return allEpisodes[currentIndex + 1];
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Failed to get next episode:', error);
+      return null;
+    }
   }
 
   // ==================== STREAMING ENDPOINTS ====================

@@ -140,9 +140,15 @@ export class ContentDisplay {
     try {
       const profileId = this.profileManager.selectedProfileId;
 
+      // Always fetch minimal watch history for "Continue Watching" row (except on My List)
+      let watchHistory = [];
+      if (this.currentCategory !== 'my' && !apiClient.isOffline && !stateManager.isOffline) {
+        watchHistory = await stateManager.getWatchHistory(profileId, false, 20).catch(() => []);
+      }
+
       switch (this.currentCategory) {
         case 'home':
-          // Home shows downloaded content + small discovery carousel
+          // Home shows downloaded content + small discovery carousel + watch history
           const recentlyAdded = await stateManager.getRecentlyAdded(20);
 
           // Only fetch discovery if online
@@ -161,7 +167,8 @@ export class ContentDisplay {
 
           this.contentData = {
             recentlyAdded: recentlyAdded.items || [],
-            discoverPreview: trendingItems
+            discoverPreview: trendingItems,
+            watchHistory: watchHistory
           };
           break;
 
@@ -201,16 +208,29 @@ export class ContentDisplay {
         case 'shows':
           // Shows page displays downloaded series only
           const seriesData = await stateManager.getLibrarySeries({ limit: 100 });
+          // Filter history for Series type only
+          const seriesHistory = watchHistory.filter(h =>
+            (h.type === 'episode' || h.type === 'series') ||
+            (h.content && (h.content.type === 'episode' || h.content.type === 'series'))
+          );
+
           this.contentData = {
-            series: seriesData.items || []
+            series: seriesData.items || [],
+            watchHistory: seriesHistory
           };
           break;
 
         case 'movies':
           // Movies page displays downloaded movies only
           const moviesData = await stateManager.getLibraryMovies({ limit: 100 });
+          // Filter history for Movie type only
+          const movieHistory = watchHistory.filter(h =>
+            h.type === 'movie' || (h.content && h.content.type === 'movie')
+          );
+
           this.contentData = {
-            movies: moviesData.items || []
+            movies: moviesData.items || [],
+            watchHistory: movieHistory
           };
           break;
 
@@ -672,6 +692,42 @@ export class ContentDisplay {
 
     const movieHub = document.createElement('div');
     movieHub.className = 'movie-hub';
+
+    // Inject "Continue Watching" row if history exists
+    const history = this.contentData.watchHistory;
+    if (history && history.length > 0) {
+      const historySection = document.createElement('div');
+      historySection.className = 'history-carousel-section';
+      historySection.innerHTML = `
+        <h2 style="color: #fff; margin: 20px 0 10px 0; font-size: 24px;">Continue Watching</h2>
+      `;
+
+      const historyHub = document.createElement('div');
+      historyHub.className = 'movie-hub';
+
+      history.forEach((historyItem, index) => {
+        // historyItem might be the content object itself if flattened, or wrapped.
+        // Adjust based on API response structure. Assuming flattened for now via simple map if needed,
+        // but let's handle the raw `WatchHistoryDto` structure: { content: ..., progressSeconds: ... }
+
+        let item = historyItem.content || historyItem;
+
+        // Ensure progress is attached to the item for the card to render
+        if (!item.watchProgress && historyItem.progressSeconds) {
+          item.watchProgress = {
+            progressSeconds: historyItem.progressSeconds,
+            durationSeconds: historyItem.durationSeconds || item.runtime * 60,
+            completed: historyItem.completed
+          };
+        }
+
+        const card = this.createContentCard(item, index, false);
+        historyHub.appendChild(card);
+      });
+
+      historySection.appendChild(historyHub);
+      row.appendChild(historySection);
+    }
 
     let contentItems = [];
     let showDiscoveryCarousel = false;
