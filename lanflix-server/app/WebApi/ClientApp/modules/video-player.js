@@ -55,8 +55,6 @@ export class VideoPlayer {
       return;
     }
 
-    console.log(`🎬 Initializing video player: contentId=${contentId}, type=${contentType}, episode=${episodeId}, start=${startPosition}s`);
-
     this.contentId = contentId;
     this.contentType = contentType;
     this.episodeId = episodeId;
@@ -82,17 +80,15 @@ export class VideoPlayer {
       this.playerNavigation.initialize();
 
       this.isInitialized = true;
-      console.log('✅ Video player initialized successfully');
 
     } catch (error) {
       console.error('❌ Failed to initialize video player:', error);
-      
+
       // Fire TV specific error handling
       const userAgent = navigator.userAgent.toLowerCase();
       const isFireTV = userAgent.includes('aftm') || userAgent.includes('aftb') || userAgent.includes('afts');
-      
+
       if (isFireTV) {
-        console.log('🔥 Fire TV initialization failed, trying fallback method...');
         await this.initializeFireTVFallback(startPosition);
       } else {
         this.showNotification('Failed to initialize video player: ' + error.message);
@@ -110,15 +106,15 @@ export class VideoPlayer {
     const isFireTV = userAgent.includes('aftm') || userAgent.includes('aftb') || userAgent.includes('afts');
     const isTV = isFireTV || userAgent.includes('tv') || userAgent.includes('androidtv');
 
-    console.log('🔍 Platform detection:', { userAgent, isFireTV, isTV });
+
 
     // Essential video attributes
     this.videoElement.setAttribute('playsinline', '');
     this.videoElement.setAttribute('webkit-playsinline', '');
-    
+
+    // Fire TV specific settings
     // Fire TV specific settings
     if (isFireTV) {
-      console.log('🔥 Fire TV detected - applying specific settings');
       this.videoElement.setAttribute('preload', 'metadata'); // Less aggressive preloading
       this.videoElement.removeAttribute('crossorigin'); // Remove CORS for Fire TV
     } else {
@@ -138,14 +134,14 @@ export class VideoPlayer {
     this.videoElement.muted = false;
     this.videoElement.volume = 1.0;
 
-    console.log('📺 Video element configured for platform:', isFireTV ? 'Fire TV' : isTV ? 'TV' : 'Web');
+
   }
 
   /**
    * Load media metadata (duration, codecs, etc.)
    */
   async loadMediaMetadata() {
-    console.log('📊 Loading media metadata...');
+
 
     try {
       const mediaInfo = await apiClient.getMediaInfo(this.contentId, this.episodeId);
@@ -155,7 +151,6 @@ export class VideoPlayer {
 
       if (mediaInfo && typeof duration === 'number' && duration > 0) {
         this.duration = duration;
-        console.log(`✅ Media duration loaded: ${this.duration}s (${Math.floor(this.duration / 60)}:${Math.floor(this.duration % 60).toString().padStart(2, '0')})`);
         this.updateDurationDisplay();
       } else {
         console.warn('⚠️ Invalid media info response:', mediaInfo);
@@ -179,13 +174,12 @@ export class VideoPlayer {
       await this.loadMediaMetadata();
     } catch (error) {
       console.warn('⚠️ Standard metadata loading failed, trying Fire TV fallback');
-      
+
       // Fire TV fallback - try to get basic info from library
       try {
         const content = await apiClient.getLibraryItem(this.contentId, this.profileId);
         if (content && content.runtime) {
           this.duration = content.runtime * 60; // Convert minutes to seconds
-          console.log(`🔥 Fire TV fallback: Using runtime from library: ${this.duration}s`);
           this.updateDurationDisplay();
         }
       } catch (fallbackError) {
@@ -199,12 +193,11 @@ export class VideoPlayer {
    * Setup video stream and detect playback mode
    */
   async setupStream(startPosition = 0) {
-    console.log('🔧 Setting up video stream...');
+
 
     try {
       // Get stream URL
       const streamUrl = this.getStreamUrl(startPosition);
-      console.log('🔗 Initial stream URL:', streamUrl);
 
       // Test stream availability and get playback mode
       await this.detectPlaybackMode(streamUrl);
@@ -214,8 +207,6 @@ export class VideoPlayer {
 
       // Wait for video to be ready
       await this.waitForVideoReady();
-
-      console.log('✅ Video stream setup complete');
 
     } catch (error) {
       console.error('❌ Failed to setup video stream:', error);
@@ -229,25 +220,23 @@ export class VideoPlayer {
    */
   async setupStreamWithRetry(startPosition = 0, maxRetries = 3) {
     let lastError = null;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`🔧 Stream setup attempt ${attempt}/${maxRetries}`);
         await this.setupStream(startPosition);
         return; // Success
       } catch (error) {
         lastError = error;
         console.warn(`⚠️ Stream setup attempt ${attempt} failed:`, error.message);
-        
+
         if (attempt < maxRetries) {
           // Wait before retry, with exponential backoff
           const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-          console.log(`⏳ Retrying in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
-    
+
     throw lastError;
   }
 
@@ -255,26 +244,22 @@ export class VideoPlayer {
    * Fire TV specific initialization fallback
    */
   async initializeFireTVFallback(startPosition = 0) {
-    console.log('🔥 Attempting Fire TV fallback initialization...');
-    
     try {
       // Simplified Fire TV initialization
       const streamUrl = this.getStreamUrl(startPosition);
-      console.log('🔗 Fire TV fallback stream URL:', streamUrl);
-      
+
       // Skip playback mode detection for Fire TV
       this.playbackMode = 'unknown';
       this.isTranscoding = true; // Assume transcoding for safety
-      
+
       // Set video source directly
       this.videoElement.src = streamUrl;
-      
+
       // Simplified ready check for Fire TV
       await this.waitForVideoReadyFireTV();
-      
+
       this.isInitialized = true;
-      console.log('✅ Fire TV fallback initialization successful');
-      
+
     } catch (error) {
       console.error('❌ Fire TV fallback initialization failed:', error);
       this.showNotification('Failed to initialize video player on Fire TV. Please check your network connection.');
@@ -307,7 +292,7 @@ export class VideoPlayer {
       };
 
       this.videoElement.addEventListener('error', onError, { once: true });
-      
+
       // Start checking
       checkReady();
     });
@@ -317,7 +302,7 @@ export class VideoPlayer {
    * Detect playback mode from server headers
    */
   async detectPlaybackMode(streamUrl) {
-    console.log('🔍 Detecting playback mode...');
+
 
     try {
       const response = await fetch(streamUrl, { method: 'HEAD' });
@@ -331,11 +316,7 @@ export class VideoPlayer {
       const transcodeMode = response.headers.get('X-Transcode-Mode');
       const directPlay = response.headers.get('X-Direct-Play');
 
-      console.log('📋 Playback headers:', {
-        'X-Playback-Mode': playbackMode,
-        'X-Transcode-Mode': transcodeMode,
-        'X-Direct-Play': directPlay
-      });
+
 
       // Determine playback mode
       this.playbackMode = playbackMode || 'unknown';
@@ -350,11 +331,6 @@ export class VideoPlayer {
       };
 
       const emoji = modeEmojis[this.playbackMode] || '❓';
-      console.log(`${emoji} Playback mode: ${this.playbackMode} (transcoding: ${this.isTranscoding})`);
-
-      if (this.isTranscoding) {
-        console.log('⚠️ Transcoded stream - seeking will reload stream at new position');
-      }
 
     } catch (error) {
       console.error('❌ Failed to detect playback mode:', error);
@@ -425,7 +401,7 @@ export class VideoPlayer {
       this.updatePlayPauseButton();
       // Start auto-hiding controls when playing
       this.showControls();
-      console.log('▶️ Video playing');
+
     });
 
     this.videoElement.addEventListener('pause', () => {
@@ -434,19 +410,16 @@ export class VideoPlayer {
       this.updatePlayPauseButton();
       // Show controls when paused (and keep them visible)
       this.showControls();
-      console.log('⏸️ Video paused');
     });
 
     this.videoElement.addEventListener('ended', () => {
       // For transcoded streams, check if we've actually reached the end
       if (this.isTranscoding && this.duration > 0) {
         const actualProgress = (this.currentTime / this.duration) * 100;
-        console.log(`🔍 Video 'ended' event - Progress: ${actualProgress.toFixed(1)}% (${this.currentTime}s / ${this.duration}s)`);
 
         // Only consider it ended if we're at least 95% through
         if (actualProgress < 95) {
-          console.log(`⚠️ Premature 'ended' event detected - attempting stream reload to continue playback`);
-          
+
           // Try to reload the stream at the current position to continue playback
           this.reloadStreamAtTime(this.currentTime).catch(error => {
             console.error('❌ Failed to reload stream after premature end:', error);
@@ -459,7 +432,6 @@ export class VideoPlayer {
       this.isPlaying = false;
       this.stopProgressTracking();
       this.saveProgress(true); // Mark as completed
-      console.log('🏁 Video ended');
     });
 
     // Time updates
@@ -473,11 +445,9 @@ export class VideoPlayer {
     // Duration updates
     this.videoElement.addEventListener('loadedmetadata', () => {
       const elementDuration = this.videoElement.duration;
-      console.log(`📏 Video element duration: ${elementDuration}s`);
 
       // For transcoded streams, video element duration is often incorrect
       if (this.isTranscoding) {
-        console.log(`⚠️ Ignoring video element duration for transcoded stream (${elementDuration}s) - using API duration (${this.duration}s)`);
         return;
       }
 
@@ -485,7 +455,6 @@ export class VideoPlayer {
       if (!this.duration || this.duration <= 0) {
         if (Number.isFinite(elementDuration) && elementDuration > 0) {
           this.duration = elementDuration;
-          console.log(`✅ Using video element duration: ${this.duration}s`);
           this.updateDurationDisplay();
         }
       }
@@ -500,12 +469,10 @@ export class VideoPlayer {
 
     // Buffering events
     this.videoElement.addEventListener('waiting', () => {
-      console.log('⏳ Video buffering...');
       this.showLoadingSpinner();
     });
 
     this.videoElement.addEventListener('playing', () => {
-      console.log('▶️ Video playing (buffering complete)');
       this.hideLoadingSpinner();
     });
 
@@ -538,8 +505,8 @@ export class VideoPlayer {
       }
     });
 
-    console.log('🎧 Event listeners setup complete');
   }
+
 
   /**
    * Setup player controls UI
@@ -626,8 +593,6 @@ export class VideoPlayer {
 
     // Attach control event listeners
     this.attachControlListeners();
-
-    console.log('🎮 Controls setup complete');
   }
 
   /**
@@ -824,8 +789,8 @@ export class VideoPlayer {
       return;
     }
 
+
     const clampedTime = Math.max(0, Math.min(targetTime, this.duration));
-    console.log(`⏭️ Seeking to ${clampedTime.toFixed(1)}s (mode: ${this.playbackMode})`);
 
     if (this.isTranscoding) {
       // For transcoded streams, reload stream at new position
@@ -840,8 +805,6 @@ export class VideoPlayer {
    * Reload transcoded stream at specific time
    */
   async reloadStreamAtTime(time) {
-    console.log(`🔄 Reloading transcoded stream at ${time}s`);
-
     const wasPlaying = this.isPlaying;
 
     try {
@@ -857,15 +820,12 @@ export class VideoPlayer {
 
       // Get new stream URL with start time
       const newStreamUrl = this.getStreamUrl(time);
-      console.log('🔗 Seek stream URL:', newStreamUrl);
 
       // Load new source
       this.videoElement.src = newStreamUrl;
 
       // Wait for video to be ready
       await this.waitForVideoReady();
-
-      console.log(`✅ Stream reloaded at ${time}s`);
 
       // Resume playback if it was playing
       if (wasPlaying) {
@@ -943,30 +903,27 @@ export class VideoPlayer {
     this.progressInterval = setInterval(() => {
       this.saveProgress();
     }, this.progressUpdateFrequency);
-
-    console.log('📊 Progress tracking started');
   }
 
   /**
    * Stop progress tracking
    */
-  stopProgressTracking() {
+  async stopProgressTracking() {
     if (this.progressInterval) {
       clearInterval(this.progressInterval);
       this.progressInterval = null;
-      console.log('📊 Progress tracking stopped');
     }
 
     // Save final progress
-    this.saveProgress();
+    await this.saveProgress(false, true);
   }
 
   /**
    * Save watch progress to backend
    */
-  async saveProgress(completed = false) {
+  async saveProgress(completed = false, force = false) {
     // Only save if progress has changed significantly (more than 5 seconds)
-    if (!completed && Math.abs(this.currentTime - this.lastSavedProgress) < 5) {
+    if (!completed && !force && Math.abs(this.currentTime - this.lastSavedProgress) < 5) {
       return;
     }
 
@@ -981,9 +938,6 @@ export class VideoPlayer {
 
       this.lastSavedProgress = this.currentTime;
 
-      if (completed) {
-        console.log('✅ Watch progress saved (completed)');
-      }
 
     } catch (error) {
       console.error('❌ Failed to save watch progress:', error);
@@ -1247,13 +1201,11 @@ export class VideoPlayer {
   /**
    * Destroy the video player and cleanup resources
    */
-  destroy() {
+  async destroy() {
     if (this.isDestroyed) return;
 
-    console.log('🧹 Destroying video player...');
-
     // Stop progress tracking
-    this.stopProgressTracking();
+    await this.stopProgressTracking();
 
     // Pause and clear video
     this.videoElement.pause();
@@ -1286,7 +1238,7 @@ export class VideoPlayer {
     this.isDestroyed = true;
     this.isInitialized = false;
 
-    console.log('✅ Video player destroyed');
+
   }
 }
 

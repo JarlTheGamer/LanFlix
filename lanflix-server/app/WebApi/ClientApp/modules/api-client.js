@@ -662,7 +662,8 @@ class ApiClient {
 
     return this.request(`/transcoding/stream/${contentId}/progress`, {
       method: 'POST',
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      keepalive: true
     });
   }
 

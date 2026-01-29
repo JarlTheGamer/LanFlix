@@ -17,7 +17,7 @@
 
 <body>
   <div class="player-container">
-    <video id="video-player" class="video-element" playsinline webkit-playsinline preload="auto"
+    <video id="video-player" class="video-element" playsinline webkit-playsinline preload="auto" autoplay
       crossorigin="anonymous"></video>
     <div id="player-controls" class="player-controls"></div>
     <button id="back-button" class="back-button" title="Back">
@@ -72,6 +72,13 @@
     // Initialize player
     await player.initialize(contentId, contentType, episodeId, startPosition);
 
+    // Force play() after initialization
+    try {
+      await player.play();
+    } catch (e) {
+      console.warn('Auto-play failed:', e);
+    }
+
     // Handle Auto-Play Next
     videoElement.addEventListener('ended', async () => {
       console.log('🎬 Video ended - checking for next episode...');
@@ -122,8 +129,8 @@
     setupTVRemoteControl();
 
     // Back button handler
-    document.getElementById('back-button').addEventListener('click', () => {
-      player.destroy();
+    document.getElementById('back-button').addEventListener('click', async () => {
+      await player.destroy();
       window.history.back();
     });
 
