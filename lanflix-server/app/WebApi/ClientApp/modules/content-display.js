@@ -145,16 +145,23 @@ export class ContentDisplay {
       const contentId = historyItem.contentId || (historyItem.content && historyItem.content.id);
       if (contentId) {
         // Convert PositionTicks to seconds
-        const progressSeconds = historyItem.positionTicks 
+        const progressSeconds = historyItem.positionTicks
           ? Math.floor(historyItem.positionTicks / 10_000_000)
           : 0;
 
-        progressMap.set(contentId, {
-          progressSeconds: progressSeconds,
-          durationSeconds: historyItem.content?.runtime ? historyItem.content.runtime * 60 : null,
-          watchedPercentage: historyItem.watchedPercentage || 0,
-          completed: historyItem.isCompleted || false
-        });
+        const currentActivity = historyItem.lastWatchedAt ? new Date(historyItem.lastWatchedAt).getTime() : 0;
+        const existingProgress = progressMap.get(contentId);
+
+        // Only update if no existing progress OR current item is newer
+        if (!existingProgress || currentActivity > existingProgress.lastActivity) {
+          progressMap.set(contentId, {
+            progressSeconds: progressSeconds,
+            durationSeconds: historyItem.content?.runtime ? historyItem.content.runtime * 60 : null,
+            watchedPercentage: historyItem.watchedPercentage || 0,
+            completed: historyItem.isCompleted || false,
+            lastActivity: currentActivity
+          });
+        }
       }
     });
 
@@ -757,7 +764,7 @@ export class ContentDisplay {
         let item = historyItem.content || historyItem;
 
         // Convert PositionTicks to seconds (1 tick = 100 nanoseconds, so 10,000,000 ticks = 1 second)
-        const progressSeconds = historyItem.positionTicks 
+        const progressSeconds = historyItem.positionTicks
           ? Math.floor(historyItem.positionTicks / 10_000_000)
           : 0;
 

@@ -40,10 +40,13 @@ export class ContentModal {
                 try {
                     const watchHistory = await apiClient.getWatchHistory(profileId, 200);
                     // Filter for episodes of this series
-                    const seriesHistory = watchHistory.filter(h => h.contentId === contentId && h.episodeId);
-                    
+                    const seriesHistory = watchHistory.filter(h => h.contentId == contentId && h.episodeId);
+
                     // Create a map of episodeId -> progress
                     this.episodeProgressMap = new Map();
+                    this.lastInteractionEpisodeId = null;
+                    let lastActivity = 0;
+
                     seriesHistory.forEach(h => {
                         const progressSeconds = h.positionTicks ? Math.floor(h.positionTicks / 10_000_000) : 0;
                         this.episodeProgressMap.set(h.episodeId, {
@@ -51,13 +54,22 @@ export class ContentModal {
                             watchedPercentage: h.watchedPercentage || 0,
                             completed: h.isCompleted || false
                         });
+
+                        // Track last interaction
+                        const activityDate = h.lastWatchedAt ? new Date(h.lastWatchedAt).getTime() : 0;
+                        if (activityDate > lastActivity) {
+                            lastActivity = activityDate;
+                            this.lastInteractionEpisodeId = h.episodeId;
+                        }
                     });
                 } catch (error) {
                     console.error('Failed to fetch watch history:', error);
                     this.episodeProgressMap = new Map();
+                    this.lastInteractionEpisodeId = null;
                 }
             } else {
                 this.episodeProgressMap = new Map();
+                this.lastInteractionEpisodeId = null;
             }
 
             // Fetch season metadata for series (episodes loaded on demand)
@@ -85,7 +97,7 @@ export class ContentModal {
             // Show modal with animation
             requestAnimationFrame(() => {
                 this.modal.classList.add('visible');
-                
+
                 // Initialize TV navigation if available
                 if (this.navigation && this.navigation.isAndroidTV) {
                     this.navigation.initializeModalNavigation();
@@ -150,6 +162,12 @@ export class ContentModal {
         // Show episodes section if it's a series (even if episodes not loaded yet)
         const hasEpisodes = content.type === 'series' && (content.seasons?.length > 0 || episodes.length > 0);
 
+        // Calculate resume info for series
+        let resumeInfo = null;
+        if (content.type === 'series' && !isDiscovery) {
+            resumeInfo = this.getSeriesResumeInfo(content);
+        }
+
         modal.innerHTML = `
       <div class="modal-ambilight"></div>
       <div class="modal-overlay"></div>
@@ -181,9 +199,11 @@ export class ContentModal {
                   Download ${content.type === 'series' ? 'All Episodes' : 'Movie'}
                 </button>
               ` : `
-                <button class="modal-btn primary" data-action="play">
+                <button class="modal-btn primary" data-action="play" ${resumeInfo && resumeInfo.targetEpisodeId ? `data-episode-id="${resumeInfo.targetEpisodeId}"` : ''}>
                   <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                  ${content.watchProgress && !content.watchProgress.completed && content.watchProgress.progressSeconds > 30 ? 'Resume' : 'Play'}
+                  ${content.type === 'series'
+                ? (resumeInfo ? resumeInfo.text : 'Play')
+                : (content.watchProgress && !content.watchProgress.completed && content.watchProgress.progressSeconds > 30 ? 'Resume' : 'Play')}
                 </button>
               `}
               <button class="modal-btn secondary" data-action="watchlist">
@@ -484,9 +504,17 @@ export class ContentModal {
         const modal = this.modal;
 
         // Play button
-        modal.querySelector('[data-action="play"]')?.addEventListener('click', () => {
+        modal.querySelector('[data-action="play"]')?.addEventListener('click', (e) => {
             if (content.type === 'series') {
-                // For series, find the first available episode to play
+                // Check if we have a specific target episode (set during render)
+                const targetEpisodeId = e.currentTarget.dataset.episodeId;
+
+                if (targetEpisodeId) {
+                    this.playEpisode(parseInt(targetEpisodeId));
+                    return;
+                }
+
+                // Fallback: Find the first available episode to play
                 const episodes = content.episodes || [];
                 const firstAvailableEpisode = episodes.find(ep => ep.available);
 
@@ -500,7 +528,7 @@ export class ContentModal {
                 const startTime = content.watchProgress && !content.watchProgress.completed && content.watchProgress.progressSeconds > 30
                     ? content.watchProgress.progressSeconds
                     : 0;
-                
+
                 const url = `player.html?contentId=${content.id}&type=${content.type}${startTime > 0 ? `&startTime=${startTime}` : ''}`;
                 window.location.href = url;
             }
@@ -677,6 +705,61 @@ export class ContentModal {
             }
         };
         document.addEventListener('keydown', escHandler);
+    }
+
+    /**
+     * Get resume info for series (button text and target episode)
+     */
+    getSeriesResumeInfo(content) {
+        const episodes = content.episodes || [];
+        if (episodes.length === 0) return null;
+
+        // Sort episodes to ensure order
+        const sortedEpisodes = [...episodes].sort((a, b) => {
+            if (a.seasonNumber !== b.seasonNumber) return a.seasonNumber - b.seasonNumber;
+            return a.episodeNumber - b.episodeNumber;
+        });
+
+        // If we have history interaction
+        if (this.lastInteractionEpisodeId) {
+            const lastEpisode = sortedEpisodes.find(e => e.id === this.lastInteractionEpisodeId);
+
+            if (lastEpisode) {
+                const progress = this.episodeProgressMap.get(lastEpisode.id);
+
+                // If in progress (not completed), resume it
+                if (progress && !progress.completed) {
+                    return {
+                        text: `Resume S${lastEpisode.seasonNumber}:E${lastEpisode.episodeNumber}`,
+                        targetEpisodeId: lastEpisode.id
+                    };
+                }
+
+                // If completed, find next episode
+                const lastIndex = sortedEpisodes.findIndex(e => e.id === lastEpisode.id);
+                if (lastIndex !== -1 && lastIndex < sortedEpisodes.length - 1) {
+                    const nextEpisode = sortedEpisodes[lastIndex + 1];
+                    return {
+                        text: `Play S${nextEpisode.seasonNumber}:E${nextEpisode.episodeNumber}`,
+                        targetEpisodeId: nextEpisode.id
+                    };
+                }
+
+                // If no next episode (finished series), maybe restart? or just show Play S1:E1
+                const firstEp = sortedEpisodes[0];
+                return {
+                    text: 'Play Again',
+                    targetEpisodeId: firstEp.id
+                };
+            }
+        }
+
+        // Default: Play first episode
+        const firstEp = sortedEpisodes[0];
+        return {
+            text: `Play S${firstEp.seasonNumber}:E${firstEp.episodeNumber}`,
+            targetEpisodeId: firstEp.id
+        };
     }
 
     /**

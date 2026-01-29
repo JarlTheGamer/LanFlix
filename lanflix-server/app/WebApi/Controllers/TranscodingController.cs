@@ -154,9 +154,9 @@ public class TranscodingController : ControllerBase
                 return Ok();
             }
 
-            // Create session key based on content and parameters (Jellyfin-style seeking)
-            // Each seek position gets its own session to restart transcoding at that point
-            var sessionKey = $"content_{contentId}_{episodeId ?? 0}_{clientType}_{profileId}_{startTime?.ToString("F3") ?? "0"}";
+            // Create session key based on content and session ID
+            // We include the unique sessionId to prevent reusing stale sessions from previous playback attempts
+            var sessionKey = $"content_{contentId}_{episodeId ?? 0}_{clientType}_{profileId}_{startTime?.ToString("F3") ?? "0"}_{sessionId}";
             
             // Log seeking behavior for debugging (Jellyfin-style)
             if (startTime.HasValue && startTime.Value > 0)
@@ -961,8 +961,8 @@ public class TranscodingController : ControllerBase
 
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Watch progress saved for content {ContentId}, profile {ProfileId}: {Percentage}%", 
-                contentId, request.ProfileId, watchedPercentage);
+            _logger.LogInformation("Watch progress saved for content {ContentId}, episode {EpisodeId}, profile {ProfileId}: {Percentage}%", 
+                contentId, request.EpisodeId, request.ProfileId, watchedPercentage);
 
             return Ok(new { success = true });
         }

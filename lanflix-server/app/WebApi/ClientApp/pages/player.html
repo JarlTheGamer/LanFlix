@@ -68,10 +68,24 @@
     } else {
       // Otherwise, check for saved progress
       try {
-        const content = await apiClient.getLibraryItem(contentId, profileId);
-        if (content && content.watchProgress && !content.watchProgress.completed) {
-          startPosition = content.watchProgress.progressSeconds || 0;
-          console.log('Loaded watch progress:', startPosition);
+        if (episodeId && contentType === 'series') {
+          // For series episodes, we need to find the specific episode progress from history
+          // We can fetch recent history and find the entry for this episode
+          const history = await apiClient.getWatchHistory(profileId, 50);
+          const episodeProgress = history.find(h => h.episodeId == episodeId);
+
+          if (episodeProgress && !episodeProgress.isCompleted) {
+            // Convert ticks to seconds (10,000,000 ticks = 1 second)
+            startPosition = episodeProgress.positionTicks ? Math.floor(episodeProgress.positionTicks / 10_000_000) : 0;
+            console.log(`Loaded episode progress: ${startPosition}s`);
+          }
+        } else {
+          // For movies, getLibraryItem might return progress (if it's simple content)
+          const content = await apiClient.getLibraryItem(contentId, profileId);
+          if (content && content.watchProgress && !content.watchProgress.completed) {
+            startPosition = content.watchProgress.progressSeconds || 0;
+            console.log('Loaded watch progress:', startPosition);
+          }
         }
       } catch (error) {
         console.error('Failed to get watch progress:', error);

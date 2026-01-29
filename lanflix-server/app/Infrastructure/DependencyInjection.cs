@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddScoped<IRadarrClient, RadarrClient>();
         services.AddScoped<ISonarrClient, SonarrClient>();
         services.AddScoped<IProwlarrClient, ProwlarrClient>();
+        services.AddScoped<IBazarrClient, BazarrClient>();
 
         // App Update Services
         services.AddScoped<IServerUpdateService, ServerUpdateService>();
