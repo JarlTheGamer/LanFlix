@@ -44,6 +44,11 @@ export class VideoPlayer {
 
     // TV Navigation
     this.playerNavigation = new PlayerNavigation(this);
+
+    // Subtitles
+    this.subtitles = [];
+    this.currentSubtitleIndex = -1; // -1 = off
+    this.subtitleMenuVisible = false;
   }
 
   /**
@@ -75,6 +80,9 @@ export class VideoPlayer {
 
       // Detect playback mode and setup stream (with retries for Fire TV)
       await this.setupStreamWithRetry(startPosition);
+
+      // Load available subtitles
+      await this.loadSubtitles();
 
       // Initialize TV navigation
       this.playerNavigation.initialize();
@@ -190,7 +198,183 @@ export class VideoPlayer {
   }
 
   /**
-   * Setup video stream and detect playback mode
+   * Load available subtitles
+   */
+  async loadSubtitles() {
+    try {
+      const response = await apiClient.getSubtitles(this.contentId, this.episodeId);
+
+      if (response && response.Subtitles && response.Subtitles.length > 0) {
+        this.subtitles = response.Subtitles;
+        console.log(`📝 Loaded ${this.subtitles.length} subtitle tracks`);
+
+        // Show CC button if subtitles exist
+        const ccBtn = document.querySelector('.cc-btn');
+        if (ccBtn) {
+          ccBtn.style.display = 'flex';
+          console.log('✅ CC Button shown');
+        } else {
+          console.warn('⚠️ CC Button not found');
+        }
+
+        // Setup tracks
+        this.setupSubtitleTracks();
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to load subtitles:', error);
+    }
+  }
+
+  /**
+   * Setup subtitle tracks in video element
+   */
+  setupSubtitleTracks() {
+    // Clear existing tracks
+    const existingTracks = this.videoElement.querySelectorAll('track');
+    existingTracks.forEach(track => track.remove());
+
+    // Add new tracks
+    this.subtitles.forEach((subtitle, index) => {
+      const track = document.createElement('track');
+      track.kind = 'subtitles';
+      track.label = `${subtitle.Language} (${subtitle.Title})`;
+      track.srclang = subtitle.Language || 'en';
+
+      // Construct URL with startTime offset if transcoding
+      // If we are transcoding and started at an offset, we need to shift subtitles
+      let trackUrl = `${apiClient.baseURL}${subtitle.Url}`;
+      if (this.isTranscoding && this.startOffset > 0) {
+        trackUrl += (trackUrl.includes('?') ? '&' : '?') + `startTime=${this.startOffset}`;
+      }
+
+      track.src = trackUrl;
+      track.default = subtitle.IsDefault;
+      track.id = `subtitle-${index}`;
+
+      // Determine if this track should be showing
+      // Use currentSubtitleIndex if set, otherwise respect default
+      const isSelected = (this.currentSubtitleIndex !== -1 && index === this.currentSubtitleIndex)
+        || (this.currentSubtitleIndex === -1 && subtitle.IsDefault);
+
+      if (isSelected) {
+        if (this.currentSubtitleIndex === -1) {
+          this.currentSubtitleIndex = index;
+          this.updateCCButtonState(true);
+        }
+        track.mode = 'showing';
+      } else {
+        track.mode = 'hidden';
+      }
+
+      this.videoElement.appendChild(track);
+    });
+  }
+
+  /**
+   * Set active subtitle track
+   */
+  setSubtitleTrack(index) {
+    const tracks = this.videoElement.textTracks;
+
+    // Turn off all tracks first
+    for (let i = 0; i < tracks.length; i++) {
+      tracks[i].mode = 'hidden';
+    }
+
+    if (index === -1) {
+      this.currentSubtitleIndex = -1;
+      this.updateCCButtonState(false);
+      this.showNotification('Subtitles: Off');
+    } else if (index >= 0 && index < this.subtitles.length) {
+      // Find the track by ID/index matching
+      // Note: tracks might not be in same order if video element reordered them, 
+      // but usually appendChild order is preserved. Safer to find by label/language or assume order.
+      // Since we cleared and appended, indices should match.
+      if (tracks[index]) {
+        tracks[index].mode = 'showing';
+        this.currentSubtitleIndex = index;
+        this.updateCCButtonState(true);
+        const sub = this.subtitles[index];
+        this.showNotification(`Subtitles: ${sub.Language} (${sub.Title})`);
+      }
+    }
+
+    // Close menu
+    this.toggleSubtitleMenu(false);
+  }
+
+  /**
+   * Toggle subtitle menu visibility
+   */
+  toggleSubtitleMenu(forceState = null) {
+    const menu = document.querySelector('.subtitle-menu');
+    if (!menu) return;
+
+    const newState = forceState !== null ? forceState : !this.subtitleMenuVisible;
+    this.subtitleMenuVisible = newState;
+
+    if (newState) {
+      menu.classList.add('visible');
+      this.renderSubtitleMenu();
+    } else {
+      menu.classList.remove('visible');
+    }
+  }
+
+  /**
+   * Render subtitle menu items
+   */
+  renderSubtitleMenu() {
+    const menuList = document.querySelector('.subtitle-menu-list');
+    if (!menuList) return;
+
+    let html = `
+      <div class="subtitle-menu-item ${this.currentSubtitleIndex === -1 ? 'active' : ''}" data-index="-1">
+        <span>Off</span>
+        ${this.currentSubtitleIndex === -1 ? '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>' : ''}
+      </div>
+    `;
+
+    this.subtitles.forEach((sub, index) => {
+      const isActive = index === this.currentSubtitleIndex;
+      html += `
+        <div class="subtitle-menu-item ${isActive ? 'active' : ''}" data-index="${index}">
+          <span>${sub.Language} ${sub.Title ? `- ${sub.Title}` : ''}</span>
+          ${isActive ? '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>' : ''}
+        </div>
+      `;
+    });
+
+    menuList.innerHTML = html;
+
+    // Add click listeners
+    menuList.querySelectorAll('.subtitle-menu-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const index = parseInt(item.dataset.index);
+        this.setSubtitleTrack(index);
+      });
+    });
+  }
+
+  /**
+   * Update CC button appearance
+   */
+  updateCCButtonState(isActive) {
+    const btn = document.querySelector('.cc-btn');
+    if (btn) {
+      if (isActive) {
+        btn.classList.add('active');
+        btn.style.color = 'var(--yt-red)';
+      } else {
+        btn.classList.remove('active');
+        btn.style.color = 'white';
+      }
+    }
+  }
+
+  /**
+   * Setup stream and detect playback mode
    */
   async setupStream(startPosition = 0) {
 
@@ -568,6 +752,17 @@ export class VideoPlayer {
             </span>
           </div>
           <div class="player-controls-right">
+            <div class="subtitle-container">
+              <button class="player-btn cc-btn" title="Subtitles" style="display: none;">
+                <svg viewBox="0 0 24 24">
+                  <path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H5v-2h6v2zm0 4H5v-2h6v2zm6 0h-4v-2h4v2zm0-4h-4v-2h4v2z"/>
+                </svg>
+              </button>
+              <div class="subtitle-menu">
+                <div class="subtitle-menu-header">Subtitles</div>
+                <div class="subtitle-menu-list"></div>
+              </div>
+            </div>
             <button class="player-btn fullscreen-btn" title="Fullscreen (F)">
               <svg class="fullscreen-enter-icon" viewBox="0 0 24 24">
                 <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
@@ -642,6 +837,19 @@ export class VideoPlayer {
       const percent = (e.clientX - rect.left) / rect.width;
       const seekTime = percent * this.duration;
       this.seek(seekTime);
+    });
+
+    // Subtitle button
+    document.querySelector('.cc-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleSubtitleMenu();
+    });
+
+    // Close subtitle menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.subtitle-container')) {
+        this.toggleSubtitleMenu(false);
+      }
     });
 
     // Fullscreen
@@ -826,6 +1034,9 @@ export class VideoPlayer {
 
       // Wait for video to be ready
       await this.waitForVideoReady();
+
+      // Reload subtitle tracks with new offset
+      this.setupSubtitleTracks();
 
       // Resume playback if it was playing
       if (wasPlaying) {

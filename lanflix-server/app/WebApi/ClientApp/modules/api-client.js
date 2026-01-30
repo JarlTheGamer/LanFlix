@@ -675,7 +675,7 @@ class ApiClient {
     const params = new URLSearchParams();
     if (episodeId) params.append('episodeId', episodeId);
 
-    return this.request(`/transcoding/stream/${contentId}/subtitles?${params.toString()}`);
+    return this.request(`/subtitles/${contentId}?${params.toString()}`);
   }
 
   /**

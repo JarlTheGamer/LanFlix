@@ -211,11 +211,14 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         // Audio encoding
         AddAudioEncodingArgs(args, request);
 
-        // Subtitle handling
+        // Subtitle handling - Removed to prevent burning and improve performance
+        // Subtitles are now handled externally by the frontend
+        /*
         if (request.SubtitleStreamIndex.HasValue)
         {
             args.Append($"-map 0:s:{request.SubtitleStreamIndex.Value} ");
         }
+        */
 
         // Output format and container
         AddOutputFormatArgs(args, request);

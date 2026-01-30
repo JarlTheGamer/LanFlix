@@ -1,0 +1,386 @@
+using System.Diagnostics;
+using Lanflix.Application.Common.Interfaces;
+using Lanflix.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Lanflix.WebApi.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class SubtitlesController : ControllerBase
+{
+    private readonly ILogger<SubtitlesController> _logger;
+    private readonly ApplicationDbContext _context;
+    private readonly IMediaAnalyzer _mediaAnalyzer;
+    private readonly IConfiguration _configuration;
+
+    public SubtitlesController(
+        ILogger<SubtitlesController> logger,
+        ApplicationDbContext context,
+        IMediaAnalyzer mediaAnalyzer,
+        IConfiguration configuration)
+    {
+        _logger = logger;
+        _context = context;
+        _mediaAnalyzer = mediaAnalyzer;
+        _configuration = configuration;
+    }
+
+    /// <summary>
+    /// Gets available subtitles for a content item or episode
+    /// </summary>
+    [HttpGet("{contentId}")]
+    public async Task<IActionResult> GetSubtitles(int contentId, [FromQuery] int? episodeId = null)
+    {
+        try
+        {
+            string filePath;
+
+            // Handle episode info request
+            if (episodeId.HasValue)
+            {
+                var episode = await _context.Episodes
+                    .FirstOrDefaultAsync(e => e.Id == episodeId.Value && e.ContentId == contentId);
+
+                if (episode == null)
+                {
+                    return NotFound("Episode not found");
+                }
+
+                filePath = episode.FilePath;
+                if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+                {
+                    return NotFound("Episode file not found");
+                }
+            }
+            else
+            {
+                // Handle content info request
+                var content = await _context.Contents
+                    .FirstOrDefaultAsync(c => c.Id == contentId);
+
+                if (content == null)
+                {
+                    return NotFound("Content not found");
+                }
+
+                filePath = content.FilePath;
+                if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+                {
+                    return NotFound("Content file not found");
+                }
+            }
+
+            // Analyze media to get subtitle streams
+            var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
+
+            // Build query string for episode parameter
+            var episodeParam = episodeId.HasValue ? $"?episodeId={episodeId.Value}" : "";
+
+            // Use the correct base URL for the client to construct tracks
+            var subtitles = mediaInfo.Subtitles == null
+                ? new object[0]
+                : mediaInfo.Subtitles.Select(s => new
+                {
+                    Index = s.Index,
+                    Language = s.Language ?? "unknown",
+                    Title = s.Title ?? $"Subtitle {s.Index + 1}",
+                    Format = s.Format,
+                    IsForced = s.IsForced,
+                    IsDefault = s.IsDefault,
+                    IsEmbedded = s.IsEmbedded,
+                    Url = $"/api/subtitles/track/{contentId}/{s.Index}{episodeParam}"
+                }).ToArray();
+
+            return Ok(new { Subtitles = subtitles });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get subtitles for content: {ContentId}", contentId);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Extracts and serves a specific subtitle track as WebVTT
+    /// </summary>
+    [HttpGet("track/{contentId}/{subtitleIndex}")]
+    public async Task<IActionResult> GetSubtitleTrack(int contentId, int subtitleIndex, [FromQuery] int? episodeId = null, [FromQuery] double? startTime = null)
+    {
+        try
+        {
+            string filePath;
+
+            if (episodeId.HasValue)
+            {
+                var episode = await _context.Episodes
+                    .FirstOrDefaultAsync(e => e.Id == episodeId.Value && e.ContentId == contentId);
+
+                if (episode == null) return NotFound("Episode not found");
+                filePath = episode.FilePath;
+            }
+            else
+            {
+                var content = await _context.Contents
+                    .FirstOrDefaultAsync(c => c.Id == contentId);
+
+                if (content == null) return NotFound("Content not found");
+                filePath = content.FilePath;
+            }
+
+            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+            {
+                return NotFound("Media file not found");
+            }
+
+            _logger.LogInformation("Extracting subtitle track {SubtitleIndex} for content {ContentId} (Episode: {EpisodeId})",
+                subtitleIndex, contentId, episodeId);
+
+            // Extract subtitle using FFmpeg and convert to WebVTT
+            var vttContent = await ExtractSubtitleAsWebVTT(filePath, subtitleIndex, startTime);
+
+            if (vttContent == null)
+            {
+                return NotFound("Subtitle track not found or extraction failed");
+            }
+
+            return Content(vttContent, "text/vtt");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get subtitle track {SubtitleIndex} for content {ContentId}", subtitleIndex, contentId);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Extracts subtitle from video file and converts to WebVTT format
+    /// </summary>
+    private async Task<string?> ExtractSubtitleAsWebVTT(string filePath, int subtitleIndex, double? startTime = null)
+    {
+        try
+        {
+            var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
+            var subtitle = mediaInfo.Subtitles?.FirstOrDefault(s => s.Index == subtitleIndex);
+
+            if (subtitle == null) return null;
+
+            // If it's an external file, conversion depends on format
+            if (!subtitle.IsEmbedded && !string.IsNullOrEmpty(subtitle.ExternalFilePath) && System.IO.File.Exists(subtitle.ExternalFilePath))
+            {
+                var extension = Path.GetExtension(subtitle.ExternalFilePath).ToLower();
+                var content = await System.IO.File.ReadAllTextAsync(subtitle.ExternalFilePath);
+
+                if (extension == ".vtt")
+                {
+                    // Already WebVTT, just return content (todo: handle offset if needed for consistency, primarily useful for SRT which is time-based)
+                    return content;
+                }
+                else if (extension == ".srt")
+                {
+                    return ConvertSrtToWebVTT(content, startTime);
+                }
+                else
+                {
+                    // For other formats (ASS, SSA), use FFmpeg to convert
+                    return await ConvertSubtitleToWebVTT(subtitle.ExternalFilePath, startTime);
+                }
+            }
+
+            // Handle embedded subtitles - extract using FFmpeg
+            var ffmpegPath = FindFFmpegPath();
+            var tempOutputPath = Path.Combine(Path.GetTempPath(), $"subtitle_{Guid.NewGuid()}.vtt");
+
+            try
+            {
+                // Use FFmpeg to extract subtitle and convert to WebVTT
+                // Add -ss if startTime is provided to sync with transcoded video
+                var seekArgs = startTime.HasValue && startTime.Value > 0 ? $"-ss {startTime.Value:F3} " : "";
+                var arguments = $"{seekArgs}-i \"{filePath}\" -map 0:s:{subtitleIndex} \"{tempOutputPath}\"";
+
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = ffmpegPath,
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = Process.Start(startInfo);
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode == 0 && System.IO.File.Exists(tempOutputPath))
+                {
+                    return await System.IO.File.ReadAllTextAsync(tempOutputPath);
+                }
+                else
+                {
+                    var error = await process.StandardError.ReadToEndAsync();
+                    _logger.LogError("FFmpeg subtitle extraction failed: {Error}", error);
+                    return null;
+                }
+            }
+            finally
+            {
+                // Clean up temp file
+                if (System.IO.File.Exists(tempOutputPath))
+                {
+                    try { System.IO.File.Delete(tempOutputPath); } catch { }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error extracting subtitle");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Converts SRT subtitle format to WebVTT
+    /// </summary>
+    private string ConvertSrtToWebVTT(string srtContent, double? startTime = null)
+    {
+        // Simple SRT to WebVTT conversion
+        var lines = srtContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        var vttLines = new List<string> { "WEBVTT", "" };
+        
+        var offset = startTime.HasValue ? TimeSpan.FromSeconds(startTime.Value) : TimeSpan.Zero;
+
+        foreach (var line in lines)
+        {
+            // Replace SRT timestamp format (00:00:00,000) with WebVTT format (00:00:00.000)
+            if (line.Contains("-->"))
+            {
+                // Parse timestamps and apply offset
+                if (startTime.HasValue && startTime.Value > 0)
+                {
+                    try 
+                    {
+                        var parts = line.Split("-->");
+                        if (parts.Length == 2)
+                        {
+                            var start = ParseSrtTimestamp(parts[0].Trim());
+                            var end = ParseSrtTimestamp(parts[1].Trim());
+                            
+                            start -= offset;
+                            end -= offset;
+                            
+                            // Skip lines that are fully before the start time
+                            if (end < TimeSpan.Zero) continue;
+                            if (start < TimeSpan.Zero) start = TimeSpan.Zero;
+                            
+                            vttLines.Add($"{FormatVttTimestamp(start)} --> {FormatVttTimestamp(end)}");
+                            continue;
+                        }
+                    }
+                    catch 
+                    {
+                        // Fallback to simple replacement if parsing fails
+                    }
+                }
+                
+                vttLines.Add(line.Replace(',', '.'));
+            }
+            else
+            {
+                vttLines.Add(line);
+            }
+        }
+
+        return string.Join("\n", vttLines);
+    }
+    
+    private TimeSpan ParseSrtTimestamp(string timestamp)
+    {
+        // Format: 00:00:00,000
+        return TimeSpan.ParseExact(timestamp.Replace(',', '.'), @"hh\:mm\:ss\.fff", null);
+    }
+    
+    private string FormatVttTimestamp(TimeSpan timestamp)
+    {
+        return timestamp.ToString(@"hh\:mm\:ss\.fff");
+    }
+
+    /// <summary>
+    /// Converts any subtitle format to WebVTT using FFmpeg
+    /// </summary>
+    private async Task<string?> ConvertSubtitleToWebVTT(string subtitleFilePath, double? startTime = null)
+    {
+        try
+        {
+            var ffmpegPath = FindFFmpegPath();
+            var tempOutputPath = Path.Combine(Path.GetTempPath(), $"subtitle_{Guid.NewGuid()}.vtt");
+
+            try
+            {
+                // Add -ss if startTime is provided
+                var seekArgs = startTime.HasValue && startTime.Value > 0 ? $"-ss {startTime.Value:F3} " : "";
+                var arguments = $"{seekArgs}-i \"{subtitleFilePath}\" \"{tempOutputPath}\"";
+
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = ffmpegPath,
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = Process.Start(startInfo);
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode == 0 && System.IO.File.Exists(tempOutputPath))
+                {
+                    return await System.IO.File.ReadAllTextAsync(tempOutputPath);
+                }
+
+                return null;
+            }
+            finally
+            {
+                if (System.IO.File.Exists(tempOutputPath))
+                {
+                    try { System.IO.File.Delete(tempOutputPath); } catch { }
+                }
+            }
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private string FindFFmpegPath()
+    {
+        // Check for local ffmpeg-path file first
+        if (System.IO.File.Exists("ffmpeg-path"))
+        {
+            var path = System.IO.File.ReadAllText("ffmpeg-path").Trim();
+            if (System.IO.File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        // Check common locations
+        var commonPaths = new[]
+        {
+            @"C:\ffmpeg\bin\ffmpeg.exe",
+            @"/usr/bin/ffmpeg",
+            @"/usr/local/bin/ffmpeg"
+        };
+
+        foreach (var path in commonPaths)
+        {
+            if (System.IO.File.Exists(path)) return path;
+        }
+
+        // Fallback to just "ffmpeg" and hope it's in PATH
+        return "ffmpeg";
+    }
+}
