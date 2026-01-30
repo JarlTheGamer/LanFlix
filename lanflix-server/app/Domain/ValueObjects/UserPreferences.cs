@@ -62,7 +62,7 @@ public record UserPreferences
 }
 
 /// <summary>
-/// Subtitle appearance and styling preferences (Jellyfin-style)
+/// Subtitle appearance and styling preferences
 /// </summary>
 public record SubtitleAppearance
 {

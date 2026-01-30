@@ -56,7 +56,7 @@ public class DirectStreamStrategy : IStreamingStrategy
             AudioStreamIndex = request.AudioStreamIndex,
             SubtitleStreamIndex = request.SubtitleStreamIndex,
             HwAccelMethod = HwAccelMethod.None, // No video transcoding
-            OutputFormat = decision.TargetContainer ?? "mpegts", // Use MPEG-TS for better seeking (Jellyfin-style)
+            OutputFormat = decision.TargetContainer ?? "mpegts", // Use MPEG-TS for better seeking
             SessionId = request.SessionId,
             TotalDuration = request.MediaInfo.Duration.TotalSeconds
         };

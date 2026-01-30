@@ -72,7 +72,7 @@ public class TranscodeStrategy : IStreamingStrategy
             AudioStreamIndex = request.AudioStreamIndex,
             SubtitleStreamIndex = request.SubtitleStreamIndex,
             HwAccelMethod = decision.HwAccelMethod,
-            OutputFormat = decision.TargetContainer ?? "mpegts", // Use MPEG-TS for better seeking (Jellyfin-style)
+            OutputFormat = decision.TargetContainer ?? "mpegts", // Use MPEG-TS for better seeking
             SessionId = request.SessionId,
             TotalDuration = request.MediaInfo.Duration.TotalSeconds
         };

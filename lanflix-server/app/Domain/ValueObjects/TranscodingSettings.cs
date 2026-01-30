@@ -96,9 +96,9 @@ public record TranscodingSettings
     public string? FFprobePath { get; init; }
 
     /// <summary>
-    /// Whether to use Jellyfin-style seeking optimizations
+    /// Whether to use seeking optimizations
     /// </summary>
-    public bool EnableJellyfinStyleSeeking { get; init; } = true;
+    public bool EnableSeekingOptimizations { get; init; } = true;
 
     /// <summary>
     /// Keyframe interval for seeking optimization (in frames)

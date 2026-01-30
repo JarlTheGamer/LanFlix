@@ -45,7 +45,6 @@ public class TranscodingController : ControllerBase
 
     /// <summary>
     /// Streams media content with optimal transcoding (replaces old streaming endpoint)
-    /// Supports Jellyfin-style seeking via startTime parameter
     /// </summary>
     [HttpGet("stream/{contentId}")]
     [HttpHead("stream/{contentId}")]
@@ -158,10 +157,9 @@ public class TranscodingController : ControllerBase
             // We include the unique sessionId to prevent reusing stale sessions from previous playback attempts
             var sessionKey = $"content_{contentId}_{episodeId ?? 0}_{clientType}_{profileId}_{startTime?.ToString("F3") ?? "0"}_{sessionId}";
             
-            // Log seeking behavior for debugging (Jellyfin-style)
             if (startTime.HasValue && startTime.Value > 0)
             {
-                _logger.LogInformation("Jellyfin-style seeking: Restarting transcoding at {StartTime}s for content {ContentId}, episode {EpisodeId}, session: {SessionKey}", 
+                _logger.LogInformation("Restarting transcoding at {StartTime}s for content {ContentId}, episode {EpisodeId}, session: {SessionKey}", 
                     startTime.Value, contentId, episodeId, sessionKey);
             }
 
@@ -866,7 +864,6 @@ public class TranscodingController : ControllerBase
     }
 
     /// <summary>
-    /// Seeks to a specific position in transcoded content (Jellyfin-style)
     /// Creates a new transcoding session starting at the specified time
     /// </summary>
     [HttpGet("stream/{contentId}/seek")]
@@ -883,7 +880,6 @@ public class TranscodingController : ControllerBase
                 contentId, episodeId, startTime);
 
             // Redirect to the main streaming endpoint with the start time
-            // This follows Jellyfin's approach of restarting transcoding at the seek position
             return RedirectToAction(nameof(StreamContent), new 
             { 
                 contentId = contentId, 
@@ -1059,7 +1055,7 @@ public class TranscodingController : ControllerBase
     }
 
     /// <summary>
-    /// Logs seeking performance metrics (Jellyfin-style monitoring)
+    /// Logs seeking performance metrics 
     /// </summary>
     private void LogSeekingMetrics(int contentId, double? startTime, string sessionKey, DateTime requestStart)
     {

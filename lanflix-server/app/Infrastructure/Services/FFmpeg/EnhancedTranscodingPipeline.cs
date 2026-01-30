@@ -193,11 +193,11 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             AddHardwareAccelerationArgs(args, request.HwAccelMethod);
         }
 
-        // Input seeking (Jellyfin-style: -ss before input for fast seeking)
+        // Input seeking
         if (request.StartPosition.HasValue && request.StartPosition.Value > 0)
         {
             args.Append($"-ss {request.StartPosition.Value:F3} ");
-            // Add noaccurate_seek for faster seeking (like Jellyfin)
+            // Add noaccurate_seek for faster seeking
             args.Append("-noaccurate_seek ");
             // Add additional seeking optimizations
             args.Append("-seek2any 1 ");
@@ -226,12 +226,12 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             args.Append($"-threads {_settings.ThreadCount} ");
         }
 
-        // General options for better seeking (Jellyfin-style)
+        // General options for better seeking
         args.Append("-avoid_negative_ts make_zero ");
         args.Append("-fflags +genpts ");
         
-        // Add keyframe settings for better seeking (Jellyfin-style)
-        if (request.Mode != StreamingMode.DirectPlay && _settings.EnableJellyfinStyleSeeking)
+        // Add keyframe settings for better seeking
+        if (request.Mode != StreamingMode.DirectPlay && _settings.EnableSeekingOptimizations)
         {
             var keyframeInterval = _settings.SeekingKeyframeInterval;
             args.Append($"-g {keyframeInterval} "); // Keyframe every N frames for better seeking
@@ -246,7 +246,7 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             }
         }
         
-        // Determine output format - use MPEG-TS for better seeking like Jellyfin
+        // Determine output format - use MPEG-TS for better seeking
         var outputFormat = GetOutputFormat(request.OutputFormat);
         
         // Add format-specific options for streaming
@@ -262,7 +262,7 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         }
         else if (outputFormat == "mpegts")
         {
-            // MPEG-TS options for better seeking support (Jellyfin-style)
+            // MPEG-TS options for better seeking support
             args.Append("-mpegts_m2ts_mode 0 ");
             args.Append("-mpegts_copyts 1 ");
         }
@@ -296,7 +296,7 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         {
             case HwAccelMethod.Nvenc:
                 args.Append("-hwaccel cuda ");
-                // Skip cuda output format for simpler pipeline (like Jellyfin)
+                // Skip cuda output format for simpler pipeline
                 // args.Append("-hwaccel_output_format cuda ");
                 if (_settings.EnableLowPowerEncoding)
                 {
