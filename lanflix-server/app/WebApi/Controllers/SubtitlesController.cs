@@ -119,7 +119,11 @@ public class SubtitlesController : ControllerBase
                 var episode = await _context.Episodes
                     .FirstOrDefaultAsync(e => e.Id == episodeId.Value && e.ContentId == contentId);
 
-                if (episode == null) return NotFound("Episode not found");
+                if (episode == null)
+                {
+                    _logger.LogWarning("Episode not found: {EpisodeId}", episodeId);
+                    return NotFound("Episode not found");
+                }
                 filePath = episode.FilePath;
             }
             else
@@ -127,26 +131,31 @@ public class SubtitlesController : ControllerBase
                 var content = await _context.Contents
                     .FirstOrDefaultAsync(c => c.Id == contentId);
 
-                if (content == null) return NotFound("Content not found");
+                if (content == null)
+                {
+                    _logger.LogWarning("Content not found: {ContentId}", contentId);
+                    return NotFound("Content not found");
+                }
                 filePath = content.FilePath;
             }
 
             if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
             {
+                _logger.LogWarning("Media file not found: {FilePath}", filePath);
                 return NotFound("Media file not found");
             }
 
-            _logger.LogInformation("Extracting subtitle track {SubtitleIndex} for content {ContentId} (Episode: {EpisodeId})",
-                subtitleIndex, contentId, episodeId);
+            _logger.LogInformation("Extracting subtitle track {SubtitleIndex} from {FilePath}", subtitleIndex, filePath);
 
-            // Extract subtitle using FFmpeg and convert to WebVTT
             var vttContent = await ExtractSubtitleAsWebVTT(filePath, subtitleIndex, startTime);
 
             if (vttContent == null)
             {
+                _logger.LogWarning("Subtitle extraction returned null for track {SubtitleIndex}", subtitleIndex);
                 return NotFound("Subtitle track not found or extraction failed");
             }
 
+            _logger.LogInformation("Successfully extracted subtitle track {SubtitleIndex}, length: {Length} chars", subtitleIndex, vttContent.Length);
             return Content(vttContent, "text/vtt");
         }
         catch (Exception ex)
@@ -166,9 +175,16 @@ public class SubtitlesController : ControllerBase
             var subtitleStreams = await ScanSubtitlesAsync(filePath);
             var subtitle = subtitleStreams.FirstOrDefault(s => s.Index == subtitleIndex);
 
-            if (subtitle == null) return null;
+            if (subtitle == null)
+            {
+                _logger.LogWarning("Subtitle index {Index} not found in file", subtitleIndex);
+                return null;
+            }
 
-            // If it's an external file, conversion depends on format
+            _logger.LogInformation("Found subtitle: Index={Index}, Embedded={IsEmbedded}, Format={Format}", 
+                subtitle.Index, subtitle.IsEmbedded, subtitle.Format);
+
+            // Handle external subtitle files
             if (!subtitle.IsEmbedded && !string.IsNullOrEmpty(subtitle.ExternalFilePath) && System.IO.File.Exists(subtitle.ExternalFilePath))
             {
                 var extension = Path.GetExtension(subtitle.ExternalFilePath).ToLower();
@@ -176,7 +192,6 @@ public class SubtitlesController : ControllerBase
 
                 if (extension == ".vtt")
                 {
-                    // Already WebVTT, just return content (todo: handle offset if needed for consistency, primarily useful for SRT which is time-based)
                     return content;
                 }
                 else if (extension == ".srt")
@@ -185,7 +200,6 @@ public class SubtitlesController : ControllerBase
                 }
                 else
                 {
-                    // For other formats (ASS, SSA), use FFmpeg to convert
                     return await ConvertSubtitleToWebVTT(subtitle.ExternalFilePath, startTime);
                 }
             }
@@ -196,12 +210,13 @@ public class SubtitlesController : ControllerBase
 
             try
             {
-                // Use FFmpeg to extract subtitle and convert to WebVTT
-                // Add -ss if startTime is provided to sync with transcoded video
+                // Map by stream index, not subtitle stream index
                 var seekArgs = startTime.HasValue && startTime.Value > 0 ? $"-ss {startTime.Value:F3} " : "";
-                var arguments = $"{seekArgs}-i \"{filePath}\" -map 0:s:{subtitleIndex} \"{tempOutputPath}\"";
+                var arguments = $"{seekArgs}-i \"{filePath}\" -map 0:{subtitleIndex} -f webvtt \"{tempOutputPath}\"";
 
-                var startInfo = new System.Diagnostics.ProcessStartInfo
+                _logger.LogInformation("Running FFmpeg: {FFmpegPath} {Arguments}", ffmpegPath, arguments);
+
+                var startInfo = new ProcessStartInfo
                 {
                     FileName = ffmpegPath,
                     Arguments = arguments,
@@ -212,22 +227,30 @@ public class SubtitlesController : ControllerBase
                 };
 
                 using var process = Process.Start(startInfo);
+                if (process == null)
+                {
+                    _logger.LogError("Failed to start FFmpeg process");
+                    return null;
+                }
+
+                var errorOutput = await process.StandardError.ReadToEndAsync();
                 await process.WaitForExitAsync();
 
                 if (process.ExitCode == 0 && System.IO.File.Exists(tempOutputPath))
                 {
-                    return await System.IO.File.ReadAllTextAsync(tempOutputPath);
+                    var result = await System.IO.File.ReadAllTextAsync(tempOutputPath);
+                    _logger.LogInformation("Successfully extracted subtitle, length: {Length} chars", result.Length);
+                    return result;
                 }
                 else
                 {
-                    var error = await process.StandardError.ReadToEndAsync();
-                    _logger.LogError("FFmpeg subtitle extraction failed: {Error}", error);
+                    _logger.LogError("FFmpeg subtitle extraction failed with exit code {ExitCode}: {Error}", 
+                        process.ExitCode, errorOutput);
                     return null;
                 }
             }
             finally
             {
-                // Clean up temp file
                 if (System.IO.File.Exists(tempOutputPath))
                 {
                     try { System.IO.File.Delete(tempOutputPath); } catch { }
@@ -236,7 +259,7 @@ public class SubtitlesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error extracting subtitle");
+            _logger.LogError(ex, "Error extracting subtitle index {Index} from {FilePath}", subtitleIndex, filePath);
             return null;
         }
     }
