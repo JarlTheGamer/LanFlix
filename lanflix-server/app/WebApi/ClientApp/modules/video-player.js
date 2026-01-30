@@ -201,27 +201,53 @@ export class VideoPlayer {
    * Load available subtitles
    */
   async loadSubtitles() {
+    const ccBtn = document.querySelector('.cc-btn');
+    
     try {
+      console.log(`🔍 Loading subtitles for contentId: ${this.contentId}, episodeId: ${this.episodeId}`);
       const response = await apiClient.getSubtitles(this.contentId, this.episodeId);
+      
+      console.log('🔍 Subtitle API response:', response);
+      console.log('🔍 response.Subtitles:', response?.Subtitles);
+      console.log('🔍 response.subtitles:', response?.subtitles);
 
-      if (response && response.Subtitles && response.Subtitles.length > 0) {
-        this.subtitles = response.Subtitles;
-        console.log(`📝 Loaded ${this.subtitles.length} subtitle tracks`);
+      // Handle both 'Subtitles' and 'subtitles' for compatibility
+      const subtitles = response?.Subtitles || response?.subtitles;
+      
+      console.log('� ExLtracted subtitles:', subtitles);
+      console.log('🔍 Subtitles length:', subtitles?.length);
 
-        // Show CC button if subtitles exist
-        const ccBtn = document.querySelector('.cc-btn');
+      if (subtitles && subtitles.length > 0) {
+        this.subtitles = subtitles;
+        console.log(`📝 Loaded ${this.subtitles.length} subtitle tracks:`, this.subtitles);
+
+        // Enable CC button
         if (ccBtn) {
-          ccBtn.style.display = 'flex';
-          console.log('✅ CC Button shown');
-        } else {
-          console.warn('⚠️ CC Button not found');
+          ccBtn.disabled = false;
+          ccBtn.style.opacity = '1';
+          ccBtn.style.cursor = 'pointer';
+          console.log('✅ CC Button enabled');
         }
 
         // Setup tracks
         this.setupSubtitleTracks();
+      } else {
+        console.log('ℹ️ No subtitles available for this content. Response:', response);
+        if (ccBtn) {
+          ccBtn.disabled = true;
+          ccBtn.style.opacity = '0.5';
+          ccBtn.style.cursor = 'not-allowed';
+          ccBtn.title = 'No subtitles available';
+        }
       }
     } catch (error) {
       console.warn('⚠️ Failed to load subtitles:', error);
+      if (ccBtn) {
+        ccBtn.disabled = true;
+        ccBtn.style.opacity = '0.5';
+        ccBtn.style.cursor = 'not-allowed';
+        ccBtn.title = 'Subtitles unavailable';
+      }
     }
   }
 
@@ -233,11 +259,14 @@ export class VideoPlayer {
     const existingTracks = this.videoElement.querySelectorAll('track');
     existingTracks.forEach(track => track.remove());
 
+    console.log(`🎬 Setting up ${this.subtitles.length} subtitle tracks`);
+
     // Add new tracks
     this.subtitles.forEach((subtitle, index) => {
       const track = document.createElement('track');
       track.kind = 'subtitles';
-      track.label = `${subtitle.Language} (${subtitle.Title})`;
+      const displayName = subtitle.Title || subtitle.Language || `Track ${index + 1}`;
+      track.label = subtitle.Language ? `${subtitle.Language} - ${displayName}` : displayName;
       track.srclang = subtitle.Language || 'en';
 
       // Construct URL with startTime offset if transcoding
@@ -262,12 +291,16 @@ export class VideoPlayer {
           this.updateCCButtonState(true);
         }
         track.mode = 'showing';
+        console.log(`✅ Track ${index} set to showing: ${track.label}`);
       } else {
-        track.mode = 'hidden';
+        track.mode = 'disabled';
       }
 
       this.videoElement.appendChild(track);
     });
+
+    // Log final track state
+    console.log(`🎬 Subtitle tracks setup complete. Current index: ${this.currentSubtitleIndex}`);
   }
 
   /**
@@ -276,15 +309,18 @@ export class VideoPlayer {
   setSubtitleTrack(index) {
     const tracks = this.videoElement.textTracks;
 
+    console.log(`🎬 Setting subtitle track to index: ${index}`);
+
     // Turn off all tracks first
     for (let i = 0; i < tracks.length; i++) {
-      tracks[i].mode = 'hidden';
+      tracks[i].mode = 'disabled';
     }
 
     if (index === -1) {
       this.currentSubtitleIndex = -1;
       this.updateCCButtonState(false);
       this.showNotification('Subtitles: Off');
+      console.log('✅ Subtitles turned off');
     } else if (index >= 0 && index < this.subtitles.length) {
       // Find the track by ID/index matching
       // Note: tracks might not be in same order if video element reordered them, 
@@ -295,7 +331,14 @@ export class VideoPlayer {
         this.currentSubtitleIndex = index;
         this.updateCCButtonState(true);
         const sub = this.subtitles[index];
-        this.showNotification(`Subtitles: ${sub.Language} (${sub.Title})`);
+        // Handle both camelCase and PascalCase
+        const title = sub.title || sub.Title;
+        const language = sub.language || sub.Language;
+        const displayName = title || language || `Track ${index + 1}`;
+        this.showNotification(`Subtitles: ${displayName}`);
+        console.log(`✅ Subtitle track ${index} enabled: ${displayName}`);
+      } else {
+        console.warn(`⚠️ Track ${index} not found in textTracks`);
       }
     }
 
@@ -308,10 +351,15 @@ export class VideoPlayer {
    */
   toggleSubtitleMenu(forceState = null) {
     const menu = document.querySelector('.subtitle-menu');
-    if (!menu) return;
+    if (!menu) {
+      console.warn('⚠️ Subtitle menu element not found');
+      return;
+    }
 
     const newState = forceState !== null ? forceState : !this.subtitleMenuVisible;
     this.subtitleMenuVisible = newState;
+
+    console.log(`🎬 Toggling subtitle menu: ${newState ? 'visible' : 'hidden'}`);
 
     if (newState) {
       menu.classList.add('visible');
@@ -326,7 +374,12 @@ export class VideoPlayer {
    */
   renderSubtitleMenu() {
     const menuList = document.querySelector('.subtitle-menu-list');
-    if (!menuList) return;
+    if (!menuList) {
+      console.warn('⚠️ Subtitle menu list element not found');
+      return;
+    }
+
+    console.log(`🎬 Rendering subtitle menu with ${this.subtitles.length} tracks, current: ${this.currentSubtitleIndex}`);
 
     let html = `
       <div class="subtitle-menu-item ${this.currentSubtitleIndex === -1 ? 'active' : ''}" data-index="-1">
@@ -337,9 +390,14 @@ export class VideoPlayer {
 
     this.subtitles.forEach((sub, index) => {
       const isActive = index === this.currentSubtitleIndex;
+      // Handle both camelCase and PascalCase property names
+      const title = sub.title || sub.Title;
+      const language = sub.language || sub.Language;
+      const displayName = title || language || `Track ${index + 1}`;
+      
       html += `
         <div class="subtitle-menu-item ${isActive ? 'active' : ''}" data-index="${index}">
-          <span>${sub.Language} ${sub.Title ? `- ${sub.Title}` : ''}</span>
+          <span>${displayName}</span>
           ${isActive ? '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>' : ''}
         </div>
       `;
@@ -351,7 +409,9 @@ export class VideoPlayer {
     menuList.querySelectorAll('.subtitle-menu-item').forEach(item => {
       item.addEventListener('click', (e) => {
         e.stopPropagation();
-        const index = parseInt(item.dataset.index);
+        e.preventDefault();
+        const index = parseInt(item.dataset.index, 10);
+        console.log(`🎬 Subtitle menu item clicked: ${index}`);
         this.setSubtitleTrack(index);
       });
     });
@@ -753,7 +813,7 @@ export class VideoPlayer {
           </div>
           <div class="player-controls-right">
             <div class="subtitle-container">
-              <button class="player-btn cc-btn" title="Subtitles" style="display: none;">
+              <button class="player-btn cc-btn" title="Subtitles">
                 <svg viewBox="0 0 24 24">
                   <path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H5v-2h6v2zm0 4H5v-2h6v2zm6 0h-4v-2h4v2zm0-4h-4v-2h4v2z"/>
                 </svg>
@@ -840,14 +900,20 @@ export class VideoPlayer {
     });
 
     // Subtitle button
-    document.querySelector('.cc-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.toggleSubtitleMenu();
-    });
+    const ccBtn = document.querySelector('.cc-btn');
+    if (ccBtn) {
+      ccBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        console.log('🎬 CC button clicked');
+        this.toggleSubtitleMenu();
+      });
+    }
 
     // Close subtitle menu when clicking outside
     document.addEventListener('click', (e) => {
-      if (!e.target.closest('.subtitle-container')) {
+      if (this.subtitleMenuVisible && !e.target.closest('.subtitle-container')) {
+        console.log('🎬 Clicking outside subtitle menu, closing');
         this.toggleSubtitleMenu(false);
       }
     });

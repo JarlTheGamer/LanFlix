@@ -72,26 +72,28 @@ public class SubtitlesController : ControllerBase
                 }
             }
 
-            // Analyze media to get subtitle streams
-            var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
+            _logger.LogInformation("Scanning for subtitles in: {FilePath}", filePath);
+
+            // Scan for subtitles directly
+            var subtitleStreams = await ScanSubtitlesAsync(filePath);
 
             // Build query string for episode parameter
             var episodeParam = episodeId.HasValue ? $"?episodeId={episodeId.Value}" : "";
 
             // Use the correct base URL for the client to construct tracks
-            var subtitles = mediaInfo.Subtitles == null
-                ? new object[0]
-                : mediaInfo.Subtitles.Select(s => new
-                {
-                    Index = s.Index,
-                    Language = s.Language ?? "unknown",
-                    Title = s.Title ?? $"Subtitle {s.Index + 1}",
-                    Format = s.Format,
-                    IsForced = s.IsForced,
-                    IsDefault = s.IsDefault,
-                    IsEmbedded = s.IsEmbedded,
-                    Url = $"/api/subtitles/track/{contentId}/{s.Index}{episodeParam}"
-                }).ToArray();
+            var subtitles = subtitleStreams.Select(s => new
+            {
+                Index = s.Index,
+                Language = s.Language ?? "unknown",
+                Title = s.Title ?? $"Subtitle {s.Index + 1}",
+                Format = s.Format,
+                IsForced = s.IsForced,
+                IsDefault = s.IsDefault,
+                IsEmbedded = s.IsEmbedded,
+                Url = $"/api/subtitles/track/{contentId}/{s.Index}{episodeParam}"
+            }).ToArray();
+
+            _logger.LogInformation("Found {Count} subtitle tracks", subtitles.Length);
 
             return Ok(new { Subtitles = subtitles });
         }
@@ -161,8 +163,8 @@ public class SubtitlesController : ControllerBase
     {
         try
         {
-            var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
-            var subtitle = mediaInfo.Subtitles?.FirstOrDefault(s => s.Index == subtitleIndex);
+            var subtitleStreams = await ScanSubtitlesAsync(filePath);
+            var subtitle = subtitleStreams.FirstOrDefault(s => s.Index == subtitleIndex);
 
             if (subtitle == null) return null;
 
@@ -237,6 +239,222 @@ public class SubtitlesController : ControllerBase
             _logger.LogError(ex, "Error extracting subtitle");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Scans for embedded and external subtitle tracks
+    /// </summary>
+    private async Task<List<SubtitleStream>> ScanSubtitlesAsync(string filePath)
+    {
+        var allSubtitles = new List<SubtitleStream>();
+
+        try
+        {
+            // Scan for embedded subtitles using FFprobe
+            var embeddedSubtitles = await ScanEmbeddedSubtitlesAsync(filePath);
+            allSubtitles.AddRange(embeddedSubtitles);
+
+            // Scan for external subtitle files
+            var externalSubtitles = ScanExternalSubtitles(filePath, embeddedSubtitles.Count);
+            allSubtitles.AddRange(externalSubtitles);
+
+            _logger.LogInformation("Found {Total} subtitles (Embedded: {Embedded}, External: {External})",
+                allSubtitles.Count, embeddedSubtitles.Count, externalSubtitles.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to scan subtitles for: {FilePath}", filePath);
+        }
+
+        return allSubtitles;
+    }
+
+    /// <summary>
+    /// Scans for embedded subtitle streams using FFprobe
+    /// </summary>
+    private async Task<List<SubtitleStream>> ScanEmbeddedSubtitlesAsync(string filePath)
+    {
+        var subtitles = new List<SubtitleStream>();
+
+        try
+        {
+            var ffprobePath = FindFFprobePath();
+            var arguments = $"-v error -print_format json -show_streams -select_streams s \"{filePath}\"";
+
+            _logger.LogInformation("Running FFprobe for subtitles: {FFprobePath} {Arguments}", ffprobePath, arguments);
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = ffprobePath,
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process == null)
+            {
+                _logger.LogError("Failed to start FFprobe process");
+                return subtitles;
+            }
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            var error = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            _logger.LogInformation("FFprobe exit code: {ExitCode}", process.ExitCode);
+            
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                _logger.LogWarning("FFprobe stderr: {Error}", error);
+            }
+
+            if (!string.IsNullOrWhiteSpace(output))
+            {
+                _logger.LogInformation("FFprobe output length: {Length} characters", output.Length);
+                
+                // Log first stream to see structure
+                if (output.Length > 500)
+                {
+                    _logger.LogDebug("FFprobe output sample: {Sample}", output.Substring(0, 500));
+                }
+            }
+            else
+            {
+                _logger.LogWarning("FFprobe returned empty output");
+            }
+
+            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+            {
+                var probeResult = System.Text.Json.JsonSerializer.Deserialize<FFprobeResult>(output, new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (probeResult?.Streams != null && probeResult.Streams.Count > 0)
+                {
+                    _logger.LogInformation("FFprobe found {Count} streams", probeResult.Streams.Count);
+                    
+                    // Since we used -select_streams s, ALL returned streams are subtitle streams
+                    // We don't need to filter by CodecType
+                    subtitles = probeResult.Streams
+                        .Select((stream, index) => new SubtitleStream
+                        {
+                            Index = stream.Index ?? index,
+                            Format = stream.CodecName ?? "unknown",
+                            Language = stream.Tags?.Language,
+                            Title = stream.Tags?.Title,
+                            IsDefault = stream.Disposition?.Default == 1,
+                            IsForced = stream.Disposition?.Forced == 1,
+                            IsEmbedded = true,
+                            ExternalFilePath = null
+                        })
+                        .ToList();
+                    
+                    _logger.LogInformation("Extracted {Count} subtitle streams", subtitles.Count);
+                }
+                else
+                {
+                    _logger.LogInformation("FFprobe result has no streams");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to scan embedded subtitles for: {FilePath}", filePath);
+        }
+
+        return subtitles;
+    }
+
+    /// <summary>
+    /// Scans for external subtitle files
+    /// </summary>
+    private List<SubtitleStream> ScanExternalSubtitles(string videoFilePath, int startIndex)
+    {
+        var externalSubtitles = new List<SubtitleStream>();
+
+        try
+        {
+            var directory = Path.GetDirectoryName(videoFilePath);
+            var fileNameWithoutExt = Path.GetFileNameWithoutExtension(videoFilePath);
+
+            if (string.IsNullOrEmpty(directory))
+                return externalSubtitles;
+
+            var subtitleExtensions = new[] { ".srt", ".vtt", ".ass", ".ssa", ".sub" };
+
+            var subtitleFiles = Directory.GetFiles(directory, $"{fileNameWithoutExt}*")
+                .Where(f => subtitleExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                .ToList();
+
+            int index = startIndex;
+            foreach (var subtitleFile in subtitleFiles)
+            {
+                var fileName = Path.GetFileName(subtitleFile);
+                var extension = Path.GetExtension(subtitleFile).ToLowerInvariant();
+                var language = ExtractLanguageFromFilename(fileName);
+                var isForced = fileName.Contains(".forced.", StringComparison.OrdinalIgnoreCase);
+
+                externalSubtitles.Add(new SubtitleStream
+                {
+                    Index = index++,
+                    Format = extension.TrimStart('.'),
+                    Language = language,
+                    Title = $"External - {language ?? "Unknown"}",
+                    IsDefault = false,
+                    IsForced = isForced,
+                    IsEmbedded = false,
+                    ExternalFilePath = subtitleFile
+                });
+
+                _logger.LogInformation("Found external subtitle: {FileName}, Language: {Language}", fileName, language ?? "unknown");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to scan external subtitles");
+        }
+
+        return externalSubtitles;
+    }
+
+    /// <summary>
+    /// Extracts language code from subtitle filename
+    /// </summary>
+    private string? ExtractLanguageFromFilename(string filename)
+    {
+        var patterns = new Dictionary<string, string>
+        {
+            { "en", "eng" }, { "eng", "eng" }, { "english", "eng" },
+            { "es", "spa" }, { "spa", "spa" }, { "spanish", "spa" },
+            { "fr", "fra" }, { "fra", "fra" }, { "french", "fra" },
+            { "de", "ger" }, { "ger", "ger" }, { "german", "ger" },
+            { "it", "ita" }, { "ita", "ita" }, { "italian", "ita" },
+            { "pt", "por" }, { "por", "por" }, { "portuguese", "por" },
+            { "ja", "jpn" }, { "jpn", "jpn" }, { "japanese", "jpn" },
+            { "ko", "kor" }, { "kor", "kor" }, { "korean", "kor" },
+            { "zh", "chi" }, { "chi", "chi" }, { "chinese", "chi" },
+            { "ar", "ara" }, { "ara", "ara" }, { "arabic", "ara" },
+            { "ru", "rus" }, { "rus", "rus" }, { "russian", "rus" },
+            { "hi", "hin" }, { "hin", "hin" }, { "hindi", "hin" }
+        };
+
+        var lowerFilename = filename.ToLowerInvariant();
+
+        foreach (var pattern in patterns)
+        {
+            if (lowerFilename.Contains($".{pattern.Key}.") ||
+                lowerFilename.Contains($".{pattern.Key}_") ||
+                lowerFilename.EndsWith($".{pattern.Key}"))
+            {
+                return pattern.Value;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -383,4 +601,76 @@ public class SubtitlesController : ControllerBase
         // Fallback to just "ffmpeg" and hope it's in PATH
         return "ffmpeg";
     }
+
+    private string FindFFprobePath()
+    {
+        // Check for local ffprobe-path file first
+        if (System.IO.File.Exists("ffprobe-path"))
+        {
+            var path = System.IO.File.ReadAllText("ffprobe-path").Trim();
+            if (System.IO.File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        // Check common locations
+        var commonPaths = new[]
+        {
+            @"C:\ffmpeg\bin\ffprobe.exe",
+            @"/usr/bin/ffprobe",
+            @"/usr/local/bin/ffprobe"
+        };
+
+        foreach (var path in commonPaths)
+        {
+            if (System.IO.File.Exists(path)) return path;
+        }
+
+        // Fallback to just "ffprobe" and hope it's in PATH
+        return "ffprobe";
+    }
+
+    #region FFprobe JSON Models
+
+    private class FFprobeResult
+    {
+        public List<FFprobeStream>? Streams { get; set; }
+    }
+
+    private class FFprobeStream
+    {
+        public int? Index { get; set; }
+        public string? CodecName { get; set; }
+        public string? CodecType { get; set; }
+        public FFprobeDisposition? Disposition { get; set; }
+        public FFprobeTags? Tags { get; set; }
+    }
+
+    private class FFprobeDisposition
+    {
+        public int? Default { get; set; }
+        public int? Forced { get; set; }
+    }
+
+    private class FFprobeTags
+    {
+        public string? Language { get; set; }
+        public string? Title { get; set; }
+    }
+
+    #endregion
+}
+
+// Helper class for subtitle stream info
+public class SubtitleStream
+{
+    public int Index { get; set; }
+    public string Format { get; set; } = string.Empty;
+    public string? Language { get; set; }
+    public string? Title { get; set; }
+    public bool IsDefault { get; set; }
+    public bool IsForced { get; set; }
+    public bool IsEmbedded { get; set; }
+    public string? ExternalFilePath { get; set; }
 }

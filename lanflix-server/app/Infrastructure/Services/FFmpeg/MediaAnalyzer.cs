@@ -38,13 +38,12 @@ public class MediaAnalyzer : IMediaAnalyzer
             var mediaInfo = BuildMediaInfo(probeResult, filePath);
 
             _logger.LogInformation(
-                "Media analysis complete: {Container}, Video: {VideoCodec} {Width}x{Height}, Audio: {AudioTracks} tracks, Subtitles: {SubtitleTracks} tracks",
+                "Media analysis complete: {Container}, Video: {VideoCodec} {Width}x{Height}, Audio: {AudioTracks} tracks",
                 mediaInfo.Container,
                 mediaInfo.Video.Codec,
                 mediaInfo.Video.Width,
                 mediaInfo.Video.Height,
-                mediaInfo.Audio.Count,
-                mediaInfo.Subtitles.Count);
+                mediaInfo.Audio.Count);
 
             return mediaInfo;
         }
@@ -173,26 +172,16 @@ public class MediaAnalyzer : IMediaAnalyzer
     {
         var videoStream = ExtractVideoStream(probeResult);
         var audioStreams = ExtractAudioStreams(probeResult);
-        var embeddedSubtitles = ExtractSubtitleStreams(probeResult);
-        
-        // Scan for external subtitle files
-        var externalSubtitles = ScanExternalSubtitles(filePath, embeddedSubtitles.Count);
-        
-        // Combine embedded and external subtitles
-        var allSubtitles = embeddedSubtitles.Concat(externalSubtitles).ToList();
 
         var fileInfo = new FileInfo(filePath);
         var duration = ParseDuration(probeResult.Format?.Duration);
         var bitrate = ParseBitrate(probeResult.Format?.BitRate);
 
-        _logger.LogInformation("Total subtitles found: {Total} (Embedded: {Embedded}, External: {External})",
-            allSubtitles.Count, embeddedSubtitles.Count, externalSubtitles.Count);
-
         return new MediaInfo
         {
             Video = videoStream,
             Audio = audioStreams,
-            Subtitles = allSubtitles,
+            Subtitles = new List<SubtitleStream>(),
             Duration = duration,
             FileSize = fileInfo.Length,
             Container = probeResult.Format?.FormatName?.Split(',').FirstOrDefault() ?? "unknown",
@@ -254,121 +243,6 @@ public class MediaAnalyzer : IMediaAnalyzer
                 IsDefault = stream.Disposition?.Default == 1
             })
             .ToList() ?? new List<AudioStream>();
-    }
-
-    private List<SubtitleStream> ExtractSubtitleStreams(FFprobeResult probeResult)
-    {
-        var embeddedSubtitles = probeResult.Streams?
-            .Where(s => s.CodecType == "subtitle")
-            .Select((stream, index) => new SubtitleStream
-            {
-                Index = stream.Index ?? index,
-                Format = NormalizeCodecName(stream.CodecName ?? "unknown"),
-                Language = stream.Tags?.Language,
-                Title = stream.Tags?.Title,
-                IsDefault = stream.Disposition?.Default == 1,
-                IsForced = stream.Disposition?.Forced == 1,
-                IsEmbedded = true,
-                ExternalFilePath = null
-            })
-            .ToList() ?? new List<SubtitleStream>();
-
-        return embeddedSubtitles;
-    }
-
-    /// <summary>
-    /// Scans for external subtitle files in the same directory as the video file
-    /// </summary>
-    private List<SubtitleStream> ScanExternalSubtitles(string videoFilePath, int startIndex)
-    {
-        var externalSubtitles = new List<SubtitleStream>();
-
-        try
-        {
-            var directory = Path.GetDirectoryName(videoFilePath);
-            var fileNameWithoutExt = Path.GetFileNameWithoutExtension(videoFilePath);
-
-            if (string.IsNullOrEmpty(directory))
-                return externalSubtitles;
-
-            // Supported subtitle extensions
-            var subtitleExtensions = new[] { ".srt", ".vtt", ".ass", ".ssa", ".sub" };
-
-            // Find all subtitle files matching the video filename
-            var subtitleFiles = Directory.GetFiles(directory, $"{fileNameWithoutExt}*")
-                .Where(f => subtitleExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                .ToList();
-
-            int index = startIndex;
-            foreach (var subtitleFile in subtitleFiles)
-            {
-                var fileName = Path.GetFileName(subtitleFile);
-                var extension = Path.GetExtension(subtitleFile).ToLowerInvariant();
-
-                // Try to extract language from filename (e.g., "movie.en.srt", "movie.eng.srt")
-                var language = ExtractLanguageFromFilename(fileName);
-                var isForced = fileName.Contains(".forced.", StringComparison.OrdinalIgnoreCase);
-
-                externalSubtitles.Add(new SubtitleStream
-                {
-                    Index = index++,
-                    Format = extension.TrimStart('.'),
-                    Language = language,
-                    Title = $"External - {language ?? "Unknown"}",
-                    IsDefault = false,
-                    IsForced = isForced,
-                    IsEmbedded = false,
-                    ExternalFilePath = subtitleFile
-                });
-
-                _logger.LogInformation("Found external subtitle: {FileName}, Language: {Language}, Forced: {IsForced}",
-                    fileName, language ?? "unknown", isForced);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to scan for external subtitles for file: {FilePath}", videoFilePath);
-        }
-
-        return externalSubtitles;
-    }
-
-    /// <summary>
-    /// Extracts language code from subtitle filename
-    /// </summary>
-    private string? ExtractLanguageFromFilename(string filename)
-    {
-        // Common patterns: movie.en.srt, movie.eng.srt, movie.english.srt
-        var patterns = new Dictionary<string, string>
-        {
-            { "en", "eng" }, { "eng", "eng" }, { "english", "eng" },
-            { "es", "spa" }, { "spa", "spa" }, { "spanish", "spa" },
-            { "fr", "fra" }, { "fra", "fra" }, { "french", "fra" },
-            { "de", "ger" }, { "ger", "ger" }, { "german", "ger" },
-            { "it", "ita" }, { "ita", "ita" }, { "italian", "ita" },
-            { "pt", "por" }, { "por", "por" }, { "portuguese", "por" },
-            { "ja", "jpn" }, { "jpn", "jpn" }, { "japanese", "jpn" },
-            { "ko", "kor" }, { "kor", "kor" }, { "korean", "kor" },
-            { "zh", "chi" }, { "chi", "chi" }, { "chinese", "chi" },
-            { "ar", "ara" }, { "ara", "ara" }, { "arabic", "ara" },
-            { "ru", "rus" }, { "rus", "rus" }, { "russian", "rus" },
-            { "hi", "hin" }, { "hin", "hin" }, { "hindi", "hin" }
-        };
-
-        var lowerFilename = filename.ToLowerInvariant();
-        
-        foreach (var pattern in patterns)
-        {
-            // Match patterns like ".en.", ".eng.", etc.
-            if (lowerFilename.Contains($".{pattern.Key}.") || 
-                lowerFilename.Contains($".{pattern.Key}_") ||
-                lowerFilename.EndsWith($".{pattern.Key}"))
-            {
-                return pattern.Value;
-            }
-        }
-
-        return null;
     }
 
     private bool DetectHDR(FFprobeStream stream)
