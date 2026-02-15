@@ -77,8 +77,16 @@ public class LibraryController : ControllerBase
                     title = c.Title,
                     overview = c.Overview,
                     year = c.ReleaseDate != null ? c.ReleaseDate.Value.Year : (int?)null,
-                    posterUrl = !string.IsNullOrEmpty(c.PosterPath) ? $"https://image.tmdb.org/t/p/w500{c.PosterPath}" : null,
-                    backdropUrl = !string.IsNullOrEmpty(c.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}" : null,
+                    posterUrl = !string.IsNullOrEmpty(c.PosterPath) 
+                        ? (System.IO.File.Exists(Path.Combine(Path.GetDirectoryName(c.FilePath) ?? "", "poster.jpg")) 
+                            ? $"/api/image/{c.Id}/poster" 
+                            : $"https://image.tmdb.org/t/p/w500{c.PosterPath}")
+                        : null,
+                    backdropUrl = !string.IsNullOrEmpty(c.BackdropPath) 
+                        ? (System.IO.File.Exists(Path.Combine(Path.GetDirectoryName(c.FilePath) ?? "", "backdrop.jpg")) 
+                            ? $"/api/image/{c.Id}/backdrop" 
+                            : $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}")
+                        : null,
                     rating = c.Rating,
                     genres = c.Genres ?? new string[0],
                     filePath = c.FilePath,
@@ -159,8 +167,16 @@ public class LibraryController : ControllerBase
                     title = c.Title,
                     overview = c.Overview,
                     year = c.ReleaseDate != null ? c.ReleaseDate.Value.Year : (int?)null,
-                    posterUrl = !string.IsNullOrEmpty(c.PosterPath) ? $"https://image.tmdb.org/t/p/w500{c.PosterPath}" : null,
-                    backdropUrl = !string.IsNullOrEmpty(c.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}" : null,
+                    posterUrl = !string.IsNullOrEmpty(c.PosterPath) 
+                        ? (System.IO.File.Exists(Path.Combine(Directory.Exists(c.FilePath) ? c.FilePath : Path.GetDirectoryName(c.FilePath) ?? "", "poster.jpg")) 
+                            ? $"/api/image/{c.Id}/poster" 
+                            : $"https://image.tmdb.org/t/p/w500{c.PosterPath}")
+                        : null,
+                    backdropUrl = !string.IsNullOrEmpty(c.BackdropPath) 
+                        ? (System.IO.File.Exists(Path.Combine(Directory.Exists(c.FilePath) ? c.FilePath : Path.GetDirectoryName(c.FilePath) ?? "", "backdrop.jpg")) 
+                            ? $"/api/image/{c.Id}/backdrop" 
+                            : $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}")
+                        : null,
                     rating = c.Rating,
                     genres = c.Genres ?? new string[0],
                     filePath = c.FilePath,
@@ -234,8 +250,16 @@ public class LibraryController : ControllerBase
                     title = c.Title,
                     overview = c.Overview,
                     year = c.ReleaseDate != null ? c.ReleaseDate.Value.Year : (int?)null,
-                    posterUrl = !string.IsNullOrEmpty(c.PosterPath) ? $"https://image.tmdb.org/t/p/w500{c.PosterPath}" : null,
-                    backdropUrl = !string.IsNullOrEmpty(c.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}" : null,
+                    posterUrl = !string.IsNullOrEmpty(c.PosterPath) 
+                        ? (System.IO.File.Exists(Path.Combine(Path.GetDirectoryName(c.FilePath) ?? "", "poster.jpg")) 
+                            ? $"/api/image/{c.Id}/poster" 
+                            : $"https://image.tmdb.org/t/p/w500{c.PosterPath}")
+                        : null,
+                    backdropUrl = !string.IsNullOrEmpty(c.BackdropPath) 
+                        ? (System.IO.File.Exists(Path.Combine(Path.GetDirectoryName(c.FilePath) ?? "", "backdrop.jpg")) 
+                            ? $"/api/image/{c.Id}/backdrop" 
+                            : $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}")
+                        : null,
                     rating = c.Rating,
                     genres = c.Genres ?? new string[0],
                     filePath = c.FilePath,
@@ -275,8 +299,16 @@ public class LibraryController : ControllerBase
                     title = c.Title,
                     overview = c.Overview,
                     year = c.ReleaseDate != null ? c.ReleaseDate.Value.Year : (int?)null,
-                    posterUrl = !string.IsNullOrEmpty(c.PosterPath) ? $"https://image.tmdb.org/t/p/w500{c.PosterPath}" : null,
-                    backdropUrl = !string.IsNullOrEmpty(c.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}" : null,
+                    posterUrl = !string.IsNullOrEmpty(c.PosterPath) 
+                        ? (System.IO.File.Exists(Path.Combine(Path.GetDirectoryName(c.FilePath) ?? "", "poster.jpg")) 
+                            ? $"/api/image/{c.Id}/poster" 
+                            : $"https://image.tmdb.org/t/p/w500{c.PosterPath}")
+                        : null,
+                    backdropUrl = !string.IsNullOrEmpty(c.BackdropPath) 
+                        ? (System.IO.File.Exists(Path.Combine(Path.GetDirectoryName(c.FilePath) ?? "", "backdrop.jpg")) 
+                            ? $"/api/image/{c.Id}/backdrop" 
+                            : $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}")
+                        : null,
                     rating = c.Rating,
                     genres = c.Genres ?? new string[0],
                     filePath = c.FilePath,
@@ -366,8 +398,16 @@ public class LibraryController : ControllerBase
                 voteAverage = enhancedMetadata?.VoteAverage ?? content.Rating,
                 runtime = enhancedMetadata?.Runtime,
                 
-                posterUrl = !string.IsNullOrEmpty(content.PosterPath) ? $"https://image.tmdb.org/t/p/w500{content.PosterPath}" : null,
-                backdropUrl = !string.IsNullOrEmpty(content.BackdropPath) ? $"https://image.tmdb.org/t/p/w1280{content.BackdropPath}" : null,
+                posterUrl = !string.IsNullOrEmpty(content.PosterPath) 
+                    ? (System.IO.File.Exists(Path.Combine(Directory.Exists(content.FilePath) ? content.FilePath : Path.GetDirectoryName(content.FilePath) ?? "", "poster.jpg")) 
+                        ? $"/api/image/{content.Id}/poster" 
+                        : $"https://image.tmdb.org/t/p/w500{content.PosterPath}")
+                    : null,
+                backdropUrl = !string.IsNullOrEmpty(content.BackdropPath) 
+                    ? (System.IO.File.Exists(Path.Combine(Directory.Exists(content.FilePath) ? content.FilePath : Path.GetDirectoryName(content.FilePath) ?? "", "backdrop.jpg")) 
+                        ? $"/api/image/{content.Id}/backdrop" 
+                        : $"https://image.tmdb.org/t/p/w1280{content.BackdropPath}")
+                    : null,
                 rating = enhancedMetadata?.VoteAverage ?? content.Rating,
                 genres = enhancedMetadata?.Genres ?? content.Genres ?? new string[0],
                 filePath = content.FilePath,
@@ -406,7 +446,10 @@ public class LibraryController : ControllerBase
     {
         try
         {
-            var mediaFolderPath = Path.GetDirectoryName(filePath);
+            var mediaFolderPath = Directory.Exists(filePath) 
+                ? filePath 
+                : Path.GetDirectoryName(filePath);
+
             if (string.IsNullOrEmpty(mediaFolderPath))
             {
                 return null;
@@ -491,7 +534,13 @@ public class LibraryController : ControllerBase
                                 overview = episode.Overview,
                                 airDate = episode.AirDate,
                                 stillPath = episode.StillPath,
-                                stillUrl = !string.IsNullOrEmpty(episode.StillPath) ? $"https://image.tmdb.org/t/p/w300{episode.StillPath}" : null,
+                                stillUrl = !string.IsNullOrEmpty(episode.StillPath) 
+                                    ? ((!string.IsNullOrEmpty(dbEpisode?.FilePath) && System.IO.File.Exists(dbEpisode.FilePath))
+                                        ? $"/api/image/{seriesId}/season/{episode.SeasonNumber}/episode/{episode.EpisodeNumber}/still"
+                                        : (System.IO.File.Exists(Path.Combine((series.FilePath != null && Directory.Exists(series.FilePath)) ? series.FilePath : (series.FilePath != null ? Path.GetDirectoryName(series.FilePath) ?? "" : ""), $"Season {episode.SeasonNumber}", $"S{episode.SeasonNumber:D2}E{episode.EpisodeNumber:D2}.jpg"))
+                                            ? $"/api/image/{seriesId}/season/{episode.SeasonNumber}/episode/{episode.EpisodeNumber}/still"
+                                            : $"https://image.tmdb.org/t/p/w300{episode.StillPath}"))
+                                    : null,
                                 filePath = dbEpisode?.FilePath,
                                 hasFile = !string.IsNullOrEmpty(dbEpisode?.FilePath) && System.IO.File.Exists(dbEpisode.FilePath),
                                 available = !string.IsNullOrEmpty(dbEpisode?.FilePath), // Episode is available if we have a file
@@ -523,7 +572,13 @@ public class LibraryController : ControllerBase
                     overview = e.Overview,
                     airDate = e.AirDate,
                     stillPath = e.StillPath,
-                    stillUrl = !string.IsNullOrEmpty(e.StillPath) ? $"https://image.tmdb.org/t/p/w300{e.StillPath}" : null,
+                    stillUrl = !string.IsNullOrEmpty(e.StillPath) 
+                        ? ((!string.IsNullOrEmpty(e.FilePath) && System.IO.File.Exists(e.FilePath))
+                            ? $"/api/image/{seriesId}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still"
+                            : (System.IO.File.Exists(Path.Combine((series.FilePath != null && Directory.Exists(series.FilePath)) ? series.FilePath : (series.FilePath != null ? Path.GetDirectoryName(series.FilePath) ?? "" : ""), $"Season {e.SeasonNumber}", $"S{e.SeasonNumber:D2}E{e.EpisodeNumber:D2}.jpg"))
+                                ? $"/api/image/{seriesId}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still"
+                                : $"https://image.tmdb.org/t/p/w300{e.StillPath}"))
+                        : null,
                     filePath = e.FilePath,
                     hasFile = !string.IsNullOrEmpty(e.FilePath) && System.IO.File.Exists(e.FilePath),
                     available = !string.IsNullOrEmpty(e.FilePath),
