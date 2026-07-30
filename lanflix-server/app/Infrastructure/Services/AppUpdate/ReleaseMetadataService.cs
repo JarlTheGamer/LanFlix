@@ -17,7 +17,7 @@ public class ReleaseMetadataService : IReleaseMetadataService
 
     private (AppReleaseMetadata? Metadata, DateTime CachedAt)? _cachedAppRelease;
     private (ServerUpdateInfo? Metadata, DateTime CachedAt)? _cachedServerRelease;
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
 
     public ReleaseMetadataService(
         IHttpClientFactory httpClientFactory,
@@ -33,11 +33,6 @@ public class ReleaseMetadataService : IReleaseMetadataService
 
     public async Task<AppReleaseMetadata?> GetLatestAppReleaseAsync(int currentVersionCode, CancellationToken cancellationToken = default)
     {
-        if (_cachedAppRelease.HasValue && DateTime.UtcNow - _cachedAppRelease.Value.CachedAt < CacheDuration)
-        {
-            return _cachedAppRelease.Value.Metadata;
-        }
-
         var release = await FetchFromGitHubAsync(cancellationToken);
         if (release != null)
         {
@@ -76,11 +71,6 @@ public class ReleaseMetadataService : IReleaseMetadataService
 
     public async Task<ServerUpdateInfo?> GetLatestServerReleaseAsync(string currentVersion, CancellationToken cancellationToken = default)
     {
-        if (_cachedServerRelease.HasValue && DateTime.UtcNow - _cachedServerRelease.Value.CachedAt < CacheDuration)
-        {
-            return _cachedServerRelease.Value.Metadata;
-        }
-
         var release = await FetchFromGitHubAsync(cancellationToken);
         if (release != null)
         {

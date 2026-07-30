@@ -125,6 +125,19 @@ def sync_version_to_files(version_name: str, version_code: int):
         content = re.sub(r'<meta name="app-version" content="[^"]+" />', f'<meta name="app-version" content="{version_name}" />', content)
         settings_file.write_text(content, encoding="utf-8")
 
+def clean_old_releases(keep_latest_version: str = None):
+    """Deletes old .zip and .apk release files from RELEASES_DIR."""
+    if RELEASES_DIR.exists():
+        for file in RELEASES_DIR.glob("*"):
+            if file.is_file() and (file.name.endswith(".zip") or file.name.endswith(".apk")):
+                if keep_latest_version and keep_latest_version in file.name:
+                    continue
+                try:
+                    file.unlink()
+                    print(f"🧹 Deleted old release file: {file.name}")
+                except Exception as e:
+                    print(f"⚠️ Could not delete old file {file.name}: {e}")
+
 def ensure_directories():
     """Ensures releases directories exist."""
     RELEASES_DIR.mkdir(parents=True, exist_ok=True)
@@ -137,6 +150,7 @@ def build_android_apk(version_name: str, version_code: int, notes: str = "Bug fi
     print("=" * 60)
 
     ensure_directories()
+    clean_old_releases(keep_latest_version=version_name)
     print(f"📦 Version: {version_name} (Code: {version_code})")
 
     gradle_cmd = "gradlew.bat" if sys.platform == "win32" else "./gradlew"
@@ -199,6 +213,7 @@ def build_server(version_name: str, notes: str = "Server update release", host_u
     print("=" * 60)
 
     ensure_directories()
+    clean_old_releases(keep_latest_version=version_name)
 
     # Delete any nested releases directory inside publish to prevent recursive zip bomb
     nested_releases = SERVER_PUBLISH_DIR / "releases"
