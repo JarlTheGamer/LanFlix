@@ -167,8 +167,16 @@ public class ServerUpdateService : IServerUpdateService
             _logger.LogInformation("Update extracted successfully to {Path}", extractPath);
             UpdateProgress("Applying", 85, "Swapping updated files in-process...");
 
-            var currentDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            // Use the actual on-disk executable directory, NOT AppContext.BaseDirectory
+            // (AppContext.BaseDirectory points to .NET's single-file temp extraction folder)
+            var exeLocation = Environment.ProcessPath
+                ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName
+                ?? Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "Lanflix.WebApi.exe" : "Lanflix.WebApi");
+            var currentDir = Path.GetDirectoryName(exeLocation)
+                ?? AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             
+            _logger.LogInformation("Update install target directory: {Dir}", currentDir);
+
             // Perform in-process C# atomic file swap
             ApplyInProcessFileSwap(currentDir, extractPath);
 
