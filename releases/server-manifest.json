@@ -1,10 +1,10 @@
 {
-  "version": "1.3.9",
-  "currentVersion": "1.3.9",
-  "releaseDate": "2026-07-30T23:49:24.780672Z",
-  "downloadUrl": "https://github.com/JarlTheGamer/LanFlix/releases/download/v1.3.9/lanflix-server-v1.3.9.zip",
-  "fileSize": 50993391,
-  "checksum": "f2e67af767f49f8764252fe7d4090653026217e0713031e4b65763dad8db689e",
-  "releaseNotes": "Fix update modal for server+Android; auto-delete .old files after update",
+  "version": "1.4.0",
+  "currentVersion": "1.4.0",
+  "releaseDate": "2026-07-30T23:50:39.809370Z",
+  "downloadUrl": "https://github.com/JarlTheGamer/LanFlix/releases/download/v1.4.0/lanflix-server-v1.4.0.zip",
+  "fileSize": 50993331,
+  "checksum": "983e8a570e63a311ec205f8ea9ee241f496732ec813fe759745f9a1ab02edc03",
+  "releaseNotes": "v1.4.0 - Unified update modal for server and Android app",
   "isUpdateAvailable": true
 }
