@@ -1629,3 +1629,44 @@ main {
     font-size: 0.8rem;
   }
 }
+
+/* ==========================================================================
+   TV Mode & Performance Optimizations
+   ========================================================================== */
+
+/* Hardware acceleration & layout containment */
+.media-card,
+.hero-carousel-slide,
+.carousel-track,
+.episode-card-horizontal {
+  will-change: transform;
+  contain: layout style paint;
+}
+
+/* Disable heavy backdrop blur only on specific overlays in TV mode for performance */
+.tv-mode .top-nav.is-solid {
+  background: rgba(15, 15, 20, 0.98) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.tv-mode .content-modal,
+.tv-mode .modal-content {
+  background: rgba(18, 18, 26, 0.98) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* TV focus states with enhanced visibility and smooth scaling */
+.tv-mode .media-card:focus,
+.tv-mode .media-card.tv-focused,
+.tv-mode .menu-item.tv-focused,
+.tv-mode .tab-btn.tv-focused,
+.tv-mode .modal-focused {
+  outline: 3px solid #e50914 !important;
+  outline-offset: 3px !important;
+  transform: scale(1.05) translateZ(0) !important;
+  transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), outline 0.15s ease !important;
+  z-index: 100 !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(229, 9, 20, 0.5) !important;
+}

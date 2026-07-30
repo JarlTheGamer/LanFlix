@@ -55,30 +55,97 @@ public static class EmbeddedResourceExtractor
             return;
         }
         
+        var extractedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int updatedCount = 0;
+        
         foreach (var resourceName in wwwrootResources)
         {
             // Remove prefix to get relative path
             var relativePath = resourceName.Substring(wwwrootPrefix.Length);
             
             // Convert embedded resource name back to file path
-            // Resources are named like: wwwroot.assets.main-D83xSheS.js
-            // We need to convert to: wwwroot/assets/main-D83xSheS.js
-            var outputPath = ConvertResourceNameToPath(relativePath);
-            outputPath = Path.Combine("wwwroot", outputPath);
+            var outputPath = Path.Combine("wwwroot", ConvertResourceNameToPath(relativePath));
+            extractedPaths.Add(Path.GetFullPath(outputPath));
             
-            if (File.Exists(outputPath))
-                continue;
-                
-            var outputDirectory = Path.GetDirectoryName(outputPath);
-            if (!string.IsNullOrEmpty(outputDirectory))
-                Directory.CreateDirectory(outputDirectory);
-                
             using var stream = assembly.GetManifestResourceStream(resourceName);
             if (stream == null)
                 continue;
                 
-            using var fileStream = File.Create(outputPath);
-            stream.CopyTo(fileStream);
+            bool needsOverwrite = true;
+            if (File.Exists(outputPath))
+            {
+                var existingInfo = new FileInfo(outputPath);
+                if (existingInfo.Length == stream.Length)
+                {
+                    using var existingStream = File.OpenRead(outputPath);
+                    if (StreamsAreEqual(stream, existingStream))
+                    {
+                        needsOverwrite = false;
+                    }
+                    stream.Position = 0; // Reset position after reading comparison
+                }
+            }
+            
+            if (needsOverwrite)
+            {
+                var outputDirectory = Path.GetDirectoryName(outputPath);
+                if (!string.IsNullOrEmpty(outputDirectory))
+                    Directory.CreateDirectory(outputDirectory);
+                    
+                using var fileStream = File.Create(outputPath);
+                stream.CopyTo(fileStream);
+                updatedCount++;
+            }
+        }
+        
+        if (updatedCount > 0)
+        {
+            Console.WriteLine($"Extracted/Updated {updatedCount} wwwroot UI asset(s)");
+        }
+
+        // Clean up obsolete stale bundle assets in wwwroot/assets no longer in current embedded build
+        var assetsDir = Path.Combine("wwwroot", "assets");
+        if (Directory.Exists(assetsDir))
+        {
+            foreach (var file in Directory.GetFiles(assetsDir, "*.*", SearchOption.AllDirectories))
+            {
+                if (!extractedPaths.Contains(Path.GetFullPath(file)))
+                {
+                    try 
+                    { 
+                        File.Delete(file);
+                    } 
+                    catch 
+                    { 
+                        // Ignore files locked by running processes
+                    }
+                }
+            }
+        }
+    }
+    
+    private static bool StreamsAreEqual(Stream stream1, Stream stream2)
+    {
+        const int bufferSize = 8192;
+        var buffer1 = new byte[bufferSize];
+        var buffer2 = new byte[bufferSize];
+
+        while (true)
+        {
+            int count1 = stream1.Read(buffer1, 0, bufferSize);
+            int count2 = stream2.Read(buffer2, 0, bufferSize);
+
+            if (count1 != count2)
+                return false;
+
+            if (count1 == 0)
+                return true;
+
+            for (int i = 0; i < count1; i++)
+            {
+                if (buffer1[i] != buffer2[i])
+                    return false;
+            }
         }
     }
     

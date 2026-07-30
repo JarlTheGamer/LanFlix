@@ -40,6 +40,7 @@ public class SeriesController : ControllerBase
                 genre, search, sortBy, limit);
 
             var query = _context.Contents
+                .AsNoTracking()
                 .Where(c => c.Type == ContentType.Series)
                 .AsQueryable();
 
@@ -92,15 +93,15 @@ public class SeriesController : ControllerBase
                     releaseDate = c.ReleaseDate,
                     year = c.ReleaseDate != null ? c.ReleaseDate.Value.Year : (int?)null,
                     posterUrl = !string.IsNullOrEmpty(c.PosterPath) 
-                        ? (System.IO.File.Exists(Path.Combine(Path.GetDirectoryName(c.FilePath) ?? "", "poster.jpg")) 
-                            ? $"/api/image/{c.Id}/poster" 
-                            : $"https://image.tmdb.org/t/p/w500{c.PosterPath}")
-                        : null,
+                        ? (c.PosterPath.StartsWith("/") 
+                            ? $"https://image.tmdb.org/t/p/w500{c.PosterPath}"
+                            : (c.PosterPath.StartsWith("http") ? c.PosterPath : $"/api/image/{c.Id}/poster"))
+                        : (!string.IsNullOrEmpty(c.FilePath) ? $"/api/image/{c.Id}/poster" : null),
                     backdropUrl = !string.IsNullOrEmpty(c.BackdropPath) 
-                        ? (System.IO.File.Exists(Path.Combine(Path.GetDirectoryName(c.FilePath) ?? "", "backdrop.jpg")) 
-                            ? $"/api/image/{c.Id}/backdrop" 
-                            : $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}")
-                        : null,
+                        ? (c.BackdropPath.StartsWith("/") 
+                            ? $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}"
+                            : (c.BackdropPath.StartsWith("http") ? c.BackdropPath : $"/api/image/{c.Id}/backdrop"))
+                        : (!string.IsNullOrEmpty(c.FilePath) ? $"/api/image/{c.Id}/backdrop" : null),
                     voteAverage = c.Rating,
                     voteCount = 0, // TODO: Add VoteCount field to Content entity
                     genres = c.Genres ?? new string[0],
@@ -138,6 +139,7 @@ public class SeriesController : ControllerBase
             _logger.LogInformation("Getting series: Id={Id}, ProfileId={ProfileId}", id, profileId);
 
             var series = await _context.Contents
+                .AsNoTracking()
                 .Where(c => c.Id == id && c.Type == ContentType.Series)
                 .Select(c => new
                 {
@@ -150,15 +152,15 @@ public class SeriesController : ControllerBase
                     releaseDate = c.ReleaseDate,
                     year = c.ReleaseDate != null ? c.ReleaseDate.Value.Year : (int?)null,
                     posterUrl = !string.IsNullOrEmpty(c.PosterPath) 
-                        ? (System.IO.File.Exists(Path.Combine(Directory.Exists(c.FilePath) ? c.FilePath : Path.GetDirectoryName(c.FilePath) ?? "", "poster.jpg")) 
-                            ? $"/api/image/{c.Id}/poster" 
-                            : $"https://image.tmdb.org/t/p/w500{c.PosterPath}")
-                        : null,
+                        ? (c.PosterPath.StartsWith("/") 
+                            ? $"https://image.tmdb.org/t/p/w500{c.PosterPath}"
+                            : (c.PosterPath.StartsWith("http") ? c.PosterPath : $"/api/image/{c.Id}/poster"))
+                        : (!string.IsNullOrEmpty(c.FilePath) ? $"/api/image/{c.Id}/poster" : null),
                     backdropUrl = !string.IsNullOrEmpty(c.BackdropPath) 
-                        ? (System.IO.File.Exists(Path.Combine(Directory.Exists(c.FilePath) ? c.FilePath : Path.GetDirectoryName(c.FilePath) ?? "", "backdrop.jpg")) 
-                            ? $"/api/image/{c.Id}/backdrop" 
-                            : $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}")
-                        : null,
+                        ? (c.BackdropPath.StartsWith("/") 
+                            ? $"https://image.tmdb.org/t/p/w1280{c.BackdropPath}"
+                            : (c.BackdropPath.StartsWith("http") ? c.BackdropPath : $"/api/image/{c.Id}/backdrop"))
+                        : (!string.IsNullOrEmpty(c.FilePath) ? $"/api/image/{c.Id}/backdrop" : null),
                     voteAverage = c.Rating,
                     voteCount = 0, // TODO: Add VoteCount field
                     genres = c.Genres ?? new string[0],
@@ -176,6 +178,7 @@ public class SeriesController : ControllerBase
 
             // Get episodes from database (these are the ones we have files for or metadata stored)
             var dbEpisodes = await _context.Episodes
+                .AsNoTracking()
                 .Where(e => e.ContentId == id)
                 .OrderBy(e => e.SeasonNumber)
                 .ThenBy(e => e.EpisodeNumber)
@@ -218,14 +221,12 @@ public class SeriesController : ControllerBase
                                 airDate = episode.AirDate,
                                 stillPath = episode.StillPath,
                                 stillUrl = !string.IsNullOrEmpty(episode.StillPath) 
-                                    ? ((!string.IsNullOrEmpty(dbEpisode?.FilePath) && System.IO.File.Exists(dbEpisode.FilePath))
-                                        ? $"/api/image/{series.id}/season/{episode.SeasonNumber}/episode/{episode.EpisodeNumber}/still"
-                                        : (System.IO.File.Exists(Path.Combine((series.filePath != null && Directory.Exists(series.filePath)) ? series.filePath : (series.filePath != null ? Path.GetDirectoryName(series.filePath) ?? "" : ""), $"Season {episode.SeasonNumber}", $"S{episode.SeasonNumber:D2}E{episode.EpisodeNumber:D2}.jpg"))
-                                            ? $"/api/image/{series.id}/season/{episode.SeasonNumber}/episode/{episode.EpisodeNumber}/still"
-                                            : $"https://image.tmdb.org/t/p/w300{episode.StillPath}"))
-                                    : null,
+                                    ? (episode.StillPath.StartsWith("/")
+                                        ? $"https://image.tmdb.org/t/p/w300{episode.StillPath}"
+                                        : (episode.StillPath.StartsWith("http") ? episode.StillPath : $"/api/image/{series.id}/season/{episode.SeasonNumber}/episode/{episode.EpisodeNumber}/still"))
+                                    : (!string.IsNullOrEmpty(dbEpisode?.FilePath) ? $"/api/image/{series.id}/season/{episode.SeasonNumber}/episode/{episode.EpisodeNumber}/still" : null),
                                 filePath = dbEpisode?.FilePath,
-                                hasFile = !string.IsNullOrEmpty(dbEpisode?.FilePath) && System.IO.File.Exists(dbEpisode.FilePath),
+                                hasFile = !string.IsNullOrEmpty(dbEpisode?.FilePath),
                                 available = !string.IsNullOrEmpty(dbEpisode?.FilePath), // Episode is available if we have a file
                                 addedAt = dbEpisode?.AddedAt
                             };
@@ -263,14 +264,12 @@ public class SeriesController : ControllerBase
                     airDate = e.AirDate,
                     stillPath = e.StillPath,
                     stillUrl = !string.IsNullOrEmpty(e.StillPath) 
-                        ? ((!string.IsNullOrEmpty(e.FilePath) && System.IO.File.Exists(e.FilePath))
-                            ? $"/api/image/{series.id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still"
-                            : (System.IO.File.Exists(Path.Combine((series.filePath != null && Directory.Exists(series.filePath)) ? series.filePath : (series.filePath != null ? Path.GetDirectoryName(series.filePath) ?? "" : ""), $"Season {e.SeasonNumber}", $"S{e.SeasonNumber:D2}E{e.EpisodeNumber:D2}.jpg"))
-                                ? $"/api/image/{series.id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still"
-                                : $"https://image.tmdb.org/t/p/w300{e.StillPath}"))
-                        : null,
+                        ? (e.StillPath.StartsWith("/")
+                            ? $"https://image.tmdb.org/t/p/w300{e.StillPath}"
+                            : (e.StillPath.StartsWith("http") ? e.StillPath : $"/api/image/{series.id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still"))
+                        : (!string.IsNullOrEmpty(e.FilePath) ? $"/api/image/{series.id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still" : null),
                     filePath = e.FilePath,
-                    hasFile = !string.IsNullOrEmpty(e.FilePath) && System.IO.File.Exists(e.FilePath),
+                    hasFile = !string.IsNullOrEmpty(e.FilePath),
                     available = !string.IsNullOrEmpty(e.FilePath),
                     addedAt = e.AddedAt
                 }).Cast<object>().ToList();
@@ -351,6 +350,7 @@ public class SeriesController : ControllerBase
 
             // Get episodes for the season
             var episodes = await _context.Episodes
+                .AsNoTracking()
                 .Where(e => e.ContentId == id && e.SeasonNumber == seasonNumber)
                 .OrderBy(e => e.EpisodeNumber)
                 .Select(e => new
@@ -364,14 +364,12 @@ public class SeriesController : ControllerBase
                     airDate = e.AirDate,
                     stillPath = e.StillPath,
                     stillUrl = !string.IsNullOrEmpty(e.StillPath) 
-                        ? ((!string.IsNullOrEmpty(e.FilePath) && System.IO.File.Exists(e.FilePath))
-                            ? $"/api/image/{id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still"
-                            : (System.IO.File.Exists(Path.Combine((series.FilePath != null && Directory.Exists(series.FilePath)) ? series.FilePath : (series.FilePath != null ? Path.GetDirectoryName(series.FilePath) ?? "" : ""), $"Season {e.SeasonNumber}", $"S{e.SeasonNumber:D2}E{e.EpisodeNumber:D2}.jpg"))
-                                ? $"/api/image/{id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still"
-                                : $"https://image.tmdb.org/t/p/w300{e.StillPath}"))
-                        : null,
+                        ? (e.StillPath.StartsWith("/")
+                            ? $"https://image.tmdb.org/t/p/w300{e.StillPath}"
+                            : (e.StillPath.StartsWith("http") ? e.StillPath : $"/api/image/{id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still"))
+                        : (!string.IsNullOrEmpty(e.FilePath) ? $"/api/image/{id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still" : null),
                     filePath = e.FilePath,
-                    hasFile = !string.IsNullOrEmpty(e.FilePath) && System.IO.File.Exists(e.FilePath),
+                    hasFile = !string.IsNullOrEmpty(e.FilePath),
                     addedAt = e.AddedAt,
                     // TODO: Add watch progress if profileId is provided
                     watchProgress = (object?)null
@@ -409,6 +407,7 @@ public class SeriesController : ControllerBase
 
             // Verify series exists
             var series = await _context.Contents
+                .AsNoTracking()
                 .Where(c => c.Id == id && c.Type == ContentType.Series)
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -419,24 +418,23 @@ public class SeriesController : ControllerBase
 
             // Get episodes grouped by season
             var seasons = await _context.Episodes
+                .AsNoTracking()
                 .Where(e => e.ContentId == id)
                 .GroupBy(e => e.SeasonNumber)
                 .Select(g => new
                 {
                     seasonNumber = g.Key,
                     episodeCount = g.Count(),
-                    availableEpisodes = g.Count(e => !string.IsNullOrEmpty(e.FilePath) && System.IO.File.Exists(e.FilePath)),
+                    availableEpisodes = g.Count(e => !string.IsNullOrEmpty(e.FilePath)),
                     firstEpisode = g.OrderBy(e => e.EpisodeNumber).Select(e => new
                     {
                         title = e.Title,
                         airDate = e.AirDate,
                         stillUrl = !string.IsNullOrEmpty(e.StillPath) 
-                            ? ((!string.IsNullOrEmpty(e.FilePath) && System.IO.File.Exists(e.FilePath))
-                                ? $"/api/image/{id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still"
-                                : (System.IO.File.Exists(Path.Combine((series.FilePath != null && Directory.Exists(series.FilePath)) ? series.FilePath : (series.FilePath != null ? Path.GetDirectoryName(series.FilePath) ?? "" : ""), $"Season {e.SeasonNumber}", $"S{e.SeasonNumber:D2}E{e.EpisodeNumber:D2}.jpg"))
-                                    ? $"/api/image/{id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still"
-                                    : $"https://image.tmdb.org/t/p/w300{e.StillPath}"))
-                            : null
+                            ? (e.StillPath.StartsWith("/")
+                                ? $"https://image.tmdb.org/t/p/w300{e.StillPath}"
+                                : (e.StillPath.StartsWith("http") ? e.StillPath : $"/api/image/{id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still"))
+                            : (!string.IsNullOrEmpty(e.FilePath) ? $"/api/image/{id}/season/{e.SeasonNumber}/episode/{e.EpisodeNumber}/still" : null)
                     }).FirstOrDefault()
                 })
                 .OrderBy(s => s.seasonNumber)

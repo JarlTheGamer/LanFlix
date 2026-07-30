@@ -183,9 +183,91 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         }
     }
 
-    private string BuildFFmpegArguments(TranscodeRequest request)
+    public async Task TranscodeToFileAsync(
+        TranscodeRequest request,
+        string outputPath,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Starting offline transcoding for session {SessionId}: {Input} -> {Output}",
+            request.SessionId, request.InputPath, outputPath);
+
+        var arguments = BuildFFmpegArguments(request, outputPath);
+        
+        _logger.LogInformation("FFmpeg offline command: {FFmpegPath} {Arguments}", _ffmpegPath, arguments);
+
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = _ffmpegPath,
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            }
+        };
+
+        var errorOutput = new StringBuilder();
+        process.ErrorDataReceived += (s, e) => 
+        {
+            if (e.Data != null)
+            {
+                errorOutput.AppendLine(e.Data);
+                // Log progress periodically or on specific markers if needed
+                if (e.Data.Contains("frame="))
+                {
+                    _logger.LogDebug("FFmpeg Progress [{SessionId}]: {Data}", request.SessionId, e.Data);
+                }
+            }
+        };
+
+        process.Start();
+        process.BeginErrorReadLine();
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+
+            if (process.ExitCode != 0)
+            {
+                var error = errorOutput.ToString();
+                _logger.LogError("Offline transcoding failed with exit code {ExitCode}: {Error}",
+                    process.ExitCode, error);
+                throw new InvalidOperationException($"Offline transcoding failed: {error}");
+            }
+
+            _logger.LogInformation("Offline transcoding completed successfully for session {SessionId}", request.SessionId);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Offline transcoding cancelled for session {SessionId}", request.SessionId);
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+            }
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during offline transcoding for session {SessionId}", request.SessionId);
+            if (!process.HasExited)
+            {
+                process.Kill(true);
+            }
+            throw;
+        }
+    }
+
+    private string BuildFFmpegArguments(TranscodeRequest request, string? outputPath = null)
     {
         var args = new StringBuilder();
+        
+        // Add global overwriting flag for offline transcodes
+        if (!string.IsNullOrEmpty(outputPath))
+        {
+            args.Append("-y "); // Overwrite output files
+        }
 
         // Hardware acceleration setup (must be before input)
         if (request.HwAccelMethod != HwAccelMethod.None)
@@ -272,8 +354,17 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         
         args.Append($"-f {outputFormat} ");
 
-        // Output to stdout
-        args.Append("pipe:1");
+        // Output destination
+        if (string.IsNullOrEmpty(outputPath))
+        {
+            // Output to stdout for streaming
+            args.Append("pipe:1");
+        }
+        else
+        {
+            // Output to file for offline transcoding
+            args.Append($"\"{outputPath}\"");
+        }
 
         return args.ToString();
     }
@@ -453,8 +544,8 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             if (!request.TargetVideoBitrate.HasValue)
             {
                 // Use CQ mode for quality when no bitrate specified
-                var cqValue = _settings.TargetQuality ?? 20; // Default to high quality
-                args.Append($"-cq {Math.Max(cqValue - 3, 15)} "); // Higher quality for NVENC CQ mode
+                var cqValue = _settings.TargetQuality ?? 23; // Use standard high quality (23) as default
+                args.Append($"-cq {cqValue} "); // Use the setting directly to avoid over-inflating size
             }
             
             if (_settings.EnableBFrames)
@@ -483,12 +574,13 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
                 args.Append("-bf 3 ");
             }
         }
-        else if (_settings.TargetQuality.HasValue)
+        else
         {
             // Software encoding with CRF for highest quality
             if (codec.Contains("x264") || codec.Contains("x265"))
             {
-                args.Append($"-crf {_settings.TargetQuality.Value} ");
+                var crfValue = _settings.TargetQuality ?? 23; // Use standard high quality (23) as default
+                args.Append($"-crf {crfValue} ");
                 // Additional quality settings for software encoding
                 if (codec.Contains("x264"))
                 {

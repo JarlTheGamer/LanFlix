@@ -1,0 +1,260 @@
+# Physics-Based Character System (6DOF Joint) — Implementation Plan
+
+Replace Trunk2026's `CharacterVirtual` ghost-body character with a **real physics-based character** inspired by Trunk2016's [Motor6D](file:///F:/VintaBlox/Trunk2016/App/include/v8datamodel/JointInstance.h#288-289) / [Humanoid](file:///F:/VintaBlox/Trunk2016/App/include/humanoid/Humanoid.h#274-275) architecture.
+
+## Current vs Target Architecture
+
+### Current System (Trunk2026)
+
+```mermaid
+graph TD
+    A["CharacterController (Instance)"] -->|"owns handle"| B["JPH::CharacterVirtual (ghost)"]
+    A -->|"drives"| C["CharacterControllerComponent"]
+    D["PlayerCharacter"] -->|"reads position from"| A
+    D -->|"BoneAttachment"| E["Part Entities (Head, Torso, Arms, Legs)"]
+    E -->|"animation-driven only"| F["AnimatorSystem + HierarchySystem"]
+    B -.->|"NO real body, NO collisions with other players"| G["Jolt Physics World"]
+```
+
+> [!WARNING]
+> The current `CharacterVirtual` is a **ghost**: it queries contacts but has **no physics body** in the broadphase. Other characters cannot collide with it. Body parts are purely visual, positioned by animation bones.
+
+### Target System (Trunk2016-inspired)
+
+```mermaid
+graph TD
+    A["CharacterController (Instance)"] -->|"owns"| B["JPH::Character (real body)"]
+    B -->|"RootPart body"| C["Jolt Physics World"]
+    A -->|"applies forces"| B
+    D["Motor6DJoint (6DOF)"] -->|"connects"| E["RootPart ↔ Head"]
+    D2["Motor6DJoint"] -->|"connects"| F["RootPart ↔ UpperTorso"]
+    D3["Motor6DJoint"] -->|"connects"| G["RootPart ↔ LeftArm"]
+    D4["Motor6DJoint"] -->|"connects"| H["RootPart ↔ RightArm"]
+    D5["Motor6DJoint"] -->|"connects"| I["RootPart ↔ LeftLeg"]
+    D6["Motor6DJoint"] -->|"connects"| J["RootPart ↔ RightLeg"]
+    E & F & G & H & I & J -->|"per-part bodies"| C
+    K["Animator"] -->|"applyPose()"| D & D2 & D3 & D4 & D5 & D6
+```
+
+## Key Design Decisions
+
+| Decision | Trunk2016 Approach | Our Approach |
+|---|---|---|
+| Root body | Custom physics engine body via [Primitive](file:///F:/VintaBlox/Trunk2016/App/humanoid/Humanoid.cpp#2776-2784) | `JPH::Character` (real Jolt body — has mass, collides) |
+| Limb bodies | Full physics [Primitive](file:///F:/VintaBlox/Trunk2016/App/humanoid/Humanoid.cpp#2776-2784) per part | `JPH::Body` (kinematic, positioned by joints) |
+| Joint type | [Motor6DJoint](file:///F:/VintaBlox/Trunk2016/App/include/v8world/Motor6DJoint.h#9-59) using custom `D6Link` | [Motor6DJoint](file:///F:/VintaBlox/Trunk2016/App/include/v8world/Motor6DJoint.h#9-59) wrapper around `JPH::SixDOFConstraint` |
+| Movement forces | `Humanoid::computeForce()` via KernelJoint | `CharacterController::Update()` — applies linear velocity to `JPH::Character` |
+| Animation | `Motor6DJoint::applyPose()` sets offset+axisAngle | Same pattern: `Motor6DJoint::ApplyPose()` sets 6DOF target transforms |
+| Ground detection | Custom floor plane contact | `JPH::Character::GetGroundState()` |
+
+## Proposed Changes
+
+### PhysicsWorld — Real Character Body + 6DOF Constraints
+
+#### [MODIFY] [PhysicsWorld.h](file:///F:/Trunk2026/Source/Runtime/Physics/PhysicsWorld.h)
+
+- Add `#include <Jolt/Physics/Character/Character.h>` and `#include <Jolt/Physics/Constraints/SixDOFConstraint.h>`
+- Change `std::unordered_map<int, JPH::CharacterVirtual*> m_Characters` → `std::unordered_map<int, JPH::Character*> m_Characters`
+- Add new APIs:
+  - `uint32_t AddDynamicBody(...)` — creates a kinematic body for limbs
+  - `void AddSixDOFConstraint(uint32_t bodyA, uint32_t bodyB, ...)` — creates a 6DOF constraint between two bodies
+  - `void SetSixDOFTarget(constraintHandle, offset, rotation)` — drives joint target for animation
+
+#### [MODIFY] [PhysicsWorld.cpp](file:///F:/Trunk2026/Source/Runtime/Physics/PhysicsWorld.cpp)
+
+- **[AddCharacter()](file:///F:/Trunk2026/Source/Runtime/Physics/PhysicsWorld.cpp#234-282)**: Replace `JPH::CharacterVirtual` with `JPH::Character`:
+  - Creates a **real** `JPH::Body` with a box shape (matching RootPart dimensions)
+  - Uses `JPH::CharacterSettings` instead of `JPH::CharacterVirtualSettings`
+  - Body lives in the `CHARACTER` layer, collides with `NON_MOVING`, `MOVING`, and `CHARACTER` (enabling player-to-player collision)
+- **`UpdateCharacter()`**: Use `JPH::Character::SetLinearVelocity()` instead of `CharacterVirtual::ExtendedUpdate()` (simpler, as Jolt handles all contact resolution for real bodies)
+- **`AddDynamicBody()`**: New function — creates a kinematic body for each limb part (lightweight, animation-positioned)
+- **`AddSixDOFConstraint()`**: New function — creates `JPH::SixDOFConstraint` between RootPart body and each limb body, with configurable axis locks and motor targets
+- **`SetSixDOFTarget()`**: New function — sets motor target position/rotation on a `SixDOFConstraint` (called by animation system to pose joints)
+- **Collision layers**: Update `ObjectLayerPairFilterImpl::ShouldCollide()` to allow `CHARACTER ↔ CHARACTER` collisions
+
+---
+
+### Motor6DJoint — New Data Model Class
+
+#### [NEW] [Motor6DJoint.h](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/Motor6DJoint.h)
+
+New [Instance](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/Instance.h#16-102)-derived class representing a 6DOF joint between two Parts:
+
+```cpp
+class Motor6DJoint : public Instance {
+public:
+    Motor6DJoint(entt::registry& registry);
+
+    // -- Joint Definition --
+    void SetPart0(Instance* part);  // Parent body
+    void SetPart1(Instance* part);  // Child body
+    Instance* GetPart0() const;
+    Instance* GetPart1() const;
+
+    void SetC0(const glm::mat4& offset);  // Offset in Part0's space
+    void SetC1(const glm::mat4& offset);  // Offset in Part1's space
+    glm::mat4 GetC0() const;
+    glm::mat4 GetC1() const;
+
+    // -- Animation Interface --
+    void ApplyPose(const glm::vec3& offset, const glm::quat& rotation, float weight);
+    
+    // -- Physics Binding --
+    void InitPhysics(PhysicsWorld* physics);
+    void ShutdownPhysics();
+    void Update(float dt);  // Drives constraint motor targets from current pose
+
+    // -- Pose State --
+    glm::vec3 GetCurrentOffset() const;
+    glm::quat GetCurrentRotation() const;
+
+    // -- MaxVelocity (legacy compat) --
+    void SetMaxVelocity(float vel);
+    float GetMaxVelocity() const;
+};
+```
+
+#### [NEW] [Motor6DJoint.cpp](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/Motor6DJoint.cpp)
+
+Implementation:
+- [InitPhysics()](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/CharacterController.cpp#213-222): Creates `SixDOFConstraint` via `PhysicsWorld::AddSixDOFConstraint()` using body IDs from Part0 and Part1
+- `ApplyPose()`: Stores target offset+rotation with weight blending, similar to Trunk2016's `Motor6DJoint::applyPose()`
+- [Update()](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/CharacterController.cpp#241-334): Interpolates current pose towards target, calls `PhysicsWorld::SetSixDOFTarget()` to drive the constraint motors
+- Pose freshness tracking (32-frame timeout, fade-back) matching Trunk2016's `poseFreshness` / `poseDuration` pattern
+
+---
+
+### Motor6DJointComponent — ECS Component
+
+#### [NEW] [Motor6DJointComponent.h](file:///F:/Trunk2026/Source/Runtime/Core/Components/Motor6DJointComponent.h)
+
+```cpp
+struct Motor6DJointComponent {
+    entt::entity Part0 = entt::null;
+    entt::entity Part1 = entt::null;
+    glm::mat4 C0 = glm::mat4(1.0f);
+    glm::mat4 C1 = glm::mat4(1.0f);
+
+    // Animation pose state
+    glm::vec3 CurrentOffset = glm::vec3(0);
+    glm::quat CurrentRotation = glm::quat(1, 0, 0, 0);
+    glm::vec3 TargetOffset = glm::vec3(0);
+    glm::quat TargetRotation = glm::quat(1, 0, 0, 0);
+    float PoseWeight = 1.0f;
+    float PoseMaskWeight = 1.0f;
+    int PoseFreshness = 0;
+
+    // Physics handle
+    int ConstraintHandle = -1;
+    float MaxVelocity = 0.1f;
+};
+```
+
+---
+
+### CharacterController — Use Real Physics Body
+
+#### [MODIFY] [CharacterController.h](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/CharacterController.h)
+
+- Add:
+  - `std::vector<Motor6DJoint*> m_Joints` — list of joints connecting character parts
+  - `void BuildJoints(PhysicsWorld* physics)` — creates Motor6DJoint for each Part in the character Model
+  - `void UpdateJoints(float dt)` — ticks all joints (drives motor targets from animation)
+  - `std::vector<uint32_t> m_LimbBodyIDs` — Jolt body IDs for limb parts
+- No change to the public API (SetWalkSpeed, Jump, etc. remain the same)
+
+#### [MODIFY] [CharacterController.cpp](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/CharacterController.cpp)
+
+- **[InitPhysics()](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/CharacterController.cpp#213-222)**: After calling `PhysicsWorld::AddCharacter()`, iterate the character Model's children (Parts), and for each:
+  - Call `PhysicsWorld::AddDynamicBody()` to create a kinematic body
+  - Create a [Motor6DJoint](file:///F:/VintaBlox/Trunk2016/App/include/v8world/Motor6DJoint.h#9-59) connecting RootPart → each limb Part
+  - Call `Motor6DJoint::InitPhysics()` to create the SixDOFConstraint
+- **[Update()](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/CharacterController.cpp#241-334)**: After the existing velocity/state logic:
+  - Call `UpdateJoints()` to tick all Motor6DJoint instances
+- **[ShutdownPhysics()](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/CharacterController.cpp#223-230)**: Clean up limb bodies and joints
+
+---
+
+### PlayerCharacter — Wire Up 6DOF Assembly
+
+#### [MODIFY] [PlayerCharacter.h](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/Character/PlayerCharacter.h)
+
+- No structural changes needed. The existing `m_Controller` already owns the physics logic. The Motor6DJoint creation happens inside `CharacterController::InitPhysics()`.
+
+#### [MODIFY] [PlayerCharacter.cpp](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/Character/PlayerCharacter.cpp)
+
+- **[Spawn()](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/Character/PlayerCharacter.cpp#58-177)**: After calling `m_Controller->InitPhysics()`, the controller now automatically creates joints. No major changes needed.
+- **[Update()](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/CharacterController.cpp#241-334)**: The animator system drives bone transforms → `BoneAttachmentComponent` provides target transforms → `Motor6DJoint::ApplyPose()` drives the physics constraints. We add a step that reads animated bone transforms and pushes them into the Motor6D joints via `ApplyPose()`.
+
+---
+
+### Serialization — NOVM Support
+
+#### [MODIFY] [Serializer.cpp](file:///F:/Trunk2026/Source/Runtime/Core/Serialization/Serializer.cpp)
+
+- Add [Motor6DJoint](file:///F:/VintaBlox/Trunk2016/App/include/v8world/Motor6DJoint.h#9-59) to the instance factory so it can be serialized/deserialized from `.novm` files
+- Register `Motor6DJointComponent` serialization: `Part0`, `Part1`, `C0`, `C1`, `MaxVelocity`
+
+---
+
+### InstanceFactory — Registration
+
+#### [MODIFY] [InstanceFactory.cpp](file:///F:/Trunk2026/Source/Runtime/Core/DataModel/InstanceFactory.cpp)
+
+- Register `"Motor6DJoint"` class name → [Motor6DJoint](file:///F:/VintaBlox/Trunk2016/App/include/v8world/Motor6DJoint.h#9-59) constructor
+
+---
+
+## System Flow — How It All Works Together
+
+```mermaid
+sequenceDiagram
+    participant PC as PlayerCharacter
+    participant CC as CharacterController
+    participant PW as PhysicsWorld
+    participant M6D as Motor6DJoint
+    participant Anim as AnimatorSystem
+
+    PC->>CC: InitPhysics()
+    CC->>PW: AddCharacter() [creates JPH::Character for RootPart]
+    CC->>PW: AddDynamicBody() × N [creates kinematic body per limb]
+    CC->>M6D: new Motor6DJoint(RootPart, LimbPart)
+    M6D->>PW: AddSixDOFConstraint(rootBodyID, limbBodyID)
+    
+    Note over PC,PW: Every frame:
+    
+    PC->>CC: Move(direction) + Update(dt)
+    CC->>PW: SetLinearVelocity on Character body
+    PW->>PW: Step() — real physics collision + constraint solving
+    CC->>CC: Read position from JPH::Character
+    
+    Anim->>Anim: Evaluate bone transforms
+    Anim->>M6D: ApplyPose(offset, rotation, weight)
+    M6D->>PW: SetSixDOFTarget(constraint, targetTransform)
+    PW->>PW: Constraint motors drive limb bodies to animated pose
+```
+
+## Verification Plan
+
+### Build Verification
+
+Command to validate the project builds:
+```
+cmake --build build --config Release --target NovinteraService Player Editor
+```
+Run from `F:\Trunk2026`. All targets must compile without errors.
+
+### Manual Verification
+
+> [!IMPORTANT]
+> Since there are no automated tests for the character system, verification is manual. The user should test the following after building:
+
+1. **Launch the Player executable** and ensure the character spawns at the spawn point
+2. **Walk with WASD** — character should move smoothly, with the root body sliding along the ground
+3. **Jump with Space** — character should jump and fall back with gravity
+4. **Check collisions** — walk into a wall; the character should stop (not pass through). If a second player is present, they should collide with each other
+5. **Check limb attachment** — arms, legs, head should stay attached and follow the animation. They should NOT detach or fly away
+6. **Check animation** — idle and walk animations should play correctly, with limbs moving naturally
+7. **Check ragdoll** (if enabled) — when the character dies, joints should release and the body should ragdoll naturally
+
+I will also add a **basic smoke test** that verifies the [Motor6DJoint](file:///F:/VintaBlox/Trunk2016/App/include/v8world/Motor6DJoint.h#9-59) class can be instantiated and its properties set/get correctly. This will be a simple C++ unit in a scratch file, not a full test framework integration.

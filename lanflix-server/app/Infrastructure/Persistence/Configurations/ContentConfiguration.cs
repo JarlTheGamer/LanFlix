@@ -24,6 +24,12 @@ public class ContentConfiguration : IEntityTypeConfiguration<Content>
 
         builder.HasIndex(c => new { c.Type, c.AddedAt });
 
+        builder.HasIndex(c => new { c.Type, c.ReleaseDate });
+
+        builder.HasIndex(c => new { c.Type, c.Rating });
+
+        builder.HasIndex(c => new { c.Type, c.Title });
+
         builder.HasIndex(c => c.Title);
 
         builder.HasIndex(c => c.IsDeleted);

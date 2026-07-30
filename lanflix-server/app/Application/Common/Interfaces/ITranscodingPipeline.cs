@@ -16,4 +16,15 @@ public interface ITranscodingPipeline
     IAsyncEnumerable<ReadOnlyMemory<byte>> StreamAsync(
         TranscodeRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Transcodes media to a physical file
+    /// </summary>
+    /// <param name="request">Transcoding request parameters</param>
+    /// <param name="outputPath">Path to the output file</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task TranscodeToFileAsync(
+        TranscodeRequest request,
+        string outputPath,
+        CancellationToken cancellationToken = default);
 }

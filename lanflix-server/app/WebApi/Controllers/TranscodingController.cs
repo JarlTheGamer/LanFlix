@@ -2,6 +2,7 @@ using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
 using Lanflix.Application.Features.Streaming.Services;
 using Lanflix.Domain.Entities;
+using Lanflix.Domain.Enums;
 using Lanflix.Domain.ValueObjects;
 using Lanflix.Infrastructure.Services.FFmpeg;
 using Lanflix.Infrastructure.Services.Settings;
@@ -21,7 +22,9 @@ public class TranscodingController : ControllerBase
     private readonly TranscodingSettingsProvider _settingsProvider;
     private readonly IApplicationDbContext _context;
     private readonly Lanflix.Infrastructure.Services.Audio.AudioTrackSelector _audioTrackSelector;
+    private readonly ITranscodingPipeline _transcodingPipeline;
     private readonly ILogger<TranscodingController> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public TranscodingController(
         EnhancedStreamingService streamingService,
@@ -31,7 +34,9 @@ public class TranscodingController : ControllerBase
         TranscodingSettingsProvider settingsProvider,
         IApplicationDbContext context,
         Lanflix.Infrastructure.Services.Audio.AudioTrackSelector audioTrackSelector,
-        ILogger<TranscodingController> logger)
+        ITranscodingPipeline transcodingPipeline,
+        ILogger<TranscodingController> logger,
+        IServiceScopeFactory scopeFactory)
     {
         _streamingService = streamingService;
         _mediaAnalyzer = mediaAnalyzer;
@@ -40,7 +45,9 @@ public class TranscodingController : ControllerBase
         _settingsProvider = settingsProvider;
         _context = context;
         _audioTrackSelector = audioTrackSelector;
+        _transcodingPipeline = transcodingPipeline;
         _logger = logger;
+        _scopeFactory = scopeFactory;
     }
 
     /// <summary>
@@ -769,6 +776,152 @@ public class TranscodingController : ControllerBase
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Starts an offline transcode of a file with maximum quality settings
+    /// </summary>
+    [HttpPost("/api/transcode/offline")]
+    public async Task<IActionResult> PostOfflineTranscode([FromBody] OfflineTranscodeRequest request)
+    {
+        try
+        {
+            _logger.LogInformation("Offline transcode request received for {Type} ID: {ContentId}", request.Type, request.ContentId);
+
+            string? filePath = null;
+            string? title = "Media";
+
+            if (request.Type.ToLowerInvariant() == "movie")
+            {
+                var content = await _context.Contents.FirstOrDefaultAsync(c => c.Id == request.ContentId);
+                if (content == null) return NotFound("Movie not found");
+                filePath = content.FilePath;
+                title = content.Title;
+            }
+            else if (request.Type.ToLowerInvariant() == "episode")
+            {
+                var episode = await _context.Episodes.FirstOrDefaultAsync(e => e.Id == request.ContentId);
+                if (episode == null) return NotFound("Episode not found");
+                filePath = episode.FilePath;
+                title = $"S{episode.SeasonNumber}E{episode.EpisodeNumber}";
+            }
+            else
+            {
+                return BadRequest("Invalid type. Supported types: movie, episode");
+            }
+
+            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+            {
+                return BadRequest("Media file not found or path is empty");
+            }
+
+            // Backup original file
+            var originalPath = filePath + ".original";
+            if (!System.IO.File.Exists(originalPath))
+            {
+                _logger.LogInformation("Backing up original file to: {BackupPath}", originalPath);
+                System.IO.File.Move(filePath, originalPath);
+            }
+            else
+            {
+                _logger.LogInformation("Backup file already exists: {BackupPath}", originalPath);
+                // If backup exists, we assume filePath is already the destination or was previously interrupted
+            }
+
+            // Detect hardware acceleration capabilities
+            var hwAccel = await _hwAccelDetector.DetectAsync();
+            var settings = await _settingsProvider.GetSettingsAsync(1); // Use default profile for offline
+
+            // Build transcode request - prefer copying streams if compatible with MP4
+            var sourceMedia = await _mediaAnalyzer.AnalyzeAsync(originalPath);
+            var videoCodec = "libx264";
+            var audioCodec = "aac";
+            
+            // Check if video is already H.264 or H.265 (most common MP4 compatible codecs)
+            if (sourceMedia.Video.Codec == "h264" || sourceMedia.Video.Codec == "hevc")
+            {
+                videoCodec = "copy";
+            }
+            
+            // Check if audio is already AAC, MP3, AC3 or E-AC3 (standard MP4 compatible)
+            var primaryAudio = sourceMedia.Audio.FirstOrDefault();
+            if (primaryAudio != null && (primaryAudio.Codec == "aac" || primaryAudio.Codec == "mp3" || 
+                primaryAudio.Codec == "ac3" || primaryAudio.Codec == "eac3"))
+            {
+                audioCodec = "copy";
+            }
+
+            // Determine final output path (always .mp4)
+            var directory = Path.GetDirectoryName(filePath) ?? "";
+            var fileName = Path.GetFileNameWithoutExtension(filePath);
+            var outputFilePath = Path.Combine(directory, fileName + ".mp4");
+
+            // Build transcode request
+            var transcodeRequest = new TranscodeRequest
+            {
+                InputPath = originalPath,
+                Mode = videoCodec == "copy" && audioCodec == "copy" ? StreamingMode.DirectPlay : StreamingMode.FullTranscode,
+                SourceMedia = sourceMedia,
+                TargetVideoCodec = videoCodec,
+                TargetAudioCodec = audioCodec,
+                TargetVideoBitrate = null, // Use CQ/CRF for transcode
+                TargetAudioBitrate = audioCodec == "copy" ? null : 320000, 
+                TargetWidth = null, // Keep original
+                TargetHeight = null, // Keep original
+                HwAccelMethod = hwAccel.PreferredMethod,
+                OutputFormat = "mp4",
+                SessionId = $"offline_{Guid.NewGuid().ToString().Substring(0, 8)}",
+                TotalDuration = 0
+            };
+
+            // Start transcoding in background
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    _logger.LogInformation("Starting background transcoding for {Title} to {Path}", title, outputFilePath);
+                    await _transcodingPipeline.TranscodeToFileAsync(transcodeRequest, outputFilePath, CancellationToken.None);
+                    _logger.LogInformation("Background transcoding completed for {Title}", title);
+
+                    // Update database with the new .mp4 path
+                    using (var scope = _scopeFactory.CreateScope())
+                    {
+                        var dbContext = scope.ServiceProvider.GetRequiredService<Lanflix.Application.Common.Interfaces.IApplicationDbContext>();
+                        if (request.Type.ToLowerInvariant() == "movie")
+                        {
+                            var content = await dbContext.Contents.FirstOrDefaultAsync(c => c.Id == request.ContentId);
+                            if (content != null)
+                            {
+                                content.FilePath = outputFilePath;
+                                await dbContext.SaveChangesAsync(CancellationToken.None);
+                                _logger.LogInformation("Updated database for movie {Id} with new path: {Path}", request.ContentId, outputFilePath);
+                            }
+                        }
+                        else if (request.Type.ToLowerInvariant() == "episode")
+                        {
+                            var episode = await dbContext.Episodes.FirstOrDefaultAsync(e => e.Id == request.ContentId);
+                            if (episode != null)
+                            {
+                                episode.FilePath = outputFilePath;
+                                await dbContext.SaveChangesAsync(CancellationToken.None);
+                                _logger.LogInformation("Updated database for episode {Id} with new path: {Path}", request.ContentId, outputFilePath);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Background transcoding failed for {Title}", title);
+                }
+            });
+
+            return Ok(new { success = true, message = $"Transcoding started for {title}" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start offline transcode for {Type} ID: {ContentId}", request.Type, request.ContentId);
+            return StatusCode(500, "Internal server error");
+        }
     }
 }
 
