@@ -1,10 +1,10 @@
 {
-  "version": "1.3.4",
-  "currentVersion": "1.3.4",
-  "releaseDate": "2026-07-30T23:38:47.330221Z",
-  "downloadUrl": "https://github.com/JarlTheGamer/LanFlix/releases/download/v1.3.4/lanflix-server-v1.3.4.zip",
-  "fileSize": 50993416,
-  "checksum": "01a28cf16b528db12dd23ab6f8f32a63e9b375e17dd426828fa4302f416b7300",
-  "releaseNotes": "Lanflix v1.3.4 release package",
+  "version": "1.3.5",
+  "currentVersion": "1.3.5",
+  "releaseDate": "2026-07-30T23:40:22.081615Z",
+  "downloadUrl": "https://github.com/JarlTheGamer/LanFlix/releases/download/v1.3.5/lanflix-server-v1.3.5.zip",
+  "fileSize": 50993397,
+  "checksum": "df0add88cf2a060fc1be1ee8cfc2e89842daa7cf801f28c3db7bb030bab23944",
+  "releaseNotes": "Lanflix v1.3.5 release package",
   "isUpdateAvailable": true
 }

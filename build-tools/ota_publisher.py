@@ -360,11 +360,14 @@ def git_push_release(version: str, notes: str, zip_path: Path = None):
             if gh_res.returncode == 0:
                 print(f"✅ Successfully uploaded {zip_path.name} to GitHub Release {tag_name}!")
             else:
+                print(f"⚠️ GitHub CLI upload failed (Exit Code {gh_res.returncode}).")
+                print("👉 TIP: Run 'gh auth login' in your terminal to authorize GitHub CLI for automatic release uploads!")
                 token = os.environ.get("GITHUB_TOKEN", "")
                 if token:
                     github_upload_release_asset(version, zip_path, notes, token)
         except Exception as e:
             print(f"⚠️ GitHub release asset upload failed: {e}")
+            print("👉 TIP: Run 'gh auth login' in your terminal to authorize GitHub CLI for automatic release uploads!")
 
 def main():
     if hasattr(sys.stdout, 'reconfigure'):
