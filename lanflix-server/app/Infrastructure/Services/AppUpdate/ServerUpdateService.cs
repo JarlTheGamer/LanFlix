@@ -255,5 +255,11 @@ public class ServerUpdateService : IServerUpdateService
                 File.Copy(sourceFilePath, targetFilePath, true);
             }
         }
+
+        // Clean up any leftover .old files from this or previous updates
+        foreach (var oldFile in Directory.GetFiles(targetDir, "*.old", SearchOption.AllDirectories))
+        {
+            try { File.Delete(oldFile); } catch { /* ignore locked files */ }
+        }
     }
 }

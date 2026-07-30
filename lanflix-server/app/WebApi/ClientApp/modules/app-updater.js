@@ -271,6 +271,78 @@ export class AppUpdater {
         }
     }
 
+    /**
+     * Unified entry point called by settings-main.js for both server and Android updates.
+     * isServerUpdate=true  → triggers the OTA progress modal + /api/server-update/apply
+     * isServerUpdate=false → tells the Android WebAppInterface to start APK install
+     */
+    showUpdateNotification(updateInfo) {
+        if (updateInfo.isServerUpdate) {
+            this.showUpdateModal(updateInfo);
+        } else {
+            // Android app update – delegate to native bridge or show install modal
+            this._showAppUpdateModal(updateInfo);
+        }
+    }
+
+    showNoUpdateMessage() {
+        this.showToast(`✅ Lanflix is up to date! (v${this.currentVersion})`);
+    }
+
+    showErrorMessage(msg) {
+        this.showToast(msg, true);
+    }
+
+    _showAppUpdateModal(updateInfo) {
+        this.hideUpdateModal();
+
+        let modal = document.getElementById('ota-update-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ota-update-modal';
+            modal.className = 'modal-overlay active';
+            document.body.appendChild(modal);
+        } else {
+            modal.classList.add('active');
+        }
+
+        modal.innerHTML = `
+            <div class="modal" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h2 class="modal-title">App Update Available</h2>
+                    <button class="modal-close" id="close-ota-modal" aria-label="Close">
+                        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <span style="font-weight: 600; color: #fff; font-size: 1.1rem;">Version ${updateInfo.version}</span>
+                        <span style="background: rgba(229, 9, 20, 0.2); color: #e50914; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.8rem;">New Release</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.05); padding: 14px; border-radius: 10px; max-height: 160px; overflow-y: auto; margin-bottom: 16px;">
+                        <p style="font-size: 0.85rem; color: #bbb; margin-bottom: 6px; font-weight: 600;">What's New:</p>
+                        <div style="font-size: 0.85rem; color: #ddd; white-space: pre-line;">${updateInfo.releaseNotes || 'Bug fixes and improvements.'}</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="modal-btn modal-btn-secondary" id="cancel-ota-btn">Later</button>
+                    <button class="modal-btn modal-btn-primary" id="apply-ota-btn" style="background: #e50914; border-color: #e50914;">Install Update</button>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('close-ota-modal').onclick = () => this.hideUpdateModal();
+        document.getElementById('cancel-ota-btn').onclick = () => this.hideUpdateModal();
+        document.getElementById('apply-ota-btn').onclick = () => {
+            if (window.Android && window.Android.downloadApk) {
+                window.Android.downloadApk(updateInfo.downloadUrl);
+            } else {
+                window.open(updateInfo.downloadUrl, '_blank');
+            }
+            this.hideUpdateModal();
+        };
+    }
+
     showToast(message, isError = false) {
         const toast = document.createElement('div');
         toast.style.cssText = `
