@@ -266,8 +266,73 @@ def build_server(version_name: str, notes: str = "Server update release", host_u
 
     return zip_target_path
 
-def git_push_release(version: str, notes: str):
-    """Performs Git add, commit, tag, and push to origin remote repository."""
+def github_upload_release_asset(version: str, zip_path: Path, notes: str, token: str):
+    """Creates a GitHub Release and uploads the ZIP as a release asset using the GitHub API."""
+    import urllib.request
+    import urllib.error
+
+    tag_name = f"v{version}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Lanflix-OTA-Publisher",
+    }
+
+    # 1. Delete existing release for this tag if present
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{tag_name}",
+            headers=headers,
+        )
+        with urllib.request.urlopen(req) as res:
+            existing = json.loads(res.read())
+            release_id = existing["id"]
+            del_req = urllib.request.Request(
+                f"https://api.github.com/repos/{GITHUB_REPO}/releases/{release_id}",
+                method="DELETE",
+                headers=headers,
+            )
+            urllib.request.urlopen(del_req)
+            print(f"🗑️  Deleted existing release {tag_name}")
+    except urllib.error.HTTPError:
+        pass  # No existing release
+
+    # 2. Create new release
+    body = json.dumps({
+        "tag_name": tag_name,
+        "name": f"Lanflix {tag_name}",
+        "body": notes,
+        "draft": False,
+        "prerelease": False,
+    }).encode()
+    req = urllib.request.Request(
+        f"https://api.github.com/repos/{GITHUB_REPO}/releases",
+        data=body,
+        method="POST",
+        headers={**headers, "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req) as res:
+        release = json.loads(res.read())
+        upload_url = release["upload_url"].split("{")[0]
+        print(f"✅ Created GitHub Release: {release['html_url']}")
+
+    # 3. Upload ZIP asset
+    print(f"📤 Uploading {zip_path.name} to GitHub Release...")
+    upload_url = f"{upload_url}?name={zip_path.name}"
+    with open(zip_path, "rb") as f:
+        data = f.read()
+    req = urllib.request.Request(
+        upload_url,
+        data=data,
+        method="POST",
+        headers={**headers, "Content-Type": "application/zip", "Content-Length": str(len(data))},
+    )
+    with urllib.request.urlopen(req) as res:
+        asset = json.loads(res.read())
+        print(f"✅ Uploaded asset: {asset['browser_download_url']}")
+
+def git_push_release(version: str, notes: str, zip_path: Path = None):
+    """Performs Git add, commit, tag, push, and optionally uploads ZIP to GitHub Releases."""
     print("=" * 60)
     print("🐙 Executing Git Release Push...")
     print("=" * 60)
@@ -284,6 +349,20 @@ def git_push_release(version: str, notes: str):
         print(f"✅ Git push successful: Pushed commits & tag {tag_name} to origin!")
     else:
         print(f"⚠️ Git push completed with status code {res.returncode}")
+
+    # Upload ZIP to GitHub Releases via gh CLI or token
+    if zip_path and zip_path.exists():
+        try:
+            print(f"📦 Uploading release asset {zip_path.name} to GitHub Releases...")
+            gh_res = subprocess.run(["gh", "release", "create", tag_name, str(zip_path), "--notes", notes, "--clobber"], cwd=PROJECT_ROOT)
+            if gh_res.returncode == 0:
+                print(f"✅ Successfully uploaded {zip_path.name} to GitHub Release {tag_name}!")
+            else:
+                token = os.environ.get("GITHUB_TOKEN", "")
+                if token:
+                    github_upload_release_asset(version, zip_path, notes, token)
+        except Exception as e:
+            print(f"⚠️ GitHub release asset upload failed: {e}")
 
 def main():
     if hasattr(sys.stdout, 'reconfigure'):
@@ -314,14 +393,15 @@ def main():
 
     print(f"🌐 Target Host: {args.host}\n")
 
+    zip_path = None
     if args.apk or args.all:
         build_android_apk(version_name=version_name, version_code=version_code, notes=args.notes, host_url=args.host)
 
     if args.server or args.all:
-        build_server(version_name=version_name, notes=args.notes, host_url=args.host)
+        zip_path = build_server(version_name=version_name, notes=args.notes, host_url=args.host)
 
     if args.git:
-        git_push_release(version=version_name, notes=args.notes)
+        git_push_release(version=version_name, notes=args.notes, zip_path=zip_path)
 
     print("\n🎉 OTA Publish Pipeline Completed Successfully!")
 
