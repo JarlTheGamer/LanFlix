@@ -937,3 +937,53 @@ fo Box */
   margin: 0;
   color: rgba(255, 255, 255, 0.8);
 }
+
+/* Mobile Responsive Adjustments */
+@media (max-width: 768px) {
+  .settings-main {
+    padding-top: 64px;
+  }
+  .settings-container {
+    padding: 16px !important;
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+    min-height: auto !important;
+  }
+  .settings-sidebar {
+    position: static !important;
+    top: 0 !important;
+  }
+  .settings-nav {
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    padding: 6px !important;
+    border-radius: 12px !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  .settings-nav::-webkit-scrollbar {
+    display: none !important;
+  }
+  .settings-nav-item {
+    padding: 10px 14px !important;
+    font-size: 0.85rem !important;
+    white-space: nowrap !important;
+    border-radius: 8px !important;
+  }
+  .settings-header-top {
+    gap: 12px !important;
+    margin-bottom: 16px !important;
+  }
+  .back-btn {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 8px !important;
+  }
+  .back-btn svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  .settings-title {
+    font-size: 1.5rem !important;
+  }
+}

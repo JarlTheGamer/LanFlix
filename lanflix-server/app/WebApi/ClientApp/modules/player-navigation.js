@@ -38,14 +38,13 @@ export class PlayerNavigation {
   detectAndroidTV() {
     const userAgent = navigator.userAgent.toLowerCase();
     return (
-      userAgent.includes('tv') ||
       userAgent.includes('googletv') ||
       userAgent.includes('androidtv') ||
       userAgent.includes('smarttv') ||
       userAgent.includes('web0s') || // LG webOS
       userAgent.includes('tizen') || // Samsung Tizen
       userAgent.includes('netcast') || // LG NetCast
-      (userAgent.includes('android') && userAgent.includes('wv'))
+      userAgent.includes('leanback')
     );
   }
 

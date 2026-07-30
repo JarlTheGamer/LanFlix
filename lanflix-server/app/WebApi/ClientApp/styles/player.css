@@ -288,9 +288,12 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 80px;
-  height: 80px;
-  background: rgba(0, 0, 0, 0.7);
+  width: 56px;
+  height: 56px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -308,15 +311,15 @@ body {
 }
 
 .center-play-button:hover {
-  background: rgba(0, 0, 0, 0.85);
-  transform: translate(-50%, -50%) scale(1.1);
+  background: rgba(229, 9, 20, 0.85);
+  transform: translate(-50%, -50%) scale(1.08);
 }
 
 .center-play-button svg {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   fill: white;
-  margin-left: 4px;
+  margin-left: 3px;
 }
 
 /* Loading spinner for transcoding seeks - Modern UI */
@@ -429,13 +432,14 @@ body {
   }
 
   .center-play-button {
-    width: 60px;
-    height: 60px;
+    width: 48px;
+    height: 48px;
   }
 
   .center-play-button svg {
-    width: 30px;
-    height: 30px;
+    width: 24px;
+    height: 24px;
+    margin-left: 2px;
   }
 
   .spinner-ring {
@@ -509,13 +513,13 @@ TV Navigation Focus Styles */
 }
 
 .tv-mode .center-play-button {
-  width: 100px;
-  height: 100px;
+  width: 72px;
+  height: 72px;
 }
 
 .tv-mode .center-play-button svg {
-  width: 50px;
-  height: 50px;
+  width: 36px;
+  height: 36px;
 }
 
 /* Subtitle Menu */

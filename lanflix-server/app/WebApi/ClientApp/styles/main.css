@@ -192,7 +192,7 @@ main {
 .settings-btn:hover,
 .settings-btn:focus-visible,
 .settings-btn.focused {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.15);
   transform: translateY(-1px);
 }
 
@@ -202,7 +202,7 @@ main {
 .settings-btn:hover svg,
 .settings-btn:focus-visible svg,
 .settings-btn.focused svg {
-  fill: rgba(0, 0, 0, 0.8);
+  fill: #ffffff;
 }
 
 .notification-badge {
@@ -378,9 +378,9 @@ main {
 
 .profile:hover,
 .profile.focused {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(255, 255, 255, 0.95);
-  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
 }
 
 .profile:active {
@@ -395,8 +395,8 @@ main {
 
 .profile:hover .profile-avatar::before,
 .profile.focused .profile-avatar::before {
-  background: rgba(0, 0, 0, 0.8);
-  box-shadow: 0 16px 0 -6px rgba(0, 0, 0, 0.8);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 16px 0 -6px rgba(255, 255, 255, 0.9);
 }
 
 .profile-arrow {
@@ -1588,6 +1588,53 @@ main {
 }
 
 @media (max-width: 768px) {
+  .hero-stage {
+    padding: 0 16px !important;
+  }
+  .content-shell {
+    padding: 0 16px 40px !important;
+  }
+  .spotlight {
+    padding: 20px 16px 24px !important;
+    margin-top: 24px !important;
+    border-radius: 20px !important;
+  }
+  .top-nav {
+    padding: 8px 12px !important;
+    min-height: 56px !important;
+  }
+  .brand-name {
+    display: none !important;
+  }
+  .left-section {
+    gap: 4px !important;
+  }
+  .menu {
+    gap: 8px !important;
+    padding: 0 2px !important;
+  }
+  .menu-item {
+    font-size: 0.8rem !important;
+    padding: 4px 6px !important;
+  }
+  .profile {
+    padding: 2px 4px !important;
+    min-height: 32px !important;
+  }
+  .profile-avatar {
+    width: 26px !important;
+    height: 26px !important;
+  }
+  .hero-title {
+    font-size: 1.75rem !important;
+  }
+  .hero-content {
+    gap: 12px !important;
+  }
+  .cta {
+    padding: 10px 18px !important;
+    font-size: 0.85rem !important;
+  }
   .profile-selection-container {
     padding: 0 24px;
     gap: 40px;

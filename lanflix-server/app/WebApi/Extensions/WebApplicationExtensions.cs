@@ -29,8 +29,20 @@ public static class WebApplicationExtensions
 
     public static WebApplication UseLanflixStaticFiles(this WebApplication app, IConfiguration configuration)
     {
-        // Serve static files from wwwroot (frontend build output)
-        app.UseStaticFiles();
+        // Serve static files from wwwroot (frontend build output) with no-cache headers for HTML/JS/CSS to ensure instant UI updates
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            OnPrepareResponse = ctx =>
+            {
+                var path = ctx.File.Name.ToLowerInvariant();
+                if (path.EndsWith(".html") || path.EndsWith(".js") || path.EndsWith(".css") || path.EndsWith(".json"))
+                {
+                    ctx.Context.Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+                    ctx.Context.Response.Headers["Pragma"] = "no-cache";
+                    ctx.Context.Response.Headers["Expires"] = "0";
+                }
+            }
+        });
 
         // Serve media files directly from media folders
         var moviesPath = configuration["Lanflix:MediaPaths:Movies"];

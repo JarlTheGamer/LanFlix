@@ -48,20 +48,18 @@ export class Navigation {
     const userAgent = navigator.userAgent.toLowerCase();
 
     // Fire TV specific detection
-    const isFireTV = userAgent.includes('aftm') || userAgent.includes('aftb') || userAgent.includes('afts') || userAgent.includes('aftkmst12');
+    const isFireTV = userAgent.includes('aftm') || userAgent.includes('aftb') || userAgent.includes('afts') || userAgent.includes('aftkmst12') || userAgent.includes('firetv');
 
-    // General TV detection
+    // Strict TV detection - DO NOT use loose 'tv' because it matches 'native' (naTVe)!
     const isTV = (
       isFireTV ||
-      userAgent.includes('tv') ||
       userAgent.includes('googletv') ||
       userAgent.includes('androidtv') ||
       userAgent.includes('smarttv') ||
       userAgent.includes('web0s') || // LG webOS
       userAgent.includes('tizen') || // Samsung Tizen
       userAgent.includes('netcast') || // LG NetCast
-      // Also detect Android WebView (for Android TV app)
-      (userAgent.includes('android') && userAgent.includes('wv'))
+      userAgent.includes('leanback')
     );
 
     console.log('TV Detection:', { userAgent, isTV, isFireTV });

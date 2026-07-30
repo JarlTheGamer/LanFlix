@@ -2,6 +2,8 @@ package com.lanflix.webview
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
@@ -11,6 +13,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.webkit.*
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -28,6 +31,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var updateManager: UpdateManager
 
     private var currentServerUrl: String = ServerManager.DEFAULT_MDNS_HOST
+
+    // Custom view for HTML5 Video Fullscreen
+    private var customView: View? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
     private val isAmazonFireTv: Boolean by lazy {
         val manufacturer = Build.MANUFACTURER.orEmpty()
@@ -111,8 +118,8 @@ class MainActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
 
             val defaultUserAgent = userAgentString.orEmpty()
-            userAgentString = if (!defaultUserAgent.contains("Lanflix-AndroidNativeApp")) {
-                "$defaultUserAgent Lanflix-AndroidNativeApp Mobile"
+            userAgentString = if (!defaultUserAgent.contains("Lanflix-AndroidApp")) {
+                "$defaultUserAgent Lanflix-AndroidApp Mobile"
             } else {
                 defaultUserAgent
             }
@@ -164,7 +171,9 @@ class MainActivity : AppCompatActivity() {
                 applyLayerTypeForUrl(url)
                 binding.progressBar.visibility = View.VISIBLE
                 binding.serverUnreachableLayout.visibility = View.GONE
-                webView.visibility = View.VISIBLE
+                if (customView == null) {
+                    webView.visibility = View.VISIBLE
+                }
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -252,6 +261,54 @@ class MainActivity : AppCompatActivity() {
                 binding.progressBar.progress = newProgress
             }
 
+            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                if (customView != null) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+
+                customView = view
+                customViewCallback = callback
+
+                binding.webView.visibility = View.GONE
+                binding.progressBar.visibility = View.GONE
+
+                binding.fullScreenContainer.addView(
+                    customView,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                )
+                binding.fullScreenContainer.visibility = View.VISIBLE
+
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                )
+
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+
+            override fun onHideCustomView() {
+                if (customView == null) return
+
+                binding.fullScreenContainer.visibility = View.GONE
+                binding.fullScreenContainer.removeAllViews()
+                binding.webView.visibility = View.VISIBLE
+
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+
+                customViewCallback?.onCustomViewHidden()
+                customView = null
+                customViewCallback = null
+            }
+
             override fun onJsAlert(
                 view: WebView?,
                 url: String?,
@@ -315,6 +372,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val connectionUrl = ServerManager.resolveUrlForConnection(this@MainActivity, currentServerUrl)
+                webView.clearCache(true)
                 webView.loadUrl(connectionUrl)
             } catch (e: Exception) {
                 showUnreachableOverlay("Error loading server: ${e.message}")
@@ -322,21 +380,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        webView.invalidate()
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (customView != null) {
+                webView.webChromeClient?.onHideCustomView()
+                return true
+            }
+            if (webView.canGoBack()) {
+                webView.goBack()
+                return true
+            }
+        }
+
         val jsCommand = when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowUp', bubbles: true}));"
             KeyEvent.KEYCODE_DPAD_DOWN -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown', bubbles: true}));"
             KeyEvent.KEYCODE_DPAD_LEFT -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowLeft', bubbles: true}));"
             KeyEvent.KEYCODE_DPAD_RIGHT -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true}));"
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));"
-            KeyEvent.KEYCODE_BACK -> {
-                if (webView.canGoBack()) {
-                    webView.goBack()
-                    return true
-                } else {
-                    "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));"
-                }
-            }
             KeyEvent.KEYCODE_MENU -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'm', bubbles: true}));"
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: ' ', bubbles: true}));"
             KeyEvent.KEYCODE_MEDIA_STOP -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));"
@@ -385,6 +451,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (customView != null) {
+            webView.webChromeClient?.onHideCustomView()
+        }
         webView.destroy()
     }
 }

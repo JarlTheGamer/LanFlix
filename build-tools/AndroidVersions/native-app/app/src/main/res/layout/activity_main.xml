@@ -28,6 +28,14 @@
 
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
+    <!-- Fullscreen Video Overlay Container -->
+    <FrameLayout
+        android:id="@+id/fullScreenContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:visibility="gone" />
+
     <!-- Native Server Unreachable Failover Overlay -->
     <LinearLayout
         android:id="@+id/serverUnreachableLayout"
