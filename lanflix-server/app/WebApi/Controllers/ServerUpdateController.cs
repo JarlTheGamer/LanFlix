@@ -25,7 +25,7 @@ public class ServerUpdateController : ControllerBase
     public IActionResult GetVersion()
     {
         var version = _updateService.GetCurrentVersion();
-        return Ok(new { version });
+        return Ok(new { version, buildNumber = version });
     }
 
     /// <summary>

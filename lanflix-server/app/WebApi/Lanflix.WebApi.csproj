@@ -20,6 +20,14 @@
 
 
 
+  <!-- Copy version.json to publish directory -->
+  <ItemGroup>
+    <None Include="..\..\..\version.json" Link="version.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.10" />
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
