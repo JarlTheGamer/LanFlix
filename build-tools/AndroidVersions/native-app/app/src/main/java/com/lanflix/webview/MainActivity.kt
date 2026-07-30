@@ -12,6 +12,7 @@ import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.WindowManager
 import android.webkit.*
 import android.widget.FrameLayout
 import android.widget.Toast
@@ -61,17 +62,42 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        setupImmersiveDisplay()
         resolveServerUrl()
         setupFailoverUI()
         setupUpdateManager()
         setupWebView()
         setupSwipeRefresh()
         loadWebApp()
+    }
 
-        lifecycleScope.launch {
-            kotlinx.coroutines.delay(3000)
-            updateManager.checkForUpdateManually(showNoUpdateDialog = false)
+    override fun onResume() {
+        super.onResume()
+        setupImmersiveDisplay()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            setupImmersiveDisplay()
         }
+    }
+
+    private fun setupImmersiveDisplay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        )
     }
 
     private fun resolveServerUrl() {
@@ -282,13 +308,7 @@ class MainActivity : AppCompatActivity() {
                 )
                 binding.fullScreenContainer.visibility = View.VISIBLE
 
-                @Suppress("DEPRECATION")
-                window.decorView.systemUiVisibility = (
-                    View.SYSTEM_UI_FLAG_FULLSCREEN or
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                )
-
+                setupImmersiveDisplay()
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             }
 
@@ -299,9 +319,7 @@ class MainActivity : AppCompatActivity() {
                 binding.fullScreenContainer.removeAllViews()
                 binding.webView.visibility = View.VISIBLE
 
-                @Suppress("DEPRECATION")
-                window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
-
+                setupImmersiveDisplay()
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
 
                 customViewCallback?.onCustomViewHidden()
@@ -380,8 +398,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    fun evaluateJavascriptInWebView(script: String) {
+        runOnUiThread {
+            if (::webView.isInitialized) {
+                webView.evaluateJavascript(script, null)
+            }
+        }
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        setupImmersiveDisplay()
         webView.invalidate()
     }
 
@@ -430,18 +457,8 @@ class MainActivity : AppCompatActivity() {
                 openServerBrowser()
                 true
             }
-            R.id.action_check_update -> {
-                lifecycleScope.launch {
-                    val hasUpdate = updateManager.checkForUpdateManually(showNoUpdateDialog = true)
-                    if (!hasUpdate) {
-                        runOnUiThread {
-                            Toast.makeText(this@MainActivity, "You're running the latest version!", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
-                true
-            }
             R.id.action_refresh -> {
+                webView.clearCache(true)
                 webView.reload()
                 true
             }

@@ -3,6 +3,7 @@ package com.lanflix.webview.ota
 import android.app.AlertDialog
 import android.content.Context
 import android.content.SharedPreferences
+import com.lanflix.webview.UpdateActivity
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -125,12 +126,9 @@ class UpdateManager(private val context: Context) {
     
     private fun launchUpdateScreen(updateInfo: UpdateInfo) {
         try {
-            val updateActivityClass = Class.forName("com.lanflix.webview.UpdateActivity")
-            val startMethod = updateActivityClass.getMethod("start", Context::class.java, UpdateInfo::class.java)
-            startMethod.invoke(null, context, updateInfo)
+            UpdateActivity.start(context, updateInfo)
         } catch (e: Exception) {
             e.printStackTrace()
-            // Fallback to service-based download if UpdateActivity is not available
             UpdateService.startDownload(context, updateInfo)
         }
     }

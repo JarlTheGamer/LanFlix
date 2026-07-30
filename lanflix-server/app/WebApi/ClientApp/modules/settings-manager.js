@@ -1,5 +1,6 @@
 import apiClient from './api-client.js';
 import stateManager from './data.js';
+import { appUpdater } from './app-updater.js';
 
 export class SettingsManager {
   constructor() {
@@ -27,6 +28,7 @@ export class SettingsManager {
     this.setupToggles();
     this.setupModals();
     this.setupProfiles();
+    this.setupUpdateChecker();
     this.updateFocus();
 
     document.addEventListener('keydown', (e) => this.handleKeyboard(e));
@@ -279,7 +281,6 @@ export class SettingsManager {
     if (targetSection) targetSection.classList.add('active');
 
     this.focusedContentIndex = 0;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   initializeCustomSelects() {
@@ -1006,6 +1007,127 @@ export class SettingsManager {
     } catch (error) {
       console.error('Failed to delete profile:', error);
       alert('Failed to delete profile. Please try again.');
+    }
+  }
+
+  setupUpdateChecker() {
+    const checkBtn = document.getElementById('check-updates-btn');
+    if (!checkBtn) return;
+
+    checkBtn.addEventListener('click', async () => {
+      await appUpdater.checkForUpdates(true);
+    });
+  }
+
+  async checkForServerUpdates(userInitiated = true) {
+    const checkBtn = document.getElementById('check-updates-btn');
+    const originalHtml = checkBtn ? checkBtn.innerHTML : '';
+
+    try {
+      if (checkBtn && userInitiated) {
+        checkBtn.disabled = true;
+        checkBtn.innerHTML = `Checking...`;
+      }
+
+      const response = await fetch('/api/server-update/check');
+      const data = await response.json();
+
+      if (checkBtn && userInitiated) {
+        checkBtn.disabled = false;
+        checkBtn.innerHTML = originalHtml;
+      }
+
+      if (data.updateAvailable) {
+        this.showOtaModal(data);
+      } else {
+        if (userInitiated) {
+          alert(`Lanflix is up to date! (Current version: ${data.currentVersion || 'v1.2.6'})`);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check for updates:', error);
+      if (checkBtn && userInitiated) {
+        checkBtn.disabled = false;
+        checkBtn.innerHTML = originalHtml;
+        alert('Could not check for updates. Make sure server has internet access.');
+      }
+    }
+  }
+
+  showOtaModal(updateData) {
+    const modal = document.getElementById('ota-update-modal');
+    const versionText = document.getElementById('ota-version-text');
+    const releaseNotes = document.getElementById('ota-release-notes');
+    const applyBtn = document.getElementById('apply-ota-btn');
+    const infoContainer = document.getElementById('ota-update-info');
+    const progressContainer = document.getElementById('ota-progress-container');
+    const modalFooter = document.getElementById('ota-modal-footer');
+
+    if (!modal) return;
+
+    if (versionText) versionText.textContent = `Version ${updateData.latestVersion}`;
+    if (releaseNotes) releaseNotes.textContent = updateData.releaseNotes || 'New features, bug fixes, and performance enhancements.';
+
+    if (infoContainer) infoContainer.style.display = 'block';
+    if (progressContainer) progressContainer.style.display = 'none';
+    if (modalFooter) modalFooter.style.display = 'flex';
+
+    modal.classList.add('active');
+
+    if (applyBtn) {
+      applyBtn.onclick = async () => {
+        await this.applyServerUpdate(updateData.downloadUrl);
+      };
+    }
+  }
+
+  hideOtaModal() {
+    const modal = document.getElementById('ota-update-modal');
+    if (modal) modal.classList.remove('active');
+  }
+
+  async applyServerUpdate(downloadUrl) {
+    const infoContainer = document.getElementById('ota-update-info');
+    const progressContainer = document.getElementById('ota-progress-container');
+    const modalFooter = document.getElementById('ota-modal-footer');
+    const progressBar = document.getElementById('ota-progress-bar');
+    const progressStatus = document.getElementById('ota-progress-status');
+    const progressSubtext = document.getElementById('ota-progress-subtext');
+
+    if (infoContainer) infoContainer.style.display = 'none';
+    if (modalFooter) modalFooter.style.display = 'none';
+    if (progressContainer) progressContainer.style.display = 'block';
+
+    if (progressBar) progressBar.style.width = '30%';
+    if (progressStatus) progressStatus.textContent = 'Downloading update package from GitHub...';
+
+    try {
+      const response = await fetch('/api/server-update/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ downloadUrl: downloadUrl })
+      });
+
+      if (progressBar) progressBar.style.width = '80%';
+      if (progressStatus) progressStatus.textContent = 'Extracting and applying update...';
+
+      if (response.ok) {
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressStatus) progressStatus.textContent = 'Update Applied! Restarting Lanflix...';
+        if (progressSubtext) progressSubtext.textContent = 'The app will reload in a few seconds.';
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 4000);
+      } else {
+        const errorData = await response.json();
+        alert(`Update failed: ${errorData.error || 'Server error'}`);
+        this.hideOtaModal();
+      }
+    } catch (error) {
+      console.error('Error applying update:', error);
+      alert('Failed to connect to server during update application.');
+      this.hideOtaModal();
     }
   }
 }

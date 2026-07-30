@@ -57,91 +57,13 @@ class WebAppInterface(private val context: Context, private val updateManager: U
     @JavascriptInterface
     fun triggerUpdate() {
         if (context is MainActivity) {
-            context.lifecycleScope.launch {
-                try {
-                    val hasUpdate = updateManager.checkForUpdateManually(showNoUpdateDialog = false)
-                    if (!hasUpdate) {
-                        // If no update found via OTA, show message
-                        context.runOnUiThread {
-                            android.widget.Toast.makeText(
-                                context, 
-                                "No updates available", 
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
-                } catch (e: Exception) {
-                    context.runOnUiThread {
-                        android.widget.Toast.makeText(
-                            context, 
-                            "Failed to check for updates", 
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-            }
+            context.evaluateJavascriptInWebView("window.appUpdater && window.appUpdater.checkForUpdates(true);")
         }
     }
 
     @JavascriptInterface
     fun triggerUpdateWithInfo(updateJson: String?) {
-        if (context !is MainActivity) {
-            triggerUpdate()
-            return
-        }
-
-        if (updateJson.isNullOrBlank()) {
-            triggerUpdate()
-            return
-        }
-
-        context.lifecycleScope.launch {
-            try {
-                val payload = JSONObject(updateJson)
-                val versionName = payload.optString("versionName")
-                val downloadUrl = payload.optString("downloadUrl")
-
-                if (versionName.isBlank() || downloadUrl.isBlank()) {
-                    triggerUpdate()
-                    return@launch
-                }
-
-                var versionCode = payload.optInt("versionCode")
-                if (versionCode <= 0) {
-                    versionCode = deriveVersionCode(versionName)
-                }
-
-                val updateInfo = UpdateInfo(
-                    versionName = versionName,
-                    versionCode = versionCode,
-                    downloadUrl = downloadUrl,
-                    releaseNotes = payload.optString("releaseNotes").takeIf { it.isNotBlank() },
-                    mandatory = payload.optBoolean("mandatory", false),
-                    fileSize = payload.optLong("fileSize", 0L),
-                    checksum = payload.optString("checksum").takeIf { it.isNotBlank() }
-                )
-
-                updateManager.startUpdateFromWeb(updateInfo)
-
-                context.runOnUiThread {
-                    android.widget.Toast.makeText(
-                        context,
-                        "Preparing update...",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                }
-            } catch (e: Exception) {
-                context.runOnUiThread {
-                    android.widget.Toast.makeText(
-                        context,
-                        "Failed to start native update",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                }
-
-                triggerUpdate()
-            }
-        }
+        triggerUpdate()
     }
 
     private fun deriveVersionCode(versionName: String): Int {

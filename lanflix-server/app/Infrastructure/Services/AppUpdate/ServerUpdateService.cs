@@ -62,6 +62,35 @@ public class ServerUpdateService : IServerUpdateService
         }
     }
 
+    private readonly UpdateProgressStatus _progress = new();
+
+    public UpdateProgressStatus GetUpdateProgress()
+    {
+        lock (_progress)
+        {
+            return new UpdateProgressStatus
+            {
+                Status = _progress.Status,
+                Percentage = _progress.Percentage,
+                Message = _progress.Message,
+                BytesDownloaded = _progress.BytesDownloaded,
+                TotalBytes = _progress.TotalBytes
+            };
+        }
+    }
+
+    private void UpdateProgress(string status, int percentage, string message, long downloaded = 0, long total = 0)
+    {
+        lock (_progress)
+        {
+            _progress.Status = status;
+            _progress.Percentage = percentage;
+            _progress.Message = message;
+            if (downloaded > 0) _progress.BytesDownloaded = downloaded;
+            if (total > 0) _progress.TotalBytes = total;
+        }
+    }
+
     public async Task<bool> DownloadAndApplyUpdateAsync(
         string downloadUrl,
         CancellationToken cancellationToken = default)
@@ -69,6 +98,7 @@ public class ServerUpdateService : IServerUpdateService
         try
         {
             _logger.LogInformation("Downloading update from: {Url}", downloadUrl);
+            UpdateProgress("Downloading", 5, "Connecting to GitHub...");
 
             var updateDir = Path.Combine(Path.GetTempPath(), "lanflix-update");
             if (Directory.Exists(updateDir))
@@ -82,22 +112,42 @@ public class ServerUpdateService : IServerUpdateService
             using (var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
             {
                 response.EnsureSuccessStatusCode();
+                var totalBytes = response.Content.Headers.ContentLength ?? 0L;
+                using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
                 using var fileStream = new FileStream(downloadPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                await response.Content.CopyToAsync(fileStream, cancellationToken);
+
+                var buffer = new byte[8192];
+                long totalDownloaded = 0;
+                int bytesRead;
+
+                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
+                {
+                    await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken);
+                    totalDownloaded += bytesRead;
+
+                    var percentage = totalBytes > 0
+                        ? (int)((totalDownloaded * 60) / totalBytes) + 5
+                        : 30;
+
+                    UpdateProgress("Downloading", percentage, $"Downloaded {totalDownloaded / 1024 / 1024} MB", totalDownloaded, totalBytes);
+                }
             }
 
             _logger.LogInformation("Update downloaded successfully to {Path}", downloadPath);
+            UpdateProgress("Extracting", 70, "Unpacking update archive...");
 
             var extractPath = Path.Combine(updateDir, "extracted");
             Directory.CreateDirectory(extractPath);
             ZipFile.ExtractToDirectory(downloadPath, extractPath, true);
 
             _logger.LogInformation("Update extracted successfully to {Path}", extractPath);
+            UpdateProgress("Applying", 90, "Restarting Lanflix Server...");
 
             var currentDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var scriptPath = CreateUpdateScript(currentDir, extractPath);
 
             _logger.LogInformation("Starting update script at {ScriptPath}. Server restarting...", scriptPath);
+            UpdateProgress("Complete", 100, "Update complete! Restarting...");
 
             var processInfo = new ProcessStartInfo
             {
@@ -116,6 +166,7 @@ public class ServerUpdateService : IServerUpdateService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error applying server update");
+            UpdateProgress("Failed", 0, $"Update failed: {ex.Message}");
             return false;
         }
     }

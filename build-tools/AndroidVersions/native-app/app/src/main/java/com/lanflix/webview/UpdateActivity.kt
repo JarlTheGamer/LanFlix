@@ -12,25 +12,25 @@ import com.lanflix.webview.ota.DownloadState
 import com.lanflix.webview.ota.UpdateDownloader
 import com.lanflix.webview.ota.UpdateInfo
 import com.lanflix.webview.ota.UpdateInstaller
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import java.text.DecimalFormat
+import java.io.File
+import java.util.Locale
 
 class UpdateActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityUpdateBinding
-    private lateinit var updateDownloader: UpdateDownloader
-    private lateinit var updateInstaller: UpdateInstaller
     private var updateInfo: UpdateInfo? = null
-    private var downloadedApkFile: java.io.File? = null
+    private var isDownloading = false
 
     companion object {
-        private const val EXTRA_UPDATE_INFO = "update_info"
+        private const val EXTRA_UPDATE_INFO = "extra_update_info"
 
+        @JvmStatic
         fun start(context: Context, updateInfo: UpdateInfo) {
             val intent = Intent(context, UpdateActivity::class.java).apply {
                 putExtra(EXTRA_UPDATE_INFO, updateInfo)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         }
@@ -41,224 +41,120 @@ class UpdateActivity : AppCompatActivity() {
         binding = ActivityUpdateBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Hide system UI for immersive experience
-        hideSystemUI()
-
-        updateDownloader = UpdateDownloader(this)
-        updateInstaller = UpdateInstaller(this)
-
-        // Get update info from intent
-        updateInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            intent.getSerializableExtra(EXTRA_UPDATE_INFO, UpdateInfo::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getSerializableExtra(EXTRA_UPDATE_INFO) as? UpdateInfo
-        }
+        @Suppress("DEPRECATION")
+        updateInfo = intent.getSerializableExtra(EXTRA_UPDATE_INFO) as? UpdateInfo
 
         if (updateInfo == null) {
+            Toast.makeText(this, "No update information available", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
 
-        setupUI()
-        startDownload()
+        bindUpdateInfo(updateInfo!!)
+        setupListeners()
     }
 
-    private fun hideSystemUI() {
-        window.decorView.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-            or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-            or View.SYSTEM_UI_FLAG_FULLSCREEN
-        )
+    private fun bindUpdateInfo(info: UpdateInfo) {
+        binding.txtVersionName.text = "Version ${info.versionName} is available"
+        binding.txtVersionBadge.text = info.versionName
+
+        if (!info.releaseNotes.isNullOrBlank()) {
+            binding.txtReleaseNotes.text = info.releaseNotes
+        }
+
+        if (info.mandatory) {
+            binding.btnCancel.visibility = View.GONE
+        }
     }
 
-    private fun setupUI() {
-        val info = updateInfo ?: return
-
-        binding.apply {
-            versionTextView.text = "Version ${info.versionName}"
-            
-            // Show release notes if available
-            if (!info.releaseNotes.isNullOrEmpty()) {
-                releaseNotesTextView.text = info.releaseNotes
-                releaseNotesScrollView.visibility = View.VISIBLE
+    private fun setupListeners() {
+        binding.btnCancel.setOnClickListener {
+            if (!isDownloading) {
+                finish()
             }
+        }
 
-            actionButton.setOnClickListener {
-                when (actionButton.text.toString()) {
-                    "Install Update" -> installUpdate()
-                    "Restart App" -> restartApp()
-                    "Try Again" -> startDownload()
-                }
+        binding.btnStartUpdate.setOnClickListener {
+            updateInfo?.let { info ->
+                startDownload(info)
             }
         }
     }
 
-    private fun startDownload() {
-        val info = updateInfo ?: return
+    private fun startDownload(info: UpdateInfo) {
+        isDownloading = true
+        binding.btnStartUpdate.isEnabled = false
+        binding.btnCancel.isEnabled = !info.mandatory
+        binding.progressContainer.visibility = View.VISIBLE
+        binding.txtErrorDetail.visibility = View.GONE
 
-        binding.apply {
-            statusTextView.text = "Downloading update..."
-            progressBar.progress = 0
-            progressTextView.text = "0%"
-            downloadInfoTextView.text = "Preparing download..."
-            actionButton.visibility = View.GONE
-            loadingProgressBar.visibility = View.VISIBLE
-        }
+        val downloader = UpdateDownloader(this)
+        val startTime = System.currentTimeMillis()
 
-        lifecycleScope.launch(Dispatchers.Main) {
-            updateDownloader.downloadUpdate(info).collect { state ->
-                handleDownloadState(state)
-            }
-        }
-    }
-
-    private fun handleDownloadState(state: DownloadState) {
-        // Ensure UI updates happen on the main thread
-        runOnUiThread {
-            when (state) {
-                is DownloadState.Starting -> {
-                    binding.apply {
-                        statusTextView.text = "Starting download..."
-                        loadingProgressBar.visibility = View.VISIBLE
+        lifecycleScope.launch {
+            downloader.downloadUpdate(info).collectLatest { state ->
+                when (state) {
+                    is DownloadState.Starting -> {
+                        binding.txtStatus.text = "Connecting to server..."
+                        binding.progressBarUpdate.progress = 0
+                        binding.txtPercentage.text = "0%"
                     }
-                }
 
-                is DownloadState.Progress -> {
-                    binding.apply {
-                        statusTextView.text = "Downloading update..."
-                        progressBar.progress = state.percentage
-                        progressTextView.text = "${state.percentage}%"
+                    is DownloadState.Progress -> {
+                        binding.txtStatus.text = "Downloading update..."
+                        binding.progressBarUpdate.progress = state.percentage
+                        binding.txtPercentage.text = "${state.percentage}%"
+
+                        val downloadedMB = state.bytesDownloaded / (1024.0 * 1024.0)
+                        val totalMB = state.totalBytes / (1024.0 * 1024.0)
                         
-                        val downloadedMB = state.bytesDownloaded / (1024 * 1024f)
-                        val totalMB = state.totalBytes / (1024 * 1024f)
-                        val format = DecimalFormat("#.#")
-                        
-                        downloadInfoTextView.text = if (state.totalBytes > 0) {
-                            "${format.format(downloadedMB)} MB / ${format.format(totalMB)} MB"
+                        if (state.totalBytes > 0) {
+                            binding.txtDownloadSize.text = String.format(Locale.US, "%.1f MB / %.1f MB", downloadedMB, totalMB)
                         } else {
-                            "${format.format(downloadedMB)} MB downloaded"
+                            binding.txtDownloadSize.text = String.format(Locale.US, "%.1f MB downloaded", downloadedMB)
                         }
-                        
-                        loadingProgressBar.visibility = View.GONE
-                    }
-                }
 
-                is DownloadState.Success -> {
-                    downloadedApkFile = state.file
-                    binding.apply {
-                        statusTextView.text = "Download complete!"
-                        progressBar.progress = 100
-                        progressTextView.text = "100%"
-                        loadingProgressBar.visibility = View.GONE
-                        
-                        // Check if we can install automatically
-                        if (updateInstaller.canInstallPackages()) {
-                            statusTextView.text = "Ready to install"
-                            actionButton.text = "Install Update"
-                            actionButton.visibility = View.VISIBLE
-                        } else {
-                            statusTextView.text = "Installation permission required"
-                            actionButton.text = "Grant Permission"
-                            actionButton.visibility = View.VISIBLE
+                        val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
+                        if (elapsedTime > 0 && state.bytesDownloaded > 0) {
+                            val speedMBs = (state.bytesDownloaded / (1024.0 * 1024.0)) / elapsedTime
+                            binding.txtDownloadSpeed.text = String.format(Locale.US, "%.1f MB/s", speedMBs)
                         }
                     }
-                }
 
-                is DownloadState.Error -> {
-                    binding.apply {
-                        statusTextView.text = "Download failed"
-                        downloadInfoTextView.text = state.message
-                        loadingProgressBar.visibility = View.GONE
-                        actionButton.text = "Try Again"
-                        actionButton.visibility = View.VISIBLE
+                    is DownloadState.Success -> {
+                        binding.txtStatus.text = "Download complete! Opening installer..."
+                        binding.progressBarUpdate.progress = 100
+                        binding.txtPercentage.text = "100%"
+                        installUpdate(state.file)
                     }
-                    
-                    Toast.makeText(this@UpdateActivity, "Download failed: ${state.message}", Toast.LENGTH_LONG).show()
+
+                    is DownloadState.Error -> {
+                        isDownloading = false
+                        binding.btnStartUpdate.isEnabled = true
+                        binding.btnStartUpdate.text = "Retry Download"
+                        binding.txtStatus.text = "Download Failed"
+                        binding.txtErrorDetail.text = state.message
+                        binding.txtErrorDetail.visibility = View.VISIBLE
+                    }
+
+                    else -> {}
                 }
-
-                else -> {}
             }
         }
     }
 
-    private fun installUpdate() {
-        val apkFile = downloadedApkFile
-        if (apkFile == null) {
-            Toast.makeText(this, "No APK file to install", Toast.LENGTH_SHORT).show()
-            return
+    private fun installUpdate(apkFile: File) {
+        val installer = UpdateInstaller(this)
+        val success = installer.installUpdate(apkFile)
+        if (!success) {
+            Toast.makeText(this, "Failed to launch APK installer. Please grant install permission.", Toast.LENGTH_LONG).show()
         }
-
-        if (!updateInstaller.canInstallPackages()) {
-            // Request permission
-            val permissionIntent = updateInstaller.getInstallPermissionIntent()
-            if (permissionIntent != null) {
-                startActivity(permissionIntent)
-                Toast.makeText(this, "Please enable 'Install from Unknown Sources' and try again", Toast.LENGTH_LONG).show()
-            }
-            return
-        }
-
-        binding.apply {
-            statusTextView.text = "Installing update..."
-            actionButton.visibility = View.GONE
-            loadingProgressBar.visibility = View.VISIBLE
-        }
-
-        // Install the APK
-        val success = updateInstaller.installUpdate(apkFile)
-        
-        if (success) {
-            binding.apply {
-                statusTextView.text = "Installation started"
-                loadingProgressBar.visibility = View.GONE
-            }
-            
-            // The installation will take over from here
-            // The app will be closed and the new version will start
-        } else {
-            binding.apply {
-                statusTextView.text = "Installation failed"
-                actionButton.text = "Try Again"
-                actionButton.visibility = View.VISIBLE
-                loadingProgressBar.visibility = View.GONE
-            }
-            
-            Toast.makeText(this, "Failed to start installation", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun restartApp() {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        startActivity(intent)
         finish()
     }
 
     override fun onBackPressed() {
-        // Prevent back button during update process
-        // Only allow if there's an error or installation is complete
-        if (binding.actionButton.visibility == View.VISIBLE && 
-            (binding.actionButton.text == "Try Again" || binding.actionButton.text == "Restart App")) {
+        if (!isDownloading && updateInfo?.mandatory != true) {
             super.onBackPressed()
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        hideSystemUI()
-        
-        // Check if we returned from permission screen
-        if (downloadedApkFile != null && updateInstaller.canInstallPackages()) {
-            binding.apply {
-                statusTextView.text = "Ready to install"
-                actionButton.text = "Install Update"
-                actionButton.visibility = View.VISIBLE
-            }
         }
     }
 }

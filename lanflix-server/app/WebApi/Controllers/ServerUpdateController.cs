@@ -108,6 +108,16 @@ public class ServerUpdateController : ControllerBase
             return StatusCode(500, new { error = "Failed to apply update", details = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Get live update progress status
+    /// </summary>
+    [HttpGet("progress")]
+    public IActionResult GetProgress()
+    {
+        var progress = _updateService.GetUpdateProgress();
+        return Ok(progress);
+    }
 }
 
 public class ApplyUpdateRequest

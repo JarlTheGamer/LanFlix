@@ -39,7 +39,9 @@ main {
 .top-nav {
   position: fixed;
   inset: 0 0 auto 0;
-  padding: var(--nav-padding-y) var(--nav-padding-x);
+  padding: var(--nav-padding-y) max(var(--nav-padding-x), env(safe-area-inset-left, 16px));
+  padding-left: max(var(--nav-padding-x), env(safe-area-inset-left, 16px));
+  padding-right: max(var(--nav-padding-x), env(safe-area-inset-right, 16px));
   background: transparent;
   backdrop-filter: blur(22px);
   z-index: 20;
@@ -1588,8 +1590,17 @@ main {
 }
 
 @media (max-width: 768px) {
+  .movie-card {
+    width: 140px !important;
+    height: 240px !important;
+  }
+  .movie-card.expanded {
+    width: calc(100vw - 32px) !important;
+    max-width: 360px !important;
+  }
   .hero-stage {
-    padding: 0 16px !important;
+    padding-left: max(16px, env(safe-area-inset-left, 16px)) !important;
+    padding-right: max(16px, env(safe-area-inset-right, 16px)) !important;
   }
   .content-shell {
     padding: 0 16px 40px !important;
@@ -1600,7 +1611,9 @@ main {
     border-radius: 20px !important;
   }
   .top-nav {
-    padding: 8px 12px !important;
+    padding-left: max(12px, env(safe-area-inset-left, 12px)) !important;
+    padding-right: max(12px, env(safe-area-inset-right, 12px)) !important;
+    padding-top: max(8px, env(safe-area-inset-top, 8px)) !important;
     min-height: 56px !important;
   }
   .brand-name {

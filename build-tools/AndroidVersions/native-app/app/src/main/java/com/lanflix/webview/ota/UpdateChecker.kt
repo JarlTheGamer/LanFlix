@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import com.google.gson.Gson
 import com.lanflix.webview.R
+import com.lanflix.webview.ServerManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -27,9 +28,11 @@ class UpdateChecker(private val context: Context) {
     suspend fun checkForUpdate(): UpdateResponse = withContext(Dispatchers.IO) {
         try {
             val currentVersion = getCurrentVersionInfo()
+            val serverHost = ServerManager.getSavedServer(context).trimEnd('/')
+            val endpoint = "$serverHost/api/app/update-check?currentVersion=${currentVersion.versionCode}&platform=android"
             
             val request = Request.Builder()
-                .url("$updateEndpoint?currentVersion=${currentVersion.versionCode}&platform=android")
+                .url(endpoint)
                 .addHeader("User-Agent", "LanflixApp/${currentVersion.versionName}")
                 .build()
             
@@ -38,15 +41,21 @@ class UpdateChecker(private val context: Context) {
             if (response.isSuccessful) {
                 val responseBody = response.body?.string()
                 if (!responseBody.isNullOrEmpty()) {
-                    val updateInfo = gson.fromJson(responseBody, UpdateInfo::class.java)
+                    val jsonObject = gson.fromJson(responseBody, com.google.gson.JsonObject::class.java)
+                    val hasUpdate = jsonObject.get("hasUpdate")?.asBoolean ?: false
                     
-                    // Check if update is available
-                    val hasUpdate = updateInfo.versionCode > currentVersion.versionCode
-                    
-                    return@withContext UpdateResponse(
-                        hasUpdate = hasUpdate,
-                        updateInfo = if (hasUpdate) updateInfo else null
-                    )
+                    if (hasUpdate) {
+                        val updateInfo = UpdateInfo(
+                            versionName = jsonObject.get("versionName")?.asString ?: "1.0.0",
+                            versionCode = jsonObject.get("versionCode")?.asInt ?: (currentVersion.versionCode + 1),
+                            downloadUrl = jsonObject.get("downloadUrl")?.asString ?: "",
+                            releaseNotes = jsonObject.get("releaseNotes")?.asString,
+                            mandatory = jsonObject.get("mandatory")?.asBoolean ?: false,
+                            fileSize = jsonObject.get("fileSize")?.asLong ?: 0L,
+                            checksum = jsonObject.get("checksum")?.asString
+                        )
+                        return@withContext UpdateResponse(hasUpdate = true, updateInfo = updateInfo)
+                    }
                 }
             }
             

@@ -941,38 +941,68 @@ fo Box */
 /* Mobile Responsive Adjustments */
 @media (max-width: 768px) {
   .settings-main {
-    padding-top: 64px;
+    padding-top: 56px !important;
   }
   .settings-container {
-    padding: 16px !important;
+    padding: 12px 16px 32px 16px !important;
     grid-template-columns: 1fr !important;
-    gap: 20px !important;
+    gap: 16px !important;
     min-height: auto !important;
   }
   .settings-sidebar {
-    position: static !important;
-    top: 0 !important;
+    position: sticky !important;
+    top: 56px !important;
+    z-index: 15 !important;
+    background: rgba(11, 11, 12, 0.95) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    padding: 4px 0 8px 0 !important;
   }
   .settings-nav {
     flex-direction: row !important;
     overflow-x: auto !important;
-    padding: 6px !important;
-    border-radius: 12px !important;
+    padding: 4px !important;
+    border-radius: 14px !important;
+    gap: 6px !important;
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
+    background: rgba(255, 255, 255, 0.06) !important;
   }
   .settings-nav::-webkit-scrollbar {
     display: none !important;
   }
   .settings-nav-item {
-    padding: 10px 14px !important;
+    padding: 8px 14px !important;
     font-size: 0.85rem !important;
     white-space: nowrap !important;
-    border-radius: 8px !important;
+    border-radius: 10px !important;
+    flex-shrink: 0 !important;
   }
-  .settings-header-top {
-    gap: 12px !important;
+  .settings-nav-item svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+  .settings-section h2 {
+    font-size: 1.35rem !important;
+    margin-bottom: 14px !important;
+  }
+  .settings-card {
+    padding: 16px !important;
+    border-radius: 16px !important;
     margin-bottom: 16px !important;
+  }
+  .settings-item {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    padding: 12px 0 !important;
+  }
+  .custom-select-wrapper,
+  .settings-select,
+  .settings-input,
+  .settings-control {
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
   .back-btn {
     width: 36px !important;
@@ -984,6 +1014,6 @@ fo Box */
     height: 18px !important;
   }
   .settings-title {
-    font-size: 1.5rem !important;
+    font-size: 1.4rem !important;
   }
 }

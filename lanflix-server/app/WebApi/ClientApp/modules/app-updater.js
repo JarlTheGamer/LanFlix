@@ -1,318 +1,300 @@
 /**
- * App & Server Updater Module
- * Checks for and installs app & server updates
+ * App & Server Unified OTA Updater Module
+ * Handles Cozmo-style OTA downloads, progress tracking, and live web reboots
  */
 
 export class AppUpdater {
-  constructor() {
-    this.currentVersion = '1.2.6';
-    this.checkInterval = 24 * 60 * 60 * 1000; // Check once per day
-    this.lastCheckKey = 'lanflix_last_update_check';
-    this.skipVersionKey = 'lanflix_skip_version';
-  }
-
-  async initialize() {
-    await this.loadCurrentVersion();
-  }
-
-  async loadCurrentVersion() {
-    try {
-      const response = await fetch('/api/server-update/version');
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.version) {
-          this.currentVersion = data.version;
-        }
-      }
-    } catch (error) {
-      console.warn('Could not load server version:', error);
+    constructor() {
+        this.currentVersion = '1.2.6';
+        this.progressInterval = null;
+        this.isUpdating = false;
     }
-  }
 
-  showUpdateNotification(updateInfo) {
-    this.hideUpdateNotification();
+    async initialize() {
+        await this.loadCurrentVersion();
+    }
 
-    const modal = document.createElement('div');
-    modal.id = 'update-notification-modal';
-    modal.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.85);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-      animation: fadeIn 0.3s ease-out;
-    `;
+    async loadCurrentVersion() {
+        try {
+            const response = await fetch('/api/server-update/version', { cache: 'no-store' });
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.version) {
+                    this.currentVersion = data.version;
+                }
+            }
+        } catch (error) {
+            console.warn('Could not load server version:', error);
+        }
+    }
 
-    const releaseNotes = this.formatReleaseNotes(updateInfo.releaseNotes);
-    const targetName = updateInfo.isServerUpdate ? 'Lanflix Server' : 'Lanflix App';
+    async checkForUpdates(userInitiated = false) {
+        const checkBtn = document.getElementById('check-updates-btn');
+        const originalHtml = checkBtn ? checkBtn.innerHTML : '';
 
-    modal.innerHTML = `
-      <div style="
-        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-        border-radius: 12px;
-        padding: 40px;
-        max-width: 600px;
-        width: 90%;
-        max-height: 80vh;
-        overflow-y: auto;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-      ">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <div style="font-size: 48px; margin-bottom: 10px;">🎉</div>
-          <h2 style="color: #fff; font-size: 28px; margin: 0 0 10px 0;">${targetName} Update Available!</h2>
-          <p style="color: #999; font-size: 16px; margin: 0;">
-            Version ${updateInfo.version} is available
-          </p>
-          <p style="color: #666; font-size: 14px; margin: 5px 0 0 0;">
-            Current version: ${updateInfo.currentVersion}
-          </p>
-        </div>
+        try {
+            if (checkBtn && userInitiated) {
+                checkBtn.disabled = true;
+                checkBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" width="18" height="18" style="animation: spin 1s linear infinite; margin-right: 6px;">
+                        <path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8z"/>
+                    </svg> Checking GitHub...`;
+            }
 
-        <div style="
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 8px;
-          padding: 20px;
-          margin-bottom: 30px;
-          max-height: 300px;
-          overflow-y: auto;
-        ">
-          <h3 style="color: #fff; font-size: 18px; margin: 0 0 15px 0;">What's New:</h3>
-          <div style="color: #ccc; font-size: 14px; line-height: 1.6;">
-            ${releaseNotes}
-          </div>
-        </div>
+            const response = await fetch('/api/server-update/check', { cache: 'no-store' });
+            const data = await response.json();
 
-        <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-          <button id="update-now-btn" style="
-            background: #e50914;
-            color: white;
-            border: none;
-            padding: 14px 32px;
-            font-size: 16px;
+            if (checkBtn && userInitiated) {
+                checkBtn.disabled = false;
+                checkBtn.innerHTML = originalHtml;
+            }
+
+            if (data.updateAvailable) {
+                this.showUpdateModal({
+                    version: data.latestVersion,
+                    currentVersion: data.currentVersion || this.currentVersion,
+                    releaseNotes: data.releaseNotes,
+                    downloadUrl: data.downloadUrl,
+                    fileSize: data.fileSize
+                });
+                return true;
+            } else {
+                if (userInitiated) {
+                    this.showToast(`Lanflix is up to date! (Version ${data.currentVersion || this.currentVersion})`);
+                }
+                return false;
+            }
+        } catch (error) {
+            console.error('Failed to check for updates:', error);
+            if (checkBtn && userInitiated) {
+                checkBtn.disabled = false;
+                checkBtn.innerHTML = originalHtml;
+            }
+            if (userInitiated) {
+                this.showToast('Could not check for updates. Check server internet connection.', true);
+            }
+            return false;
+        }
+    }
+
+    showUpdateModal(updateInfo) {
+        this.hideUpdateModal();
+
+        let modal = document.getElementById('ota-update-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ota-update-modal';
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h2 class="modal-title" id="ota-modal-title">Lanflix Update Available</h2>
+                        <button class="modal-close" id="close-ota-modal" aria-label="Close">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="ota-update-info">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <span style="font-weight: 600; color: #fff; font-size: 1.1rem;" id="ota-version-text">Version ${updateInfo.version}</span>
+                                <span style="background: rgba(229, 9, 20, 0.2); color: #e50914; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.8rem;" id="ota-size-badge">New Release</span>
+                            </div>
+                            <div style="background: rgba(255, 255, 255, 0.05); padding: 14px; border-radius: 10px; max-height: 160px; overflow-y: auto; margin-bottom: 16px;">
+                                <p style="font-size: 0.85rem; color: #bbb; margin-bottom: 6px; font-weight: 600;">What's New:</p>
+                                <div id="ota-release-notes" style="font-size: 0.85rem; color: #ddd; white-space: pre-line;">${updateInfo.releaseNotes || 'Bug fixes and performance improvements.'}</div>
+                            </div>
+                        </div>
+                        <div id="ota-progress-container" style="display: none; text-align: center; padding: 16px 0;">
+                            <div style="font-size: 1rem; color: #fff; font-weight: 600; margin-bottom: 8px;" id="ota-progress-status">Downloading update from GitHub...</div>
+                            <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+                                <div id="ota-progress-bar" style="width: 0%; height: 100%; background: #e50914; transition: width 0.3s ease;"></div>
+                            </div>
+                            <div style="font-size: 0.8rem; color: #aaa;" id="ota-progress-subtext">Please wait... Lanflix will restart automatically.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer" id="ota-modal-footer">
+                        <button class="modal-btn modal-btn-secondary" id="cancel-ota-btn">Later</button>
+                        <button class="modal-btn modal-btn-primary" id="apply-ota-btn" style="background: #e50914; border-color: #e50914;">Download &amp; Update Now</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        } else {
+            modal.classList.add('active');
+            const versionText = document.getElementById('ota-version-text');
+            const releaseNotes = document.getElementById('ota-release-notes');
+            if (versionText) versionText.textContent = `Version ${updateInfo.version}`;
+            if (releaseNotes) releaseNotes.textContent = updateInfo.releaseNotes || 'Bug fixes and performance improvements.';
+        }
+
+        const closeBtn = document.getElementById('close-ota-modal');
+        const cancelBtn = document.getElementById('cancel-ota-btn');
+        const applyBtn = document.getElementById('apply-ota-btn');
+
+        if (closeBtn) closeBtn.onclick = () => this.hideUpdateModal();
+        if (cancelBtn) cancelBtn.onclick = () => this.hideUpdateModal();
+        if (applyBtn) {
+            applyBtn.onclick = () => {
+                this.applyUpdate(updateInfo.downloadUrl);
+            };
+        }
+    }
+
+    hideUpdateModal() {
+        if (this.isUpdating) return;
+        const modal = document.getElementById('ota-update-modal');
+        if (modal) {
+            modal.classList.remove('active');
+        }
+    }
+
+    async applyUpdate(downloadUrl) {
+        this.isUpdating = true;
+        const infoContainer = document.getElementById('ota-update-info');
+        const progressContainer = document.getElementById('ota-progress-container');
+        const modalFooter = document.getElementById('ota-modal-footer');
+        const progressBar = document.getElementById('ota-progress-bar');
+        const progressStatus = document.getElementById('ota-progress-status');
+        const progressSubtext = document.getElementById('ota-progress-subtext');
+
+        if (infoContainer) infoContainer.style.display = 'none';
+        if (modalFooter) modalFooter.style.display = 'none';
+        if (progressContainer) progressContainer.style.display = 'block';
+
+        if (progressBar) progressBar.style.width = '10%';
+        if (progressStatus) progressStatus.textContent = 'Connecting to GitHub...';
+
+        // Start live progress polling (Cozmo-style OTA reporting)
+        this.startProgressPolling();
+
+        try {
+            const response = await fetch('/api/server-update/apply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ downloadUrl: downloadUrl })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Server rejected update request');
+            }
+        } catch (error) {
+            console.error('Error starting server update:', error);
+            this.stopProgressPolling();
+            this.isUpdating = false;
+            if (progressStatus) progressStatus.textContent = 'Update Failed!';
+            if (progressSubtext) progressSubtext.textContent = error.message;
+            if (modalFooter) modalFooter.style.display = 'flex';
+        }
+    }
+
+    startProgressPolling() {
+        this.stopProgressPolling();
+        let errorCount = 0;
+
+        this.progressInterval = setInterval(async () => {
+            try {
+                const response = await fetch('/api/server-update/progress', { cache: 'no-store' });
+                if (response.ok) {
+                    errorCount = 0;
+                    const progress = await response.json();
+                    this.updateProgressUI(progress);
+
+                    if (progress.status === 'Complete') {
+                        this.stopProgressPolling();
+                        this.handleUpdateComplete();
+                    }
+                }
+            } catch (e) {
+                errorCount++;
+                if (errorCount > 3) {
+                    // Server is rebooting!
+                    const progressStatus = document.getElementById('ota-progress-status');
+                    const progressSubtext = document.getElementById('ota-progress-subtext');
+                    const progressBar = document.getElementById('ota-progress-bar');
+                    if (progressBar) progressBar.style.width = '95%';
+                    if (progressStatus) progressStatus.textContent = 'Restarting Lanflix Server...';
+                    if (progressSubtext) progressSubtext.textContent = 'Applying updates and launching new version...';
+                    
+                    this.pollForServerReboot();
+                }
+            }
+        }, 800);
+    }
+
+    updateProgressUI(progress) {
+        const progressBar = document.getElementById('ota-progress-bar');
+        const progressStatus = document.getElementById('ota-progress-status');
+        const progressSubtext = document.getElementById('ota-progress-subtext');
+
+        if (progressBar && progress.percentage) {
+            progressBar.style.width = `${Math.min(100, Math.max(10, progress.percentage))}%`;
+        }
+
+        if (progressStatus && progress.status) {
+            progressStatus.textContent = `${progress.status}... (${progress.percentage}%)`;
+        }
+
+        if (progressSubtext && progress.message) {
+            progressSubtext.textContent = progress.message;
+        }
+    }
+
+    pollForServerReboot() {
+        this.stopProgressPolling();
+        const interval = setInterval(async () => {
+            try {
+                const response = await fetch('/api/server-update/version', { cache: 'no-store' });
+                if (response.ok) {
+                    clearInterval(interval);
+                    const progressBar = document.getElementById('ota-progress-bar');
+                    const progressStatus = document.getElementById('ota-progress-status');
+                    if (progressBar) progressBar.style.width = '100%';
+                    if (progressStatus) progressStatus.textContent = 'Update Applied! Reloading...';
+
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+            } catch (e) {
+                // Server is still starting up
+            }
+        }, 1500);
+    }
+
+    stopProgressPolling() {
+        if (this.progressInterval) {
+            clearInterval(this.progressInterval);
+            this.progressInterval = null;
+        }
+    }
+
+    showToast(message, isError = false) {
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: ${isError ? 'rgba(229, 9, 20, 0.95)' : 'rgba(255, 255, 255, 0.95)'};
+            color: ${isError ? '#fff' : '#000'};
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 15px;
             font-weight: 600;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s;
-            flex: 1;
-            min-width: 140px;
-          ">
-            Update Now
-          </button>
-          <button id="update-later-btn" style="
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 14px 32px;
-            font-size: 16px;
-            font-weight: 600;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s;
-            flex: 1;
-            min-width: 140px;
-          ">
-            Later
-          </button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    document.getElementById('update-now-btn').addEventListener('click', () => {
-      this.startUpdate(updateInfo);
-    });
-
-    document.getElementById('update-later-btn').addEventListener('click', () => {
-      this.hideUpdateNotification();
-    });
-  }
-
-  formatReleaseNotes(notes) {
-    if (!notes) return '<p>Bug fixes and performance improvements.</p>';
-    return notes
-      .replace(/\n/g, '<br>')
-      .replace(/•/g, '&bull;');
-  }
-
-  hideUpdateNotification() {
-    const modal = document.getElementById('update-notification-modal');
-    if (modal) {
-      modal.remove();
+            z-index: 10002;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            animation: fadeIn 0.2s ease-out;
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3500);
     }
-  }
-
-  async startUpdate(updateInfo) {
-    const hasNativeBridge = typeof window !== 'undefined' && window.Android;
-
-    if (hasNativeBridge && !updateInfo.isServerUpdate) {
-      // Native Android App update
-      const nativeUpdateInfo = {
-        versionName: updateInfo.version,
-        versionCode: updateInfo.versionCode || 40,
-        downloadUrl: updateInfo.downloadUrl,
-        releaseNotes: updateInfo.releaseNotes || '',
-        mandatory: false,
-        fileSize: updateInfo.fileSize || 0,
-        checksum: updateInfo.checksum || ''
-      };
-
-      if (typeof window.Android.triggerUpdateWithInfo === 'function') {
-        window.Android.triggerUpdateWithInfo(JSON.stringify(nativeUpdateInfo));
-        this.hideUpdateNotification();
-      } else if (typeof window.Android.triggerUpdate === 'function') {
-        window.Android.triggerUpdate();
-        this.hideUpdateNotification();
-      }
-    } else {
-      // Server update (Web Browser / In-App Server update)
-      this.hideUpdateNotification();
-      this.showServerUpdateOverlay();
-      
-      try {
-        const response = await fetch('/api/server-update/apply', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ downloadUrl: updateInfo.downloadUrl })
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to initiate server update');
-        }
-
-        // Poll for server restart completion
-        this.pollServerReboot();
-      } catch (error) {
-        console.error('Error applying server update:', error);
-        this.showErrorMessage('Failed to start server update. Please try again.');
-      }
-    }
-  }
-
-  showServerUpdateOverlay() {
-    let overlay = document.getElementById('server-update-overlay');
-    if (!overlay) {
-      overlay = document.createElement('div');
-      overlay.id = 'server-update-overlay';
-      overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: #000;
-        color: #fff;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        z-index: 99999;
-        font-family: 'Poppins', sans-serif;
-        text-align: center;
-        padding: 20px;
-      `;
-
-      overlay.innerHTML = `
-        <div style="font-size: 64px; margin-bottom: 20px; animation: pulse 1.5s infinite;">🚀</div>
-        <h1 style="font-size: 28px; margin-bottom: 10px; color: #fff;">Server Updating</h1>
-        <p style="color: #aaa; max-width: 450px; font-size: 16px; margin-bottom: 30px;">
-          Please wait while Lanflix Server downloads the update, installs improvements, and restarts...
-        </p>
-        <div style="width: 300px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-bottom: 15px;">
-          <div id="update-progress-bar" style="width: 30%; height: 100%; background: #e50914; border-radius: 3px; animation: loading 2s infinite linear;"></div>
-        </div>
-        <span id="update-status-text" style="color: #888; font-size: 14px;">Downloading & Applying Update...</span>
-        
-        <style>
-          @keyframes loading {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(200%); }
-          }
-          @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-          }
-        </style>
-      `;
-      document.body.appendChild(overlay);
-    }
-  }
-
-  pollServerReboot() {
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const response = await fetch('/api/server-update/version', { cache: 'no-store' });
-        if (response.ok) {
-          clearInterval(interval);
-          const statusText = document.getElementById('update-status-text');
-          if (statusText) statusText.textContent = 'Server updated! Reloading...';
-          setTimeout(() => {
-            window.location.reload();
-          }, 1000);
-        }
-      } catch (e) {
-        // Server is rebooting
-        const statusText = document.getElementById('update-status-text');
-        if (statusText && attempts > 5) {
-          statusText.textContent = 'Restarting Lanflix Server...';
-        }
-      }
-    }, 2000);
-  }
-
-  showNoUpdateMessage() {
-    this.showInfoMessage("You're running the latest version!");
-  }
-
-  showInfoMessage(message) {
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-      position: fixed;
-      top: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.95);
-      color: #000;
-      padding: 16px 32px;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 500;
-      z-index: 10002;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    `;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-  }
-
-  showErrorMessage(message) {
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-      position: fixed;
-      top: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(229, 9, 20, 0.95);
-      color: white;
-      padding: 16px 32px;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 500;
-      z-index: 10002;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    `;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
-  }
 }
 
 export const appUpdater = new AppUpdater();
+if (typeof window !== 'undefined') {
+    window.appUpdater = appUpdater;
+}

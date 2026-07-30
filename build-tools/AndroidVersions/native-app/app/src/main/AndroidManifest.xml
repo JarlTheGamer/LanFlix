@@ -71,12 +71,6 @@
             android:screenOrientation="sensor"
             android:theme="@style/Theme.Lanflix.NoActionBar" />
             
-        <activity
-            android:name=".UpdateActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:theme="@style/Theme.Lanflix.NoActionBar" />
-            
         <!-- OTA Update Service -->
         <service
             android:name=".ota.UpdateService"
