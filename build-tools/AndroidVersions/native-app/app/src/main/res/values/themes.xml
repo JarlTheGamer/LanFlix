@@ -6,8 +6,9 @@
         <item name="colorOnPrimary">@color/white</item>
         <item name="colorSecondary">@color/accent_color</item>
         <item name="colorOnSecondary">@color/black</item>
-        <item name="android:statusBarColor">@color/primary_color</item>
-        <item name="android:navigationBarColor">@color/black</item>
+        <item name="android:statusBarColor">@color/bg_dark</item>
+        <item name="android:navigationBarColor">@color/bg_dark</item>
+        <item name="android:windowBackground">@color/bg_dark</item>
         <!-- Disable all focus and selection indicators -->
         <item name="colorControlHighlight">@android:color/transparent</item>
         <item name="colorControlActivated">@color/primary_color</item>
@@ -26,10 +27,13 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowFullscreen">false</item>
+        <item name="android:statusBarColor">@color/bg_dark</item>
+        <item name="android:navigationBarColor">@color/bg_dark</item>
     </style>
     
     <style name="Theme.Lanflix.Splash" parent="Theme.Lanflix.NoActionBar">
-        <item name="android:windowBackground">@color/primary_color</item>
-        <item name="android:statusBarColor">@color/primary_color</item>
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="android:statusBarColor">@color/bg_dark</item>
+        <item name="android:navigationBarColor">@color/bg_dark</item>
     </style>
 </resources>

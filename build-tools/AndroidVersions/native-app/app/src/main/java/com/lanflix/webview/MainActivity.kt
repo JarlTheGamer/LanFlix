@@ -27,6 +27,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var updateManager: UpdateManager
 
+    private var currentServerUrl: String = ServerManager.DEFAULT_MDNS_HOST
+
     private val isAmazonFireTv: Boolean by lazy {
         val manufacturer = Build.MANUFACTURER.orEmpty()
         val model = Build.MODEL.orEmpty()
@@ -39,137 +41,139 @@ class MainActivity : AppCompatActivity() {
                 device.startsWith("AFT", ignoreCase = true))
     }
 
-    // Default server URL - change this to your server address
-    private val serverUrl = "http://192.168.178.13:5037" // Change to your server IP
-    private val serverHost: String? by lazy {
-        runCatching { Uri.parse(serverUrl).host?.lowercase(Locale.US) }.getOrNull()
+    private fun getServerHosts(): Set<String> {
+        val hosts = mutableSetOf<String>()
+        runCatching { Uri.parse(currentServerUrl).host?.lowercase(Locale.US) }
+            .getOrNull()?.let { hosts.add(it) }
+        hosts.add("lanflix.local")
+        return hosts
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        
+
+        resolveServerUrl()
+        setupFailoverUI()
         setupUpdateManager()
         setupWebView()
         setupSwipeRefresh()
         loadWebApp()
-        
-        // Check for updates on app start (after a delay)
+
         lifecycleScope.launch {
-            kotlinx.coroutines.delay(3000) // Wait 3 seconds after app start
+            kotlinx.coroutines.delay(3000)
             updateManager.checkForUpdateManually(showNoUpdateDialog = false)
         }
     }
-    
+
+    private fun resolveServerUrl() {
+        val intentUrl = intent.getStringExtra("SERVER_URL")
+        currentServerUrl = if (!intentUrl.isNullOrBlank()) {
+            ServerManager.formatServerUrl(intentUrl)
+        } else {
+            ServerManager.getSavedServer(this)
+        }
+        ServerManager.saveServer(this, currentServerUrl)
+    }
+
+    private fun setupFailoverUI() {
+        binding.btnRetryConnection.setOnClickListener {
+            binding.serverUnreachableLayout.visibility = View.GONE
+            binding.webView.visibility = View.VISIBLE
+            loadWebApp()
+        }
+
+        binding.btnOpenServerBrowser.setOnClickListener {
+            openServerBrowser()
+        }
+    }
+
+    private fun openServerBrowser() {
+        val intent = Intent(this, ServerBrowserActivity::class.java)
+        startActivity(intent)
+    }
+
     private fun setupUpdateManager() {
         updateManager = UpdateManager(this)
         updateManager.schedulePeriodicUpdateCheck()
     }
-    
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         webView = binding.webView
         swipeRefresh = binding.swipeRefresh
-        
-        // Enable JavaScript and other WebView settings for performance
+
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
             cacheMode = WebSettings.LOAD_DEFAULT
-            
-            // Performance optimizations
+
+            val defaultUserAgent = userAgentString.orEmpty()
+            userAgentString = if (!defaultUserAgent.contains("Lanflix-AndroidNativeApp")) {
+                "$defaultUserAgent Lanflix-AndroidNativeApp Mobile"
+            } else {
+                defaultUserAgent
+            }
+
             setRenderPriority(WebSettings.RenderPriority.HIGH)
             setEnableSmoothTransition(true)
-            
-            // Allow file access for local content
+
             allowFileAccess = true
             allowContentAccess = true
             allowFileAccessFromFileURLs = true
             allowUniversalAccessFromFileURLs = true
-            
-            // Zoom and viewport settings for proper scaling
+
             setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
             useWideViewPort = true
             loadWithOverviewMode = true
-            
-            // Better text scaling - prevent automatic text scaling
+
             textZoom = 100
             minimumFontSize = 1
             minimumLogicalFontSize = 1
             defaultFontSize = 16
             defaultFixedFontSize = 13
-            
-            // Prevent automatic scaling
+
             layoutAlgorithm = WebSettings.LayoutAlgorithm.NORMAL
-            
-            // Media settings
             mediaPlaybackRequiresUserGesture = false
-            
-            // Mixed content for HTTPS/HTTP
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
-        
-        // Add JavaScript interface for native app integration
+
         webView.addJavascriptInterface(WebAppInterface(this, updateManager), "Android")
-        
-        // Force hardware acceleration only on devices that need the hint. Fire TV
-        // devices (model identifiers start with "AFT") already run the WebView with
-        // hardware acceleration by default, but explicitly forcing the layer causes
-        // the video element to render as a blank surface while audio continues to
-        // play. Leaving the layer type untouched lets the platform pick the
-        // appropriate pipeline without giving up hardware acceleration performance.
-        val manufacturer = Build.MANUFACTURER.orEmpty()
-        val model = Build.MODEL.orEmpty()
-        val product = Build.PRODUCT.orEmpty()
-        val device = Build.DEVICE.orEmpty()
-        val isAmazonFireTv = manufacturer.equals("Amazon", ignoreCase = true) &&
-            (model.startsWith("AFT", ignoreCase = true) ||
-                product.startsWith("AFT", ignoreCase = true) ||
-                device.startsWith("AFT", ignoreCase = true))
 
         if (isAmazonFireTv) {
-            // LAYER_TYPE_NONE keeps hardware acceleration enabled when the hosting
-            // window is hardware accelerated, but avoids the blank video surface seen
-            // on Fire TV when forcing LAYER_TYPE_HARDWARE.
             webView.setLayerType(View.LAYER_TYPE_NONE, null)
         } else {
             webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         }
-        
-        // Set initial scale for better display - use 0 for automatic scaling
+
         webView.setInitialScale(0)
-        
-        // Enable scrollbars for better user experience
         webView.isScrollbarFadingEnabled = true
         webView.isVerticalScrollBarEnabled = true
         webView.isHorizontalScrollBarEnabled = false
-        
-        // Set background and enable smooth scrolling
-        webView.setBackgroundColor(android.graphics.Color.BLACK)
+        webView.setBackgroundColor(android.graphics.Color.parseColor("#0D0D11"))
         webView.isHapticFeedbackEnabled = true
         webView.isScrollContainer = true
-     
-        // Set WebView client for handling page navigation
+
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 applyLayerTypeForUrl(url)
                 binding.progressBar.visibility = View.VISIBLE
+                binding.serverUnreachableLayout.visibility = View.GONE
+                webView.visibility = View.VISIBLE
             }
-            
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 binding.progressBar.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
-                
-                // Inject viewport meta tag and CSS for proper scaling and mobile experience
+
                 webView.evaluateJavascript(
                     """
-                    // Add or update viewport meta tag for proper scaling
                     var viewport = document.querySelector('meta[name="viewport"]');
                     if (!viewport) {
                         viewport = document.createElement('meta');
@@ -178,7 +182,6 @@ class MainActivity : AppCompatActivity() {
                     }
                     viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no';
                     
-                    // Add CSS for better mobile experience and Android WebView optimizations
                     var style = document.createElement('style');
                     style.innerHTML = `
                         * {
@@ -188,47 +191,10 @@ class MainActivity : AppCompatActivity() {
                             -webkit-text-size-adjust: 100% !important;
                             text-size-adjust: 100% !important;
                         }
-                        *:focus {
-                            outline: none !important;
-                            box-shadow: none !important;
-                        }
-                        html {
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            -webkit-text-size-adjust: 100% !important;
-                            text-size-adjust: 100% !important;
-                            font-size: 16px !important;
-                        }
                         body {
+                            background-color: #0d0d11 !important;
                             overflow-y: auto !important;
                             -webkit-overflow-scrolling: touch !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            -webkit-text-size-adjust: 100% !important;
-                            text-size-adjust: 100% !important;
-                            min-height: 100vh !important;
-                            position: relative !important;
-                        }
-                        input, textarea, select, button {
-                            outline: none !important;
-                            -webkit-tap-highlight-color: transparent !important;
-                            -webkit-text-size-adjust: 100% !important;
-                            text-size-adjust: 100% !important;
-                        }
-                        input:focus, textarea:focus, select:focus, button:focus {
-                            outline: none !important;
-                            box-shadow: none !important;
-                        }
-                        /* Ensure proper scaling on Android */
-                        .top-nav {
-                            -webkit-transform: translateZ(0) !important;
-                            transform: translateZ(0) !important;
-                            will-change: transform !important;
-                        }
-                        /* Prevent zoom on input focus */
-                        input[type="text"], input[type="email"], input[type="password"], 
-                        input[type="search"], textarea, select {
-                            font-size: 16px !important;
                         }
                     `;
                     document.head.appendChild(style);
@@ -236,54 +202,56 @@ class MainActivity : AppCompatActivity() {
                     null
                 )
             }
-            
+
             override fun onReceivedError(
                 view: WebView?,
                 request: WebResourceRequest?,
                 error: WebResourceError?
             ) {
                 super.onReceivedError(view, request, error)
-                binding.progressBar.visibility = View.GONE
-                swipeRefresh.isRefreshing = false
-                
-                // Show error message
-                Toast.makeText(
-                    this@MainActivity,
-                    "Failed to load page: ${error?.description}",
-                    Toast.LENGTH_LONG
-                ).show()
+                if (request == null || request.isForMainFrame) {
+                    showUnreachableOverlay("Could not connect to $currentServerUrl\n${error?.description}")
+                }
             }
-            
+
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: WebResourceResponse?
+            ) {
+                super.onReceivedHttpError(view, request, errorResponse)
+                if (request != null && request.isForMainFrame && (errorResponse?.statusCode ?: 200) >= 500) {
+                    showUnreachableOverlay("Server returned HTTP error ${errorResponse?.statusCode} at $currentServerUrl")
+                }
+            }
+
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url.toString()
-                
-                // Handle external links
                 if (url.startsWith("http://") || url.startsWith("https://")) {
                     val parsed = runCatching { Uri.parse(url) }.getOrNull()
-                    val host = parsed?.host?.lowercase(Locale.US)
-                    val isExternalHost = serverHost != null && host != null && host != serverHost
+                    val targetHost = parsed?.host?.lowercase(Locale.US)
 
-                    if (isExternalHost && parsed != null) {
-                        // Open external links in browser
+                    val validHosts = getServerHosts()
+                    val isServerHost = targetHost != null && (validHosts.contains(targetHost) || validHosts.isEmpty() || targetHost.endsWith(".local"))
+
+                    if (!isServerHost && parsed != null) {
                         startActivity(Intent(Intent.ACTION_VIEW, parsed))
                         return true
                     }
                 }
-
                 return false
             }
         }
-        
-        // Set WebChrome client for better JavaScript support
+
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 super.onProgressChanged(view, newProgress)
                 binding.progressBar.progress = newProgress
             }
-            
+
             override fun onJsAlert(
                 view: WebView?,
                 url: String?,
@@ -295,21 +263,23 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
         }
-        
-        // Enable focus for proper touch interactions
+
         webView.isFocusable = true
         webView.isFocusableInTouchMode = true
     }
-    
+
+    private fun showUnreachableOverlay(message: String) {
+        binding.progressBar.visibility = View.GONE
+        swipeRefresh.isRefreshing = false
+        webView.visibility = View.GONE
+        binding.txtUnreachableDetail.text = message
+        binding.serverUnreachableLayout.visibility = View.VISIBLE
+    }
+
     private fun setupSwipeRefresh() {
-        // Disable pull-to-refresh to prevent accidental refreshes
         swipeRefresh.isEnabled = false
     }
 
-    // Fire TV renders the HTML player surface as a blank rectangle if the WebView
-    // is forced onto the hardware layer. Keep the performance hint enabled for
-    // navigation screens, but fall back to the default layer when the dedicated
-    // player page is loading so the video element can composite correctly.
     private fun applyLayerTypeForUrl(url: String?) {
         val targetLayerType = when {
             isAmazonFireTv && isVideoPlaybackUrl(url) -> View.LAYER_TYPE_NONE
@@ -323,10 +293,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun isVideoPlaybackUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
-
         val parsedUrl = runCatching { Uri.parse(url) }.getOrNull() ?: return false
-
-        val hostMatches = serverHost == null || parsedUrl.host?.lowercase(Locale.US) == serverHost
+        val validHosts = getServerHosts()
+        val hostMatches = validHosts.isEmpty() || validHosts.contains(parsedUrl.host?.lowercase(Locale.US))
         if (!hostMatches) return false
 
         val path = parsedUrl.path?.lowercase(Locale.US).orEmpty()
@@ -341,18 +310,19 @@ class MainActivity : AppCompatActivity() {
 
         return false
     }
-    
+
     private fun loadWebApp() {
-        try {
-            webView.loadUrl(serverUrl)
-        } catch (e: Exception) {
-            Toast.makeText(this, "Error loading web app: ${e.message}", Toast.LENGTH_LONG).show()
+        lifecycleScope.launch {
+            try {
+                val connectionUrl = ServerManager.resolveUrlForConnection(this@MainActivity, currentServerUrl)
+                webView.loadUrl(connectionUrl)
+            } catch (e: Exception) {
+                showUnreachableOverlay("Error loading server: ${e.message}")
+            }
         }
     }
-    
-    // Handle remote control and keyboard input
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // Map remote control keys to web navigation
         val jsCommand = when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowUp', bubbles: true}));"
             KeyEvent.KEYCODE_DPAD_DOWN -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown', bubbles: true}));"
@@ -368,35 +338,36 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             KeyEvent.KEYCODE_MENU -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'm', bubbles: true}));"
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: ' ', bubbles: true}));"
-            KeyEvent.KEYCODE_MEDIA_PLAY -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: ' ', bubbles: true}));"
-            KeyEvent.KEYCODE_MEDIA_PAUSE -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: ' ', bubbles: true}));"
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: ' ', bubbles: true}));"
             KeyEvent.KEYCODE_MEDIA_STOP -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));"
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true}));"
             KeyEvent.KEYCODE_MEDIA_REWIND -> "window.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowLeft', bubbles: true}));"
             else -> null
         }
-        
+
         if (jsCommand != null && jsCommand != "handled") {
             webView.evaluateJavascript(jsCommand, null)
             return true
         }
-        
+
         return super.onKeyDown(keyCode, event)
     }
-    
+
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
         return true
     }
-    
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_change_server -> {
+                openServerBrowser()
+                true
+            }
             R.id.action_check_update -> {
                 lifecycleScope.launch {
                     val hasUpdate = updateManager.checkForUpdateManually(showNoUpdateDialog = true)
                     if (!hasUpdate) {
-                        // Show no update available message
                         runOnUiThread {
                             Toast.makeText(this@MainActivity, "You're running the latest version!", Toast.LENGTH_SHORT).show()
                         }
@@ -411,7 +382,7 @@ class MainActivity : AppCompatActivity() {
             else -> super.onOptionsItemSelected(item)
         }
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
         webView.destroy()

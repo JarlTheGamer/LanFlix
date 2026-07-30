@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
@@ -37,13 +39,11 @@
         android:hardwareAccelerated="true"
         tools:targetApi="31">
         
+        <!-- Splash Screen Entry Launcher -->
         <activity
-            android:name=".MainActivity"
+            android:name=".SplashActivity"
             android:exported="true"
-            android:launchMode="singleTop"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:screenOrientation="sensor"
-            android:theme="@style/Theme.Lanflix.NoActionBar">
+            android:theme="@style/Theme.Lanflix.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -54,11 +54,22 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
-        
+
+        <!-- Server Browser Activity -->
         <activity
-            android:name=".SplashActivity"
+            android:name=".ServerBrowserActivity"
             android:exported="false"
-            android:theme="@style/Theme.Lanflix.Splash" />
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Lanflix.NoActionBar" />
+
+        <!-- Main WebView Activity -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="sensor"
+            android:theme="@style/Theme.Lanflix.NoActionBar" />
             
         <activity
             android:name=".UpdateActivity"

@@ -1,42 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/primary_color"
+    android:background="#050507"
     android:gravity="center"
-    android:orientation="vertical">
+    tools:context=".SplashActivity">
 
-    <ImageView
-        android:id="@+id/logoImageView"
-        android:layout_width="@dimen/splash_logo_size"
-        android:layout_height="@dimen/splash_logo_size"
-        android:layout_marginBottom="@dimen/splash_margin"
-        android:contentDescription="@string/app_name"
-        android:src="@mipmap/ic_launcher" />
+    <!-- Ambient Netflix-Style Red Glow -->
+    <View
+        android:id="@+id/ambientGlowView"
+        android:layout_width="320dp"
+        android:layout_height="320dp"
+        android:layout_centerInParent="true"
+        android:background="@drawable/bg_ambient_glow"
+        android:alpha="0.75" />
 
-    <TextView
-        android:id="@+id/appNameTextView"
+    <!-- Center Branding Block (Pure Typography) -->
+    <LinearLayout
+        android:id="@+id/logoContainer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:text="@string/app_name"
-        android:textColor="@android:color/white"
-        android:textSize="@dimen/splash_text_size"
-        android:textStyle="bold" />
+        android:layout_centerInParent="true"
+        android:gravity="center"
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/loadingTextView"
-        android:layout_width="wrap_content"
+        <TextView
+            android:id="@+id/splashTitleView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-black"
+            android:letterSpacing="0.22"
+            android:text="LANFLIX"
+            android:textColor="#FFFFFF"
+            android:textSize="36sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+    <!-- Minimal Progress Line at Bottom -->
+    <LinearLayout
+        android:layout_width="160dp"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/splash_margin"
-        android:text="Loading..."
-        android:textColor="@android:color/white"
-        android:textSize="@dimen/splash_loading_text_size" />
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="60dp"
+        android:gravity="center"
+        android:orientation="vertical">
 
-    <ProgressBar
-        android:id="@+id/progressBar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:indeterminateTint="@android:color/white" />
+        <ProgressBar
+            android:id="@+id/splashProgressBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:indeterminate="true"
+            android:indeterminateTint="@color/primary_color" />
 
-</LinearLayout>
+    </LinearLayout>
+
+</RelativeLayout>
