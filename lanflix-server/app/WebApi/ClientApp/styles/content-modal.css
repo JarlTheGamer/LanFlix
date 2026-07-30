@@ -118,11 +118,14 @@
   display: flex;
   gap: 24px;
   padding: 40px;
+  align-items: flex-start;
 }
 
 .modal-poster {
   flex-shrink: 0;
   width: 200px;
+  align-self: flex-start;
+  aspect-ratio: 2 / 3;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -130,7 +133,8 @@
 
 .modal-poster img {
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 

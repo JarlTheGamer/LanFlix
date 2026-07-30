@@ -42,6 +42,7 @@ public class ImageController : ControllerBase
             return NotFound();
         }
 
+        Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
         return PhysicalFile(path, "image/jpeg");
     }
 
@@ -69,6 +70,7 @@ public class ImageController : ControllerBase
             return NotFound();
         }
 
+        Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
         return PhysicalFile(path, "image/jpeg");
     }
 
@@ -102,6 +104,7 @@ public class ImageController : ControllerBase
             return NotFound();
         }
 
+        Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
         return PhysicalFile(path, "image/jpeg");
     }
 }

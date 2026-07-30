@@ -5,6 +5,7 @@ export class Navigation {
 
     this.focusedElement = 'menu';
     this.focusedMenuIndex = 1;
+    this.heroButtonIndex = 0; // 0 = Play, 1 = More Info
     this.focusedTabIndex = 0;
     this.focusedCardIndex = 0;
     this.focusedCarouselIndex = 0; // Track which carousel is focused
@@ -19,6 +20,9 @@ export class Navigation {
     // Page transition state
     this.isTransitioning = false;
     this.transitionDuration = 300; // ms
+
+    // Track if user has initiated keyboard/remote navigation
+    this.hasUserNavigated = false;
 
     // Detect if device has touch capability
     this.isTouchDevice = this.detectTouchDevice();
@@ -462,7 +466,7 @@ export class Navigation {
    * @param {'auto'|'smooth'} [options.behavior='smooth'] - Scroll behavior
    */
   scrollElementIntoView(element, { align = 'start', offset = 24, behavior = 'smooth' } = {}) {
-    if (!this.isAndroidTV || !element) {
+    if (!element) {
       return;
     }
 
@@ -507,6 +511,9 @@ export class Navigation {
       return;
     }
 
+    // Enable navigation mode on first key press
+    this.hasUserNavigated = true;
+
     // Prevent default for arrow keys to avoid page scrolling
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
       e.preventDefault();
@@ -530,20 +537,45 @@ export class Navigation {
     const cards = () => Array.from(document.querySelectorAll('.movie-card'));
 
     if (this.focusedElement === 'hero') {
-      if (e.key === 'ArrowLeft') {
-        const newIndex = this.contentDisplay.currentHeroIndex > 0
-          ? this.contentDisplay.currentHeroIndex - 1
-          : this.contentDisplay.currentHeroIndex;
-        this.contentDisplay.goToSlide(newIndex);
-      } else if (e.key === 'ArrowRight') {
-        const newIndex = this.contentDisplay.currentHeroIndex + 1;
-        this.contentDisplay.goToSlide(newIndex);
+      const focusedHero = this.contentDisplay.getFocusedHeroElement();
+      const actionBtns = focusedHero ? Array.from(focusedHero.querySelectorAll('.hero-actions button, .cta')) : [];
+
+      if (e.key === 'ArrowRight') {
+        if (this.heroButtonIndex < actionBtns.length - 1) {
+          this.heroButtonIndex++;
+          this.updateFocus();
+        } else {
+          // Double press right on last button scrolls to next hero slide (wrapping around)
+          const totalHeroSlides = this.contentDisplay.heroCarouselTrack?.children.length || 1;
+          const newIndex = (this.contentDisplay.currentHeroIndex + 1) % totalHeroSlides;
+          this.contentDisplay.goToSlide(newIndex);
+          this.heroButtonIndex = 0;
+          this.updateFocus();
+        }
+      } else if (e.key === 'ArrowLeft') {
+        if (this.heroButtonIndex > 0) {
+          this.heroButtonIndex--;
+          this.updateFocus();
+        } else {
+          // Double press left on first button scrolls to previous hero slide (wrapping around to end)
+          const totalHeroSlides = this.contentDisplay.heroCarouselTrack?.children.length || 1;
+          const newIndex = (this.contentDisplay.currentHeroIndex - 1 + totalHeroSlides) % totalHeroSlides;
+          this.contentDisplay.goToSlide(newIndex);
+          this.heroButtonIndex = 0;
+          this.updateFocus();
+        }
+      } else if (e.key === 'Enter') {
+        if (actionBtns[this.heroButtonIndex]) {
+          actionBtns[this.heroButtonIndex].click();
+        }
       } else if (e.key === 'ArrowUp') {
         this.focusedElement = 'menu';
         this.focusedMenuIndex = this.lastMenuIndex;
         this.updateFocus();
       } else if (e.key === 'ArrowDown') {
-        this.focusedElement = 'tabs';
+        this.focusedElement = 'cards';
+        this.focusedCardIndex = 0;
+        this.focusedCarouselIndex = 0;
         this.updateFocus();
       }
     } else if (this.focusedElement === 'menu') {
@@ -628,19 +660,23 @@ export class Navigation {
       const carouselCards = Array.from(currentCarousel.querySelectorAll('.movie-card'));
 
       if (e.key === 'ArrowLeft') {
-        this.focusedCardIndex = this.focusedCardIndex > 0 ? this.focusedCardIndex - 1 : carouselCards.length - 1;
+        this.focusedCardIndex = (this.focusedCardIndex > 0)
+          ? this.focusedCardIndex - 1
+          : carouselCards.length - 1;
         this.updateFocus();
       } else if (e.key === 'ArrowRight') {
-        this.focusedCardIndex = this.focusedCardIndex < carouselCards.length - 1 ? this.focusedCardIndex + 1 : 0;
+        this.focusedCardIndex = (this.focusedCardIndex < carouselCards.length - 1)
+          ? this.focusedCardIndex + 1
+          : 0;
         this.updateFocus();
       } else if (e.key === 'ArrowUp') {
-        // Move to previous carousel or tabs
+        // Move to previous carousel or hero
         if (this.focusedCarouselIndex > 0) {
           this.focusedCarouselIndex--;
-          this.focusedCardIndex = 0; // Reset to first card in new carousel
+          this.focusedCardIndex = 0;
           this.updateFocus();
         } else {
-          this.focusedElement = 'tabs';
+          this.focusedElement = 'hero';
           this.updateFocus();
         }
       } else if (e.key === 'ArrowDown') {
@@ -680,7 +716,10 @@ export class Navigation {
     const settingsButton = document.querySelector('.settings-btn');
 
     const allHeros = document.querySelectorAll('.hero');
-    allHeros.forEach(h => h.classList.remove('focused'));
+    allHeros.forEach(h => {
+      h.classList.remove('focused');
+      h.querySelectorAll('.hero-actions button, .cta').forEach(b => b.classList.remove('focused', 'active-focus'));
+    });
     menuButtons.forEach((btn) => btn.classList.remove('focused'));
     tabs.forEach((tab) => tab.classList.remove('focused'));
     if (profileButton) profileButton.classList.remove('focused');
@@ -696,10 +735,24 @@ export class Navigation {
       }
     });
 
+    // Highlight initial Nav Bar item ("Home") on load
+    if (!this.hasUserNavigated) {
+      if (this.focusedElement === 'menu' && menuButtons[this.focusedMenuIndex]) {
+        menuButtons[this.focusedMenuIndex].classList.add('focused');
+      }
+      return;
+    }
+
     if (this.focusedElement === 'hero') {
       const focusedHero = this.contentDisplay.getFocusedHeroElement();
       if (focusedHero) {
         focusedHero.classList.add('focused');
+        const actionBtns = Array.from(focusedHero.querySelectorAll('.hero-actions button, .cta'));
+        actionBtns.forEach(b => b.classList.remove('focused', 'active-focus'));
+        if (actionBtns.length > 0) {
+          const btnToFocus = actionBtns[this.heroButtonIndex] || actionBtns[0];
+          btnToFocus.classList.add('focused', 'active-focus');
+        }
       }
 
       const heroStage = document.querySelector('.hero-stage');
@@ -709,6 +762,7 @@ export class Navigation {
     } else if (this.focusedElement === 'menu') {
       if (menuButtons[this.focusedMenuIndex]) {
         menuButtons[this.focusedMenuIndex].classList.add('focused');
+        this.scrollElementIntoView(menuButtons[this.focusedMenuIndex], { align: 'start', offset: 10 });
       }
     } else if (this.focusedElement === 'profile') {
       if (profileButton) profileButton.classList.add('focused');
@@ -742,6 +796,10 @@ export class Navigation {
           }
 
           this.updateMovieCarousel(currentCarousel);
+
+          try {
+            focusedCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          } catch (e) {}
 
           const section = focusedCard.closest('.spotlight') || focusedCard.closest('section') || currentCarousel;
           this.scrollElementIntoView(section, { align: 'center', offset: 40 });

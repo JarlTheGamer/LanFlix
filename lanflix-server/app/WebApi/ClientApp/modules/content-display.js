@@ -364,9 +364,6 @@ export class ContentDisplay {
     }
 
     this.focusedHeroElement = this.heroCarouselTrack.querySelector('.hero');
-    if (this.focusedHeroElement) {
-      this.focusedHeroElement.classList.add('focused');
-    }
   }
 
   /**
@@ -443,8 +440,9 @@ export class ContentDisplay {
     const infoBtn = heroSection.querySelector('[data-action="info"]');
 
     if (playBtn) {
-      playBtn.addEventListener('click', () => {
-        window.location.href = `player.html?contentId=${item.id}&type=${item.type}`;
+      playBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.handlePlayAction(item.id, item.type, item);
       });
     }
 
@@ -1153,11 +1151,45 @@ export class ContentDisplay {
   /**
    * Handle play action
    */
-  async handlePlayAction(contentId, contentType) {
-    console.log('Play:', contentId, contentType);
-    // This will be implemented in the video player module
-    const streamUrl = apiClient.getStreamUrl(contentId);
-    window.location.href = `player.html?contentId=${contentId}&type=${contentType}`;
+  async handlePlayAction(contentId, contentType, itemData = null) {
+    console.log('Play action:', contentId, contentType);
+    const type = (contentType || itemData?.type || 'movie').toLowerCase();
+
+    if (type === 'series' || type === 'tv') {
+      try {
+        const profile = this.profileManager?.getCurrentProfile();
+        const profileId = profile?.id;
+        
+        // Fetch series details to find available episodes
+        const seriesData = await apiClient.getLibraryItem(contentId, profileId);
+        const episodes = seriesData?.episodes || itemData?.episodes || [];
+
+        let episodeToPlay = null;
+        if (episodes.length > 0) {
+          // Find first episode with a file or available
+          episodeToPlay = episodes.find(e => e.hasFile || e.available || e.filePath) || episodes[0];
+        }
+
+        if (episodeToPlay) {
+          const episodeId = episodeToPlay.id || episodeToPlay.episodeId || episodeToPlay.tmdbId;
+          let playerUrl = `player.html?contentId=${contentId}&type=series&episodeId=${episodeId}`;
+          if (episodeToPlay.watchProgress && episodeToPlay.watchProgress.progressSeconds > 30 && !episodeToPlay.watchProgress.completed) {
+            playerUrl += `&startTime=${episodeToPlay.watchProgress.progressSeconds}`;
+          }
+          window.location.href = playerUrl;
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to resolve series episode for play action:', err);
+      }
+
+      // If no episode found or fetch fails, open modal so user can view/select episodes
+      await this.contentModal.show(contentId, type, false);
+      return;
+    }
+
+    // For movies
+    window.location.href = `player.html?contentId=${contentId}&type=${type}`;
   }
 
   /**
