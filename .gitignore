@@ -77,9 +77,9 @@ Media/
 *.avi
 *.mov
 
-# APK releases
-releases/
-*.apk
+# APK releases - ignore binaries but track manifest files
+releases/*.zip
+releases/*.apk
 
 # Android build files
 build-tools/AndroidVersions/android-native/build/
