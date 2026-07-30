@@ -36,9 +36,33 @@ public class ServerUpdateService : IServerUpdateService
 
     public string GetCurrentVersion()
     {
+        try
+        {
+            var versionJsonPath = Path.Combine(AppContext.BaseDirectory, "version.json");
+            if (!File.Exists(versionJsonPath))
+            {
+                versionJsonPath = Path.Combine(Directory.GetCurrentDirectory(), "version.json");
+            }
+
+            if (File.Exists(versionJsonPath))
+            {
+                var json = File.ReadAllText(versionJsonPath);
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("serverVersion", out var verProp))
+                {
+                    var verStr = verProp.GetString();
+                    if (!string.IsNullOrEmpty(verStr)) return verStr;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error reading version.json for GetCurrentVersion");
+        }
+
         var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
         var version = assembly.GetName().Version;
-        return version?.ToString(3) ?? "1.2.6";
+        return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "0.0.0";
     }
 
     public async Task<ServerUpdateInfo?> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
@@ -141,22 +165,28 @@ public class ServerUpdateService : IServerUpdateService
             ZipFile.ExtractToDirectory(downloadPath, extractPath, true);
 
             _logger.LogInformation("Update extracted successfully to {Path}", extractPath);
-            UpdateProgress("Applying", 90, "Restarting Lanflix Server...");
+            UpdateProgress("Applying", 85, "Swapping updated files in-process...");
 
             var currentDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var scriptPath = CreateUpdateScript(currentDir, extractPath);
+            
+            // Perform in-process C# atomic file swap
+            ApplyInProcessFileSwap(currentDir, extractPath);
 
-            _logger.LogInformation("Starting update script at {ScriptPath}. Server restarting...", scriptPath);
-            UpdateProgress("Complete", 100, "Update complete! Restarting...");
+            UpdateProgress("Complete", 100, "Update complete! Restarting server...");
 
-            var processInfo = new ProcessStartInfo
+            var exePath = Path.Combine(currentDir, OperatingSystem.IsWindows() ? "Lanflix.WebApi.exe" : "Lanflix.WebApi");
+
+            if (File.Exists(exePath))
             {
-                FileName = scriptPath,
-                UseShellExecute = true,
-                CreateNoWindow = false
-            };
-
-            Process.Start(processInfo);
+                _logger.LogInformation("Relaunching process: {ExePath}", exePath);
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = exePath,
+                    WorkingDirectory = currentDir,
+                    UseShellExecute = true
+                };
+                Process.Start(startInfo);
+            }
 
             await Task.Delay(1000, cancellationToken);
             _lifetime.StopApplication();
@@ -171,90 +201,51 @@ public class ServerUpdateService : IServerUpdateService
         }
     }
 
-    private string CreateUpdateScript(string currentDir, string extractPath)
+    private void ApplyInProcessFileSwap(string targetDir, string sourceDir)
     {
-        var isWindows = OperatingSystem.IsWindows();
-        var scriptPath = Path.Combine(Path.GetTempPath(), isWindows ? "update.bat" : "update.sh");
-
-        if (isWindows)
+        var protectedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            var script = $@"@echo off
-echo Waiting for Lanflix server to stop...
-timeout /t 5 /nobreak > nul
+            "lanflix.db",
+            "lanflix.db-shm",
+            "lanflix.db-wal",
+            "appsettings.json",
+            "appsettings.Development.json"
+        };
 
-echo Preserving database and settings...
-if exist ""{currentDir}\lanflix.db"" copy ""{currentDir}\lanflix.db"" ""{currentDir}\lanflix.db.preserve"" > nul
-if exist ""{currentDir}\lanflix.db-shm"" copy ""{currentDir}\lanflix.db-shm"" ""{currentDir}\lanflix.db-shm.preserve"" > nul
-if exist ""{currentDir}\lanflix.db-wal"" copy ""{currentDir}\lanflix.db-wal"" ""{currentDir}\lanflix.db-wal.preserve"" > nul
-if exist ""{currentDir}\appsettings.json"" copy ""{currentDir}\appsettings.json"" ""{currentDir}\appsettings.json.preserve"" > nul
-
-echo Installing update...
-xcopy ""{extractPath}\*"" ""{currentDir}\"" /E /I /Y > nul
-
-echo Restoring database and settings...
-if exist ""{currentDir}\lanflix.db.preserve"" (
-    copy ""{currentDir}\lanflix.db.preserve"" ""{currentDir}\lanflix.db"" > nul
-    del ""{currentDir}\lanflix.db.preserve""
-)
-if exist ""{currentDir}\lanflix.db-shm.preserve"" (
-    copy ""{currentDir}\lanflix.db-shm.preserve"" ""{currentDir}\lanflix.db-shm"" > nul
-    del ""{currentDir}\lanflix.db-shm.preserve""
-)
-if exist ""{currentDir}\lanflix.db-wal.preserve"" (
-    copy ""{currentDir}\lanflix.db-wal.preserve"" ""{currentDir}\lanflix.db-wal"" > nul
-    del ""{currentDir}\lanflix.db-wal.preserve""
-)
-if exist ""{currentDir}\appsettings.json.preserve"" (
-    copy ""{currentDir}\appsettings.json.preserve"" ""{currentDir}\appsettings.json"" > nul
-    del ""{currentDir}\appsettings.json.preserve""
-)
-
-echo Starting Lanflix server...
-cd /d ""{currentDir}""
-start """" ""Lanflix.WebApi.exe""
-
-echo Update complete!
-timeout /t 3 /nobreak > nul
-del ""{scriptPath}""
-";
-            File.WriteAllText(scriptPath, script);
-        }
-        else
+        foreach (var sourceFilePath in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
         {
-            var script = $@"#!/bin/bash
-echo ""Waiting for Lanflix server to stop...""
-sleep 5
+            var relativePath = Path.GetRelativePath(sourceDir, sourceFilePath);
+            var fileName = Path.GetFileName(relativePath);
 
-echo ""Preserving database and settings...""
-[ -f ""{currentDir}/lanflix.db"" ] && cp ""{currentDir}/lanflix.db"" ""{currentDir}/lanflix.db.preserve""
-[ -f ""{currentDir}/lanflix.db-shm"" ] && cp ""{currentDir}/lanflix.db-shm"" ""{currentDir}/lanflix.db-shm.preserve""
-[ -f ""{currentDir}/lanflix.db-wal"" ] && cp ""{currentDir}/lanflix.db-wal"" ""{currentDir}/lanflix.db-wal.preserve""
-[ -f ""{currentDir}/appsettings.json"" ] && cp ""{currentDir}/appsettings.json"" ""{currentDir}/appsettings.json.preserve""
+            if (protectedFiles.Contains(fileName))
+            {
+                continue; // Always preserve user database & configuration
+            }
 
-echo ""Installing update...""
-cp -r ""{extractPath}""/* ""{currentDir}/""
+            var targetFilePath = Path.Combine(targetDir, relativePath);
+            var targetDirectory = Path.GetDirectoryName(targetFilePath);
 
-echo ""Restoring database and settings...""
-[ -f ""{currentDir}/lanflix.db.preserve"" ] && mv ""{currentDir}/lanflix.db.preserve"" ""{currentDir}/lanflix.db""
-[ -f ""{currentDir}/lanflix.db-shm.preserve"" ] && mv ""{currentDir}/lanflix.db-shm.preserve"" ""{currentDir}/lanflix.db-shm""
-[ -f ""{currentDir}/lanflix.db-wal.preserve"" ] && mv ""{currentDir}/lanflix.db-wal.preserve"" ""{currentDir}/lanflix.db-wal""
-[ -f ""{currentDir}/appsettings.json.preserve"" ] && mv ""{currentDir}/appsettings.json.preserve"" ""{currentDir}/appsettings.json""
+            if (!string.IsNullOrEmpty(targetDirectory) && !Directory.Exists(targetDirectory))
+            {
+                Directory.CreateDirectory(targetDirectory);
+            }
 
-echo ""Setting permissions...""
-chmod +x ""{currentDir}/Lanflix.WebApi""
+            try
+            {
+                File.Copy(sourceFilePath, targetFilePath, true);
+            }
+            catch (IOException)
+            {
+                // Locked file (e.g. running DLL or EXE) - Windows permits renaming locked files!
+                var tempOldPath = targetFilePath + ".old";
+                if (File.Exists(tempOldPath))
+                {
+                    try { File.Delete(tempOldPath); } catch { }
+                }
 
-echo ""Starting Lanflix server...""
-cd ""{currentDir}""
-./Lanflix.WebApi &
-
-echo ""Update complete!""
-sleep 3
-rm ""{scriptPath}""
-";
-            File.WriteAllText(scriptPath, script);
-            Process.Start("chmod", $"+x {scriptPath}")?.WaitForExit();
+                File.Move(targetFilePath, tempOldPath);
+                File.Copy(sourceFilePath, targetFilePath, true);
+            }
         }
-
-        return scriptPath;
     }
 }

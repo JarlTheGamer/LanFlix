@@ -29,6 +29,7 @@ export class SettingsManager {
     this.setupModals();
     this.setupProfiles();
     this.setupUpdateChecker();
+    this.updateVersionDisplay();
     this.updateFocus();
 
     document.addEventListener('keydown', (e) => this.handleKeyboard(e));
@@ -1017,6 +1018,25 @@ export class SettingsManager {
     checkBtn.addEventListener('click', async () => {
       await appUpdater.checkForUpdates(true);
     });
+  }
+
+  async updateVersionDisplay() {
+    try {
+      const response = await fetch('/api/server-update/version', { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        const versionEl = document.getElementById('app-version');
+        const buildEl = document.getElementById('app-build-number');
+        if (versionEl && data.version) {
+          versionEl.textContent = data.version;
+        }
+        if (buildEl && data.version) {
+          buildEl.textContent = `v${data.version}`;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch app version for settings page:', e);
+    }
   }
 
   async checkForServerUpdates(userInitiated = true) {
