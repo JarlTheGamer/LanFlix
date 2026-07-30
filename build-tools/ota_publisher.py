@@ -20,6 +20,7 @@ from pathlib import Path
 # Paths relative to project root
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
+GITHUB_REPO = "JarlTheGamer/LanFlix"
 VERSION_FILE = PROJECT_ROOT / "version.json"
 ANDROID_APP_DIR = PROJECT_ROOT / "build-tools" / "AndroidVersions" / "native-app"
 SERVER_DIR = PROJECT_ROOT / "lanflix-server"
@@ -246,7 +247,7 @@ def build_server(version_name: str, notes: str = "Server update release", host_u
         "version": version_name,
         "currentVersion": version_name,
         "releaseDate": datetime.utcnow().isoformat() + "Z",
-        "downloadUrl": f"{host_url.rstrip('/')}/releases/{zip_file_name}",
+        "downloadUrl": f"https://github.com/{GITHUB_REPO}/releases/download/v{version_name}/{zip_file_name}",
         "fileSize": file_size,
         "checksum": checksum,
         "releaseNotes": notes,
