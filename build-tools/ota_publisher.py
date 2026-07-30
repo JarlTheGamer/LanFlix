@@ -354,7 +354,9 @@ def git_push_release(version: str, notes: str, zip_path: Path = None):
     if zip_path and zip_path.exists():
         try:
             print(f"📦 Uploading release asset {zip_path.name} to GitHub Releases...")
-            gh_res = subprocess.run(["gh", "release", "create", tag_name, str(zip_path), "--notes", notes, "--clobber"], cwd=PROJECT_ROOT)
+            gh_res = subprocess.run(["gh", "release", "create", tag_name, str(zip_path), "--notes", notes], cwd=PROJECT_ROOT)
+            if gh_res.returncode != 0:
+                gh_res = subprocess.run(["gh", "release", "upload", tag_name, str(zip_path), "--clobber"], cwd=PROJECT_ROOT)
             if gh_res.returncode == 0:
                 print(f"✅ Successfully uploaded {zip_path.name} to GitHub Release {tag_name}!")
             else:
