@@ -1,10 +1,10 @@
 {
-  "version": "1.4.2",
-  "currentVersion": "1.4.2",
-  "releaseDate": "2026-07-30T23:56:14.822319Z",
-  "downloadUrl": "https://github.com/JarlTheGamer/LanFlix/releases/download/v1.4.2/lanflix-server-v1.4.2.zip",
-  "fileSize": 50998133,
-  "checksum": "e12c277c27c972830822bc4080110923635ccf629097a395d525d5ddafaed313",
-  "releaseNotes": "Restored original \ud83c\udf89 OTA update modal with confetti celebration!",
+  "version": "1.4.3",
+  "currentVersion": "1.4.3",
+  "releaseDate": "2026-07-30T23:58:33.102259Z",
+  "downloadUrl": "https://github.com/JarlTheGamer/LanFlix/releases/download/v1.4.3/lanflix-server-v1.4.3.zip",
+  "fileSize": 50993643,
+  "checksum": "e433f342a097199f160e1bfe8f685bfb46b654dccbe12e9061f6db66c60d8afd",
+  "releaseNotes": "Fix duplicate update toast notification listeners",
   "isUpdateAvailable": true
 }

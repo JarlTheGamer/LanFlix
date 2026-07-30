@@ -1,9 +1,9 @@
 {
-  "serverVersion": "1.4.2",
-  "serverBuildNumber": 42,
-  "androidVersionName": "1.4.2",
-  "androidVersionCode": 42,
+  "serverVersion": "1.4.3",
+  "serverBuildNumber": 43,
+  "androidVersionName": "1.4.3",
+  "androidVersionCode": 43,
   "minSupportedServerVersion": "1.0.0",
   "minSupportedAndroidVersionCode": 1,
-  "lastUpdated": "2026-07-30T23:56:00.397088Z"
+  "lastUpdated": "2026-07-30T23:58:19.547696Z"
 }
