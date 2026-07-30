@@ -28,7 +28,7 @@ public class ReleaseMetadataService : IReleaseMetadataService
         _httpClient = httpClientFactory.CreateClient("GitHubClient");
         _logger = logger;
         _environment = environment;
-        _githubRepo = configuration["Lanflix:GitHubRepo"] ?? "JarlTheGamer/RipFlix";
+        _githubRepo = configuration["Lanflix:GitHubRepo"] ?? "JarlTheGamer/LanFlix";
     }
 
     public async Task<AppReleaseMetadata?> GetLatestAppReleaseAsync(int currentVersionCode, CancellationToken cancellationToken = default)
