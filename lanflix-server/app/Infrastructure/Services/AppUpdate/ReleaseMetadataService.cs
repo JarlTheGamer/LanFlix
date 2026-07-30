@@ -42,9 +42,9 @@ public class ReleaseMetadataService : IReleaseMetadataService
         if (release != null)
         {
             var apkAsset = release.Assets?.FirstOrDefault(a => a.Name?.EndsWith(".apk", StringComparison.OrdinalIgnoreCase) == true);
-            if (apkAsset != null)
+            if (apkAsset != null && !string.IsNullOrWhiteSpace(release.TagName))
             {
-                var versionName = release.TagName?.TrimStart('v') ?? "4.0.0";
+                var versionName = release.TagName.TrimStart('v', 'V');
                 var versionCode = ParseVersionCode(versionName);
 
                 var metadata = new AppReleaseMetadata

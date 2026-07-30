@@ -68,16 +68,13 @@ class WebAppInterface(private val context: Context, private val updateManager: U
 
     private fun deriveVersionCode(versionName: String): Int {
         return runCatching {
-            if (versionName == "4.0.0") {
-                return@runCatching 4
-            }
-
             val parts = versionName.split('.')
-            val major = parts.getOrNull(0)?.toIntOrNull() ?: 0
-            val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            val major = parts.getOrNull(0)?.toIntOrNull() ?: 1
+            val minor = parts.getOrNull(1)?.toIntOrNull() ?: 2
+            val patch = parts.getOrNull(2)?.toIntOrNull() ?: 8
 
-            major * 10 + minor
-        }.getOrDefault(0)
+            major * 100 + minor * 10 + patch
+        }.getOrDefault(28)
     }
     
     @JavascriptInterface

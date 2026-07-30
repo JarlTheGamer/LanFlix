@@ -2,7 +2,8 @@
 """
 Lanflix OTA Publisher & Automated Build Tool
 Automates building Android APK releases, packaging Lanflix Server releases,
-calculating SHA-256 checksums, updating local OTA manifests, and Git push/tag releases.
+calculating SHA-256 checksums, enforcing version downgrade protection via version.json,
+updating local OTA manifests, and Git push/tag releases.
 """
 
 import os
@@ -19,10 +20,11 @@ from pathlib import Path
 # Paths relative to project root
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
+VERSION_FILE = PROJECT_ROOT / "version.json"
 ANDROID_APP_DIR = PROJECT_ROOT / "build-tools" / "AndroidVersions" / "native-app"
 SERVER_DIR = PROJECT_ROOT / "lanflix-server"
 SERVER_PUBLISH_DIR = SERVER_DIR / "publish"
-RELEASES_DIR = SERVER_PUBLISH_DIR / "releases"
+RELEASES_DIR = PROJECT_ROOT / "releases"
 DEV_RELEASES_DIR = SERVER_DIR / "app" / "WebApi" / "bin" / "Release" / "net9.0" / "releases"
 
 def calculate_sha256(file_path: Path) -> str:
@@ -33,37 +35,108 @@ def calculate_sha256(file_path: Path) -> str:
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
 
-def extract_android_version() -> tuple:
-    """Extracts versionCode and versionName from build.gradle.kts."""
-    gradle_file = ANDROID_APP_DIR / "app" / "build.gradle.kts"
-    version_code = 1
-    version_name = "1.0.0"
+def load_version_config() -> dict:
+    """Loads central version configuration from version.json."""
+    if VERSION_FILE.exists():
+        try:
+            return json.loads(VERSION_FILE.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"⚠️ Error reading version.json: {e}")
+    return {
+        "serverVersion": "1.2.7",
+        "serverBuildNumber": 27,
+        "androidVersionName": "1.2.7",
+        "androidVersionCode": 27,
+        "minSupportedServerVersion": "1.0.0",
+        "minSupportedAndroidVersionCode": 1
+    }
 
+def save_version_config(config: dict):
+    """Saves updated version configuration to version.json."""
+    config["lastUpdated"] = datetime.utcnow().isoformat() + "Z"
+    VERSION_FILE.write_text(json.dumps(config, indent=2), encoding="utf-8")
+
+def compare_versions(v1: str, v2: str) -> int:
+    """Compares semantic version strings. Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal."""
+    def parse(v):
+        return [int(x) for x in re.sub(r'[^0-9.]', '', v).split('.') if x.isdigit()]
+    p1, p2 = parse(v1), parse(v2)
+    for a, b in zip(p1, p2):
+        if a > b: return 1
+        if a < b: return -1
+    return len(p1) - len(p2)
+
+def bump_patch_version(v: str) -> str:
+    """Bumps patch component of a version string (e.g. 1.2.7 -> 1.2.8)."""
+    parts = v.split('.')
+    if len(parts) >= 3 and parts[2].isdigit():
+        parts[2] = str(int(parts[2]) + 1)
+        return '.'.join(parts)
+    elif len(parts) == 2 and parts[1].isdigit():
+        return f"{parts[0]}.{parts[1]}.1"
+    return f"{v}.1"
+
+def validate_and_bump_version(proposed_version: str = None, auto_bump: bool = False) -> tuple:
+    """
+    Validates version against version.json.
+    Enforces that new version cannot be lower than previous version.
+    Returns (version_name, version_code).
+    """
+    config = load_version_config()
+    current_version = config.get("serverVersion", "1.2.7")
+    current_code = config.get("serverBuildNumber", 27)
+
+    if auto_bump or not proposed_version or proposed_version == "1.0.0":
+        new_version = bump_patch_version(current_version)
+    else:
+        new_version = proposed_version
+
+    if compare_versions(new_version, current_version) < 0:
+        raise ValueError(
+            f"❌ VERSION DOWNGRADE REJECTED!\n"
+            f"Proposed version '{new_version}' is lower than current version '{current_version}' in version.json.\n"
+            f"Please specify a higher version (e.g. --version {bump_patch_version(current_version)})."
+        )
+
+    new_code = current_code + 1 if compare_versions(new_version, current_version) > 0 else current_code
+    config["serverVersion"] = new_version
+    config["serverBuildNumber"] = new_code
+    config["androidVersionName"] = new_version
+    config["androidVersionCode"] = new_code
+
+    save_version_config(config)
+    sync_version_to_files(new_version, new_code)
+
+    print(f"📌 Version Verified & Synced: {new_version} (Build: {new_code})")
+    return new_version, new_code
+
+def sync_version_to_files(version_name: str, version_code: int):
+    """Syncs version strings across Android Gradle and settings.html."""
+    gradle_file = ANDROID_APP_DIR / "app" / "build.gradle.kts"
     if gradle_file.exists():
         content = gradle_file.read_text(encoding="utf-8")
-        code_match = re.search(r'versionCode\s*=\s*(\d+)', content)
-        name_match = re.search(r'versionName\s*=\s*"([^"]+)"', content)
+        content = re.sub(r'versionCode\s*=\s*\d+', f'versionCode = {version_code}', content)
+        content = re.sub(r'versionName\s*=\s*"[^"]+"', f'versionName = "{version_name}"', content)
+        gradle_file.write_text(content, encoding="utf-8")
 
-        if code_match:
-            version_code = int(code_match.group(1))
-        if name_match:
-            version_name = name_match.group(1)
-
-    return version_code, version_name
+    settings_file = SERVER_DIR / "app" / "WebApi" / "ClientApp" / "pages" / "settings.html"
+    if settings_file.exists():
+        content = settings_file.read_text(encoding="utf-8")
+        content = re.sub(r'<meta name="app-version" content="[^"]+" />', f'<meta name="app-version" content="{version_name}" />', content)
+        settings_file.write_text(content, encoding="utf-8")
 
 def ensure_directories():
     """Ensures releases directories exist."""
     RELEASES_DIR.mkdir(parents=True, exist_ok=True)
     DEV_RELEASES_DIR.mkdir(parents=True, exist_ok=True)
 
-def build_android_apk(notes: str = "Bug fixes and performance improvements", host_url: str = "http://lanflix.local:5037") -> Path:
+def build_android_apk(version_name: str, version_code: int, notes: str = "Bug fixes and performance improvements", host_url: str = "http://lanflix.local:5037") -> Path:
     """Compiles Android APK and updates app-manifest.json."""
     print("=" * 60)
     print("🚀 [1/2] Building Android Native App APK...")
     print("=" * 60)
 
     ensure_directories()
-    version_code, version_name = extract_android_version()
     print(f"📦 Version: {version_name} (Code: {version_code})")
 
     gradle_cmd = "gradlew.bat" if sys.platform == "win32" else "./gradlew"
@@ -119,13 +192,18 @@ def build_android_apk(notes: str = "Bug fixes and performance improvements", hos
 
     return target_apk_path
 
-def build_server(version: str = "1.0.0", notes: str = "Server update release", host_url: str = "http://lanflix.local:5037") -> Path:
+def build_server(version_name: str, notes: str = "Server update release", host_url: str = "http://lanflix.local:5037") -> Path:
     """Builds and packages the Lanflix C# Server and updates server-manifest.json."""
     print("=" * 60)
     print("🚀 [2/2] Building Lanflix C# Backend Server...")
     print("=" * 60)
 
     ensure_directories()
+
+    # Delete any nested releases directory inside publish to prevent recursive zip bomb
+    nested_releases = SERVER_PUBLISH_DIR / "releases"
+    if nested_releases.exists():
+        shutil.rmtree(nested_releases, ignore_errors=True)
 
     build_script = SERVER_DIR.parent / "lanflix-server" / "build.ps1"
     if sys.platform == "win32" and build_script.exists():
@@ -136,7 +214,11 @@ def build_server(version: str = "1.0.0", notes: str = "Server update release", h
             print("❌ Server build script failed!")
             sys.exit(1)
 
-    zip_file_name = f"lanflix-server-v{version}.zip"
+    # Clean nested releases again after build script
+    if nested_releases.exists():
+        shutil.rmtree(nested_releases, ignore_errors=True)
+
+    zip_file_name = f"lanflix-server-v{version_name}.zip"
     zip_target_path = RELEASES_DIR / zip_file_name
 
     print(f"📦 Creating server release package: {zip_target_path}")
@@ -146,8 +228,8 @@ def build_server(version: str = "1.0.0", notes: str = "Server update release", h
     checksum = calculate_sha256(zip_target_path)
 
     manifest_data = {
-        "version": version,
-        "currentVersion": version,
+        "version": version_name,
+        "currentVersion": version_name,
         "releaseDate": datetime.utcnow().isoformat() + "Z",
         "downloadUrl": f"{host_url.rstrip('/')}/releases/{zip_file_name}",
         "fileSize": file_size,
@@ -188,13 +270,17 @@ def git_push_release(version: str, notes: str):
         print(f"⚠️ Git push completed with status code {res.returncode}")
 
 def main():
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+
     parser = argparse.ArgumentParser(description="Lanflix Automated OTA Build & Release Publisher Tool")
     parser.add_argument("--apk", action="store_true", help="Build and publish Android APK update")
     parser.add_argument("--server", action="store_true", help="Build and publish Server release ZIP")
     parser.add_argument("--all", action="store_true", help="Build and publish both APK and Server updates")
     parser.add_argument("--git", action="store_true", help="Automatically git add, commit, tag, and push release to remote repository")
     parser.add_argument("--notes", type=str, default="Release update with performance improvements and bug fixes", help="Release notes text")
-    parser.add_argument("--version", type=str, default="1.0.0", help="Server release version string (e.g. 1.1.0)")
+    parser.add_argument("--version", type=str, default=None, help="Server release version string (e.g. 1.2.8)")
+    parser.add_argument("--bump", action="store_true", help="Auto-bump version number to next patch release")
     parser.add_argument("--host", type=str, default="http://lanflix.local:5037", help="Base server host URL for download links")
 
     args = parser.parse_args()
@@ -203,16 +289,23 @@ def main():
         args.all = True
 
     print("\n🎬 LANFLIX OTA AUTOMATED PUBLISHER TOOL")
+
+    try:
+        version_name, version_code = validate_and_bump_version(args.version, args.bump)
+    except ValueError as e:
+        print(e)
+        sys.exit(1)
+
     print(f"🌐 Target Host: {args.host}\n")
 
     if args.apk or args.all:
-        build_android_apk(notes=args.notes, host_url=args.host)
+        build_android_apk(version_name=version_name, version_code=version_code, notes=args.notes, host_url=args.host)
 
     if args.server or args.all:
-        build_server(version=args.version, notes=args.notes, host_url=args.host)
+        build_server(version_name=version_name, notes=args.notes, host_url=args.host)
 
     if args.git:
-        git_push_release(version=args.version, notes=args.notes)
+        git_push_release(version=version_name, notes=args.notes)
 
     print("\n🎉 OTA Publish Pipeline Completed Successfully!")
 
