@@ -354,20 +354,19 @@ def git_push_release(version: str, notes: str, zip_path: Path = None):
     if zip_path and zip_path.exists():
         try:
             print(f"📦 Uploading release asset {zip_path.name} to GitHub Releases...")
-            gh_res = subprocess.run(["gh", "release", "create", tag_name, str(zip_path), "--notes", notes], cwd=PROJECT_ROOT)
+            clean_env = {k: v for k, v in os.environ.items() if k != 'GITHUB_TOKEN'}
+            gh_res = subprocess.run(["gh", "release", "create", tag_name, str(zip_path), "--notes", notes], cwd=PROJECT_ROOT, env=clean_env)
             if gh_res.returncode != 0:
-                gh_res = subprocess.run(["gh", "release", "upload", tag_name, str(zip_path), "--clobber"], cwd=PROJECT_ROOT)
+                gh_res = subprocess.run(["gh", "release", "upload", tag_name, str(zip_path), "--clobber"], cwd=PROJECT_ROOT, env=clean_env)
             if gh_res.returncode == 0:
                 print(f"✅ Successfully uploaded {zip_path.name} to GitHub Release {tag_name}!")
             else:
-                print(f"⚠️ GitHub CLI upload failed (Exit Code {gh_res.returncode}).")
-                print("👉 TIP: Run 'gh auth login' in your terminal to authorize GitHub CLI for automatic release uploads!")
+                print(f"⚠️ GitHub CLI upload failed with status {gh_res.returncode}")
                 token = os.environ.get("GITHUB_TOKEN", "")
                 if token:
                     github_upload_release_asset(version, zip_path, notes, token)
         except Exception as e:
             print(f"⚠️ GitHub release asset upload failed: {e}")
-            print("👉 TIP: Run 'gh auth login' in your terminal to authorize GitHub CLI for automatic release uploads!")
 
 def main():
     if hasattr(sys.stdout, 'reconfigure'):
