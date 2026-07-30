@@ -59,8 +59,12 @@ public static class DependencyInjection
         services.AddScoped<IBazarrClient, BazarrClient>();
 
         // App Update Services
+        services.AddSingleton<IReleaseMetadataService, ReleaseMetadataService>();
         services.AddScoped<IServerUpdateService, ServerUpdateService>();
         services.AddScoped<IAppUpdateService, AppUpdateService>();
+
+        // Discovery Services (mDNS lanflix.local)
+        services.AddHostedService<Lanflix.Infrastructure.Services.Discovery.MDnsDiscoveryService>();
 
         // FFmpeg Services
         services.AddScoped<IMediaAnalyzer, MediaAnalyzer>();

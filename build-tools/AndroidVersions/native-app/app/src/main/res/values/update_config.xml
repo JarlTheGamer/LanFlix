@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- OTA Update Configuration -->
-    <string name="update_server_url">http://192.168.178.13:5037</string>
+    <string name="update_server_url">http://lanflix.local:5037</string>
     <string name="update_endpoint">/api/app/update-check</string>
     <integer name="update_check_interval_hours">6</integer>
     <bool name="auto_download_updates">true</bool>

@@ -389,16 +389,16 @@
                         <div class="settings-item">
                             <div class="settings-item-info">
                                 <label>Connection Status</label>
-                                <p class="settings-item-description">Connected to high-speed network</p>
+                                <p class="settings-item-description">Connected to local network (lanflix.local)</p>
                             </div>
-                            <span class="status-badge status-online">Online</span>
+                            <span class="status-badge status-online" id="network-status">Online</span>
                         </div>
                         <div class="settings-item">
                             <div class="settings-item-info">
-                                <label>Download Speed</label>
-                                <p class="settings-item-description">Current network speed</p>
+                                <label>Interface Speed</label>
+                                <p class="settings-item-description">Current network bandwidth</p>
                             </div>
-                            <span class="settings-value">125 Mbps</span>
+                            <span class="settings-value" id="network-speed">Loading...</span>
                         </div>
                     </div>
                 </section>
@@ -409,32 +409,11 @@
 
                     <div class="settings-group">
                         <h2 class="settings-group-title">Active Devices</h2>
-                        <div class="device-list">
+                        <div class="device-list" id="device-list-container">
                             <div class="device-item">
-                                <div class="device-icon">
-                                    <svg viewBox="0 0 24 24">
-                                        <path
-                                            d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" />
-                                    </svg>
-                                </div>
                                 <div class="device-info">
-                                    <div class="device-name">Chrome - Windows PC</div>
-                                    <div class="device-meta">Last active: Now</div>
+                                    <div class="device-name">Loading active devices...</div>
                                 </div>
-                                <button class="device-remove">Remove</button>
-                            </div>
-                            <div class="device-item">
-                                <div class="device-icon">
-                                    <svg viewBox="0 0 24 24">
-                                        <path
-                                            d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z" />
-                                    </svg>
-                                </div>
-                                <div class="device-info">
-                                    <div class="device-name">iPhone 14 Pro</div>
-                                    <div class="device-meta">Last active: 2 hours ago</div>
-                                </div>
-                                <button class="device-remove">Remove</button>
                             </div>
                         </div>
                     </div>
