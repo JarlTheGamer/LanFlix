@@ -84,15 +84,18 @@ public class ReleaseMetadataService : IReleaseMetadataService
         var release = await FetchFromGitHubAsync(cancellationToken);
         if (release != null)
         {
-            var latestVersion = release.TagName?.TrimStart('v') ?? "1.0.0";
+            var latestVersion = !string.IsNullOrWhiteSpace(release.TagName) ? release.TagName.TrimStart('v', 'V') : currentVersion;
             var platform = OperatingSystem.IsWindows() ? "win-x64" : (OperatingSystem.IsLinux() ? "linux-x64" : "osx-x64");
             
             var asset = release.Assets?.FirstOrDefault(a =>
                 a.Name != null &&
-                a.Name.Contains(platform, StringComparison.OrdinalIgnoreCase) &&
-                (a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || a.Name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)));
+                (a.Name.Contains("server", StringComparison.OrdinalIgnoreCase) || a.Name.Contains(platform, StringComparison.OrdinalIgnoreCase)) &&
+                (a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || a.Name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)))
+                ?? release.Assets?.FirstOrDefault(a => a.Name != null && a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
 
-            if (asset != null)
+            var downloadUrl = asset?.BrowserDownloadUrl ?? release.ZipballUrl ?? string.Empty;
+
+            if (!string.IsNullOrEmpty(downloadUrl))
             {
                 var isNewer = CompareVersions(latestVersion, currentVersion) > 0;
                 var info = new ServerUpdateInfo
@@ -100,8 +103,8 @@ public class ReleaseMetadataService : IReleaseMetadataService
                     Version = latestVersion,
                     CurrentVersion = currentVersion,
                     ReleaseDate = release.PublishedAt ?? DateTime.UtcNow,
-                    DownloadUrl = asset.BrowserDownloadUrl ?? string.Empty,
-                    FileSize = asset.Size ?? 0L,
+                    DownloadUrl = downloadUrl,
+                    FileSize = asset?.Size ?? 0L,
                     ReleaseNotes = release.Body ?? "Server update available",
                     IsUpdateAvailable = isNewer
                 };
@@ -223,6 +226,9 @@ public class ReleaseMetadataService : IReleaseMetadataService
 
         [JsonPropertyName("published_at")]
         public DateTime? PublishedAt { get; set; }
+
+        [JsonPropertyName("zipball_url")]
+        public string? ZipballUrl { get; set; }
 
         [JsonPropertyName("assets")]
         public List<GitHubAssetDto>? Assets { get; set; }
