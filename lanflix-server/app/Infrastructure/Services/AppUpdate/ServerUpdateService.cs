@@ -32,6 +32,40 @@ public class ServerUpdateService : IServerUpdateService
         _releaseMetadataService = releaseMetadataService;
         _httpClient = httpClientFactory.CreateClient();
         _currentVersion = GetCurrentVersion();
+        CleanUpOldFiles();
+    }
+
+    private void CleanUpOldFiles()
+    {
+        try
+        {
+            var exeLocation = Environment.ProcessPath
+                ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName
+                ?? Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "Lanflix.WebApi.exe" : "Lanflix.WebApi");
+            var currentDir = Path.GetDirectoryName(exeLocation)
+                ?? AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            if (Directory.Exists(currentDir))
+            {
+                var oldFiles = Directory.GetFiles(currentDir, "*.old", SearchOption.AllDirectories);
+                foreach (var oldFile in oldFiles)
+                {
+                    try
+                    {
+                        File.Delete(oldFile);
+                        _logger.LogInformation("Cleaned up old update temp file: {File}", Path.GetFileName(oldFile));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Could not delete old temp file yet: {File}", oldFile);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error cleaning up .old files on startup");
+        }
     }
 
     public string GetCurrentVersion()
