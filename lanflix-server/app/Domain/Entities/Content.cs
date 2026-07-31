@@ -76,6 +76,16 @@ public class Content : BaseEntity, IAuditableEntity, ISoftDelete
     public DateTime AddedAt { get; set; }
 
     /// <summary>
+    /// TMDb Collection / Box Set ID
+    /// </summary>
+    public int? CollectionId { get; set; }
+
+    /// <summary>
+    /// TMDb Collection / Box Set Name
+    /// </summary>
+    public string? CollectionName { get; set; }
+
+    /// <summary>
     /// Indicates whether the content has been soft deleted
     /// </summary>
     public bool IsDeleted { get; set; }

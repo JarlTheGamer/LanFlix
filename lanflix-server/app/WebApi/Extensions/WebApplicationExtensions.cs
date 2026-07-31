@@ -4,6 +4,7 @@ using Lanflix.Infrastructure.Services.Settings;
 using Lanflix.WebApi.Hubs;
 using Lanflix.WebApi.Middleware;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 namespace Lanflix.WebApi.Extensions;
@@ -218,6 +219,38 @@ public static class WebApplicationExtensions
             Log.Information("Ensuring database exists...");
             await context.Database.EnsureCreatedAsync();
             Log.Information("Database is ready");
+            
+            // Schema migrations: safely add new columns (no-op if already exist)
+            try
+            {
+                await context.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE Episodes ADD COLUMN IntroStartTime REAL NULL");
+            }
+            catch { /* Column already exists */ }
+            try
+            {
+                await context.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE Episodes ADD COLUMN IntroEndTime REAL NULL");
+            }
+            catch { /* Column already exists */ }
+            try
+            {
+                await context.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE Episodes ADD COLUMN CreditsStartTime REAL NULL");
+            }
+            catch { /* Column already exists */ }
+            try
+            {
+                await context.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE Contents ADD COLUMN CollectionId INTEGER NULL");
+            }
+            catch { /* Column already exists */ }
+            try
+            {
+                await context.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE Contents ADD COLUMN CollectionName TEXT NULL");
+            }
+            catch { /* Column already exists */ }
             
             // Seed initial data
             var seeder = new Lanflix.Infrastructure.Persistence.DatabaseSeeder(context, logger);

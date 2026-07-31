@@ -489,4 +489,32 @@ public class SeriesController : ControllerBase
             return StatusCode(500, new { error = "Failed to get series seasons", details = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Trigger audio fingerprinting intro scan for a season
+    /// </summary>
+    [HttpPost("{seriesId}/season/{seasonNumber}/scan-intros")]
+    public async Task<IActionResult> ScanSeasonIntros(
+        int seriesId,
+        int seasonNumber,
+        [FromServices] IIntroScanner introScanner,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Requesting intro fingerprint scan for Series {SeriesId} Season {SeasonNumber}", seriesId, seasonNumber);
+
+        // Launch scan in background task
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await introScanner.ScanSeasonIntrosAsync(seriesId, seasonNumber, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error scanning intros for Series {SeriesId} Season {SeasonNumber}", seriesId, seasonNumber);
+            }
+        }, cancellationToken);
+
+        return Ok(new { message = $"Audio fingerprinting intro scan queued for Series {seriesId} Season {seasonNumber}" });
+    }
 }

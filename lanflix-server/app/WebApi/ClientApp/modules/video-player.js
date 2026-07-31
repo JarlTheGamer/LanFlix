@@ -83,6 +83,9 @@ export class VideoPlayer {
       // Load available subtitles
       await this.loadSubtitles();
 
+      // Load intro/credits markers from the DB (written by audio fingerprinting)
+      await this.loadIntroMarkers();
+
       // Initialize TV navigation
       this.playerNavigation.initialize();
 
@@ -228,6 +231,28 @@ export class VideoPlayer {
         ccBtn.style.cursor = 'not-allowed';
         ccBtn.title = 'Subtitles unavailable';
       }
+    }
+  }
+
+  /**
+   * Load intro/credits time markers from DB (populated by audio fingerprinting scanner)
+   */
+  async loadIntroMarkers() {
+    if (!this.episodeId) return;
+    try {
+      const info = await apiClient.request(`/stream/episode/${this.episodeId}`);
+      this.introStartTime = typeof info?.introStartTime === 'number' ? info.introStartTime : null;
+      this.introEndTime   = typeof info?.introEndTime   === 'number' ? info.introEndTime   : null;
+      this.creditsStartTime = typeof info?.creditsStartTime === 'number' ? info.creditsStartTime : null;
+
+      if (this.introStartTime !== null) {
+        console.log(`🎬 Intro markers loaded: ${this.introStartTime}s → ${this.introEndTime}s`);
+      }
+      if (this.creditsStartTime !== null) {
+        console.log(`🎬 Credits marker loaded: ${this.creditsStartTime}s`);
+      }
+    } catch (e) {
+      console.warn('Could not load intro/credits markers (audio fingerprinting may not have run yet):', e);
     }
   }
 
@@ -636,6 +661,7 @@ export class VideoPlayer {
       const rawTime = this.videoElement.currentTime;
       this.currentTime = this.isTranscoding ? (rawTime + this.startOffset) : rawTime;
       this.updateProgressBar();
+      this.checkIntroAndCreditsMarkers();
     });
 
     // Duration updates
@@ -858,6 +884,32 @@ export class VideoPlayer {
       }
     });
 
+    // Skip Intro button listener
+    document.getElementById('skip-intro-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.introEndTime !== null) {
+        this.seek(this.introEndTime);
+        this.showNotification('Skipped Intro');
+      }
+    });
+
+    // Next Episode button listener
+    document.getElementById('next-episode-play-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.playNextEpisode();
+    });
+
+    // Keyboard shortcut 'S' or 's' to Skip Intro
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 's' || e.key === 'S') {
+        const skipBtn = document.getElementById('skip-intro-btn');
+        if (skipBtn && skipBtn.classList.contains('visible') && this.introEndTime !== null) {
+          this.seek(this.introEndTime);
+          this.showNotification('Skipped Intro');
+        }
+      }
+    });
+
     // Fullscreen
     document.querySelector('.fullscreen-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -866,6 +918,53 @@ export class VideoPlayer {
 
     // Mouse controls for showing/hiding controls
     this.setupMouseControls();
+  }
+
+  checkIntroAndCreditsMarkers() {
+    const skipBtn = document.getElementById('skip-intro-btn');
+    const nextCard = document.getElementById('next-episode-card');
+
+    // Skip Intro button logic
+    if (this.introStartTime !== null && this.introEndTime !== null) {
+      if (this.currentTime >= this.introStartTime && this.currentTime < this.introEndTime) {
+        if (skipBtn && !skipBtn.classList.contains('visible')) {
+          skipBtn.classList.add('visible');
+        }
+      } else {
+        if (skipBtn && skipBtn.classList.contains('visible')) {
+          skipBtn.classList.remove('visible');
+        }
+      }
+    }
+
+    // Next Episode card logic
+    if (this.creditsStartTime !== null && this.duration > 0) {
+      if (this.currentTime >= this.creditsStartTime) {
+        if (nextCard && !nextCard.classList.contains('visible')) {
+          nextCard.classList.add('visible');
+        }
+      } else {
+        if (nextCard && nextCard.classList.contains('visible')) {
+          nextCard.classList.remove('visible');
+        }
+      }
+    }
+  }
+
+  async playNextEpisode() {
+    if (!this.contentId || !this.episodeId) return;
+    try {
+      const episodes = await apiClient.request(`/series/${this.contentId}/episodes`);
+      if (Array.isArray(episodes)) {
+        const currentIndex = episodes.findIndex(e => e.id == this.episodeId);
+        if (currentIndex !== -1 && currentIndex + 1 < episodes.length) {
+          const nextEp = episodes[currentIndex + 1];
+          window.location.href = `player.html?contentId=${this.contentId}&type=series&episodeId=${nextEp.id}`;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load next episode:', e);
+    }
   }
 
   /**

@@ -19,6 +19,7 @@ public class LibraryService : ILibraryService
     private readonly IMetadataService _metadataService;
     private readonly ITmdbClient _tmdbClient;
     private readonly IMediaAnalyzer _mediaAnalyzer;
+    private readonly IIntroScanner _introScanner;
     private readonly ILogger<LibraryService> _logger;
 
     private readonly string[] _videoExtensions = { ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v" };
@@ -31,6 +32,7 @@ public class LibraryService : ILibraryService
         IMetadataService metadataService,
         ITmdbClient tmdbClient,
         IMediaAnalyzer mediaAnalyzer,
+        IIntroScanner introScanner,
         ILogger<LibraryService> logger)
     {
         _context = context;
@@ -38,6 +40,7 @@ public class LibraryService : ILibraryService
         _metadataService = metadataService;
         _tmdbClient = tmdbClient;
         _mediaAnalyzer = mediaAnalyzer;
+        _introScanner = introScanner;
         _logger = logger;
     }
 
@@ -72,6 +75,34 @@ public class LibraryService : ILibraryService
 
             // Clean up missing content
             await CleanupMissingContentAsync(stats, cancellationToken);
+
+            // Trigger background audio fingerprint intro scanner for seasons missing intro markers
+            var introScanner = _introScanner;
+            var logger = _logger;
+            var unscannedSeasons = await _context.Episodes
+                .Where(e => e.IntroStartTime == null && !string.IsNullOrEmpty(e.FilePath))
+                .Select(e => new { e.ContentId, e.SeasonNumber })
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            if (unscannedSeasons.Count > 0)
+            {
+                _logger.LogInformation("Queueing background audio fingerprint intro scan for {Count} unscanned seasons...", unscannedSeasons.Count);
+                _ = Task.Run(async () =>
+                {
+                    foreach (var season in unscannedSeasons)
+                    {
+                        try
+                        {
+                            await introScanner.ScanSeasonIntrosAsync(season.ContentId, season.SeasonNumber);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, "Background intro scan failed for Series {ContentId} Season {SeasonNumber}", season.ContentId, season.SeasonNumber);
+                        }
+                    }
+                });
+            }
 
             _logger.LogInformation("Library scan completed: {Added} added, {Updated} updated, {Removed} removed, {Errors} errors", 
                 stats.Added, stats.Updated, stats.Removed, stats.Errors.Count);

@@ -65,6 +65,21 @@ public class Episode : BaseEntity, IAuditableEntity, ISoftDelete
     public DateTime AddedAt { get; set; }
 
     /// <summary>
+    /// Intro start time in seconds (for Skip Intro)
+    /// </summary>
+    public double? IntroStartTime { get; set; }
+
+    /// <summary>
+    /// Intro end time in seconds (for Skip Intro)
+    /// </summary>
+    public double? IntroEndTime { get; set; }
+
+    /// <summary>
+    /// Credits start time in seconds (for Next Episode countdown)
+    /// </summary>
+    public double? CreditsStartTime { get; set; }
+
+    /// <summary>
     /// Indicates whether the episode has been soft deleted
     /// </summary>
     public bool IsDeleted { get; set; }

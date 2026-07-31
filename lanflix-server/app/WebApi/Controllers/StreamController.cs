@@ -75,8 +75,9 @@ public class StreamController : ControllerBase
     }
 
     /// <summary>
-    /// Get direct video URL for a TV episode
+    /// Get direct video URL and markers for a TV episode
     /// </summary>
+    [HttpGet("episode/{id}")]
     [HttpGet("episode/{id}/url")]
     public async Task<IActionResult> GetEpisodeStreamUrl(
         [FromRoute] int id,
@@ -120,7 +121,10 @@ public class StreamController : ControllerBase
                 filePath = episode.FilePath,
                 fileName = Path.GetFileName(episode.FilePath),
                 fileSize = new FileInfo(episode.FilePath).Length,
-                mimeType = GetMimeType(episode.FilePath)
+                mimeType = GetMimeType(episode.FilePath),
+                introStartTime = episode.IntroStartTime,
+                introEndTime = episode.IntroEndTime,
+                creditsStartTime = episode.CreditsStartTime
             });
         }
         catch (Exception ex)

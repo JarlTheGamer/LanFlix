@@ -47,8 +47,10 @@ public static class DependencyInjection
         services.AddScoped<IMetadataService, MetadataService>();
         services.AddSingleton<ITranscodingSessionManager, TranscodingSessionManager>();
         
-        // Transcoding Settings
+        // Transcoding Settings & Analysis
         services.AddScoped<TranscodingSettingsProvider>();
+        services.AddScoped<IMediaAnalyzer, MediaAnalyzer>();
+        services.AddScoped<IIntroScanner, AudioFingerprintIntroScanner>();
         
         // Authentication Services
         services.AddScoped<ITokenService, TokenService>();

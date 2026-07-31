@@ -441,9 +441,23 @@ window.toggleEpisodes = async function (seriesId, seriesTitle) {
       // Render episodes grouped by season
       let html = '<div class="episodes-list">';
       Object.keys(seasons).sort((a, b) => a - b).forEach(seasonNum => {
+        const seasonEps = seasons[seasonNum];
+        const hasIntros = seasonEps.some(ep => ep.introStartTime !== null && ep.introStartTime !== undefined);
+        const introStatus = hasIntros
+          ? `<span class="intro-badge has-intros" title="Intro markers detected">🎵 Intros: ✓</span>`
+          : `<span class="intro-badge no-intros" title="No intro markers yet">🎵 Intros: —</span>`;
+
         html += `
           <div class="season-group">
-            <h3 class="season-title">Season ${seasonNum}</h3>
+            <div class="season-header">
+              <h3 class="season-title">Season ${seasonNum}</h3>
+              <div class="season-actions">
+                ${introStatus}
+                <button class="media-btn rescan-intros" onclick="scanSeasonIntros(${seriesId}, ${seasonNum}, this)">
+                  🔄 Re-scan Intros
+                </button>
+              </div>
+            </div>
             <div class="season-episodes">
         `;
 
@@ -457,6 +471,9 @@ window.toggleEpisodes = async function (seriesId, seriesTitle) {
                 <div class="episode-meta">
                   ${episode.runtime ? `${episode.runtime} min` : ''}
                   ${episode.airDate ? `• Aired: ${new Date(episode.airDate).toLocaleDateString()}` : ''}
+                  ${episode.introStartTime !== null && episode.introStartTime !== undefined
+                    ? `• 🎵 Intro: ${episode.introStartTime.toFixed(1)}s → ${(episode.introEndTime || 0).toFixed(1)}s`
+                    : '• 🎵 No intro marker'}
                 </div>
                 <div class="media-path" title="${episode.filePath || 'No file'}">${episode.filePath || 'No file'}</div>
               </div>
@@ -482,6 +499,40 @@ window.toggleEpisodes = async function (seriesId, seriesTitle) {
   } else {
     // Hide episodes
     episodesContainer.style.display = 'none';
+  }
+};
+
+// Trigger audio fingerprint intro scan for a specific season
+window.scanSeasonIntros = async function(seriesId, seasonNumber, btn) {
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Scanning...';
+  btn.disabled = true;
+
+  try {
+    await apiClient.request(`/series/${seriesId}/season/${seasonNumber}/scan-intros`, {
+      method: 'POST'
+    });
+
+    btn.textContent = '✅ Queued!';
+    btn.style.background = 'rgba(76, 175, 80, 0.2)';
+    btn.style.borderColor = '#4caf50';
+    btn.style.color = '#4caf50';
+    setTimeout(() => {
+      btn.textContent = originalText;
+      btn.disabled = false;
+      btn.style.background = '';
+      btn.style.borderColor = '';
+      btn.style.color = '';
+    }, 4000);
+  } catch (error) {
+    console.error('Failed to queue intro scan:', error);
+    btn.textContent = '❌ Failed';
+    btn.style.color = '#f44336';
+    setTimeout(() => {
+      btn.textContent = originalText;
+      btn.disabled = false;
+      btn.style.color = '';
+    }, 3000);
   }
 };
 

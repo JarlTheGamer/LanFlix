@@ -665,12 +665,81 @@
 }
 
 @media (max-width: 768px) {
-  .path-selector {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
   .path-separator {
     text-align: center;
   }
+}
+
+/* Season header with Re-scan Intros button */
+.season-group {
+  margin-bottom: 24px;
+}
+
+.season-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  border-left: 3px solid #e50914;
+  margin-bottom: 10px;
+  gap: 12px;
+}
+
+.season-title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.season-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.intro-badge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.intro-badge.has-intros {
+  background: rgba(76, 175, 80, 0.15);
+  color: #66bb6a;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.intro-badge.no-intros {
+  background: rgba(255, 255, 255, 0.06);
+  color: #888;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.media-btn.rescan-intros {
+  background: rgba(229, 9, 20, 0.1);
+  border: 1px solid rgba(229, 9, 20, 0.4);
+  color: #e50914;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+
+.media-btn.rescan-intros:hover {
+  background: rgba(229, 9, 20, 0.25);
+  border-color: #e50914;
+}
+
+.media-btn.rescan-intros:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

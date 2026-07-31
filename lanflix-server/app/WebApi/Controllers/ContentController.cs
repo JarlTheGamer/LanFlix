@@ -9,6 +9,7 @@ namespace Lanflix.WebApi.Controllers;
 [Route("api/[controller]")]
 public class ContentController : ControllerBase
 {
+    private readonly IApplicationDbContext _context;
     private readonly ITmdbClient _tmdbClient;
     private readonly IRadarrClient _radarrClient;
     private readonly ISonarrClient _sonarrClient;
@@ -18,6 +19,7 @@ public class ContentController : ControllerBase
     private readonly ILogger<ContentController> _logger;
 
     public ContentController(
+        IApplicationDbContext context,
         ITmdbClient tmdbClient,
         ISettingsService settingsService,
         IRadarrClient radarrClient,
@@ -26,6 +28,7 @@ public class ContentController : ControllerBase
         IMemoryCache cache,
         ILogger<ContentController> logger)
     {
+        _context = context;
         _tmdbClient = tmdbClient;
         _settingsService = settingsService;
         _radarrClient = radarrClient;

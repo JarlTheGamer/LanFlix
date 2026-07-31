@@ -531,6 +531,8 @@ public class LibraryController : ControllerBase
                     hasFile = !string.IsNullOrEmpty(e.FilePath),
                     available = !string.IsNullOrEmpty(e.FilePath),
                     watched = false,
+                    introStartTime = e.IntroStartTime,
+                    introEndTime = e.IntroEndTime,
                     addedAt = e.AddedAt
                 }).ToArray();
             }
