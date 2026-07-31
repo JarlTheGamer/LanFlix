@@ -52,7 +52,7 @@ public class AudioFingerprintIntroScanner : IIntroScanner
         {
             if (File.Exists(ep.FilePath))
             {
-                var env = await ExtractAudioEnergyEnvelopeAsync(ep.FilePath, 600, cancellationToken);
+                var env = await ExtractAudioEnergyEnvelopeAsync(ep.FilePath, 0, 600, cancellationToken);
                 if (env.Length > 0)
                 {
                     envelopes[ep.Id] = env;
@@ -78,7 +78,8 @@ public class AudioFingerprintIntroScanner : IIntroScanner
             var env1 = envelopes[ep1.Id];
             var env2 = envelopes[ep2.Id];
 
-            var match = FindLongestMatchingSegment(env1, env2, samplesPerSec: 20, minSec: 15, maxSec: 120);
+            // Intros: search only the first 300s
+            var match = FindLongestMatchingSegment(env1, env2, samplesPerSec: 20, minSec: 15, maxSec: 120, maxSearchSec: 300);
             if (match.HasValue)
             {
                 if (!epStarts.ContainsKey(ep1.Id)) epStarts[ep1.Id] = new List<double>();
@@ -99,28 +100,112 @@ public class AudioFingerprintIntroScanner : IIntroScanner
             {
                 if (epStarts.TryGetValue(ep.Id, out var starts) && epEnds.TryGetValue(ep.Id, out var ends) && starts.Count > 0)
                 {
-                    ep.IntroStartTime = Math.Round(starts.Average(), 1);
-                    ep.IntroEndTime = Math.Round(ends.Average(), 1);
-                    _logger.LogInformation("  -> Ep {Num} ({Title}): Intro detected at {Start:F1}s - {End:F1}s",
-                        ep.EpisodeNumber, ep.Title, ep.IntroStartTime, ep.IntroEndTime);
+                    starts.Sort();
+                    ends.Sort();
+                    ep.IntroStartTime = Math.Round(starts[starts.Count / 2], 1);
+                    ep.IntroEndTime = Math.Round(ends[ends.Count / 2], 1);
+                }
+            }
+        }
+
+        // 3. Fast Audio Fingerprinting for End Credits Detection
+        //    Extract mono audio from the last 3 minutes (180s) of each episode.
+        //    Credits in TV episodes always live in the final 3 minutes of the video file.
+        //    Cross-correlate credit theme music using a strict backward-expansion threshold (0.80)
+        //    so it stops PRECISELY at the 0.5s sample where credit music starts.
+        var mediaAnalyzer = scope.ServiceProvider.GetRequiredService<IMediaAnalyzer>();
+        var tailAudioEnvelopes = new Dictionary<int, float[]>();
+        var tailStartOffsets = new Dictionary<int, int>();
+        const int tailWindowSec = 180; // Last 3 minutes
+
+        foreach (var ep in episodes)
+        {
+            if (File.Exists(ep.FilePath))
+            {
+                try
+                {
+                    var mediaInfo = await mediaAnalyzer.AnalyzeAsync(ep.FilePath, cancellationToken);
+                    int totalSec = (int)mediaInfo.Duration.TotalSeconds;
+
+                    int tailStart = totalSec > tailWindowSec ? totalSec - tailWindowSec : 0;
+                    int window = Math.Min(totalSec, tailWindowSec);
+
+                    if (window > 30)
+                    {
+                        var tailEnv = await ExtractAudioEnergyEnvelopeAsync(ep.FilePath, tailStart, window, cancellationToken);
+                        if (tailEnv.Length > 0)
+                        {
+                            tailAudioEnvelopes[ep.Id] = tailEnv;
+                            tailStartOffsets[ep.Id] = tailStart;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not extract tail audio envelope for episode {EpId}", ep.Id);
+                }
+            }
+        }
+
+        if (tailAudioEnvelopes.Count >= 2)
+        {
+            var epTailList = episodes.Where(e => tailAudioEnvelopes.ContainsKey(e.Id)).ToList();
+            var epCreditsStarts = new Dictionary<int, List<double>>();
+
+            for (int i = 0; i < epTailList.Count; i++)
+            {
+                for (int j = i + 1; j < epTailList.Count; j++)
+                {
+                    var ep1 = epTailList[i];
+                    var ep2 = epTailList[j];
+                    var env1 = tailAudioEnvelopes[ep1.Id];
+                    var env2 = tailAudioEnvelopes[ep2.Id];
+
+                    var match = FindCreditsAudioSegment(env1, env2, samplesPerSec: 20);
+                    if (match.HasValue)
+                    {
+                        double credits1 = tailStartOffsets[ep1.Id] + match.Value.Start1;
+                        double credits2 = tailStartOffsets[ep2.Id] + match.Value.Start2;
+
+                        if (!epCreditsStarts.ContainsKey(ep1.Id)) epCreditsStarts[ep1.Id] = new List<double>();
+                        epCreditsStarts[ep1.Id].Add(credits1);
+
+                        if (!epCreditsStarts.ContainsKey(ep2.Id)) epCreditsStarts[ep2.Id] = new List<double>();
+                        epCreditsStarts[ep2.Id].Add(credits2);
+                    }
                 }
             }
 
-            await context.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Completed audio fingerprint intro scan for Series {SeriesId} Season {Season}. Saved per-episode markers to DB.", seriesId, seasonNumber);
+            foreach (var ep in episodes)
+            {
+                if (epCreditsStarts.TryGetValue(ep.Id, out var starts) && starts.Count > 0)
+                {
+                    starts.Sort();
+                    ep.CreditsStartTime = Math.Round(starts[starts.Count / 2], 1);
+                }
+            }
         }
-        else
+
+        foreach (var ep in episodes)
         {
-            _logger.LogInformation("Completed audio fingerprint scan: No clear intro audio match detected across season {Season} episodes.", seasonNumber);
+            _logger.LogInformation("  -> Ep {Num} ({Title}): Intro {IntroStart} → {IntroEnd} | Credits {CreditsStart}",
+                ep.EpisodeNumber,
+                ep.Title,
+                ep.IntroStartTime.HasValue ? $"{ep.IntroStartTime:F1}s" : "None",
+                ep.IntroEndTime.HasValue ? $"{ep.IntroEndTime:F1}s" : "None",
+                ep.CreditsStartTime.HasValue ? $"{ep.CreditsStartTime:F1}s" : "None");
         }
+
+        await context.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Completed audio fingerprint marker scan for Series {SeriesId} Season {Season}. Saved markers to DB.", seriesId, seasonNumber);
     }
 
-    private async Task<float[]> ExtractAudioEnergyEnvelopeAsync(string filePath, int durationSec, CancellationToken cancellationToken)
+    private async Task<float[]> ExtractAudioEnergyEnvelopeAsync(string filePath, int startOffsetSec, int durationSec, CancellationToken cancellationToken)
     {
         try
         {
             // Extract mono 8000Hz PCM raw s16le audio quietly (-v quiet)
-            var arguments = $"-v quiet -ss 0 -t {durationSec} -i \"{filePath}\" -ac 1 -ar 8000 -f s16le -";
+            var arguments = $"-v quiet -ss {startOffsetSec} -t {durationSec} -i \"{filePath}\" -ac 1 -ar 8000 -f s16le -";
             var startInfo = new ProcessStartInfo
             {
                 FileName = _ffmpegPath,
@@ -172,15 +257,78 @@ public class AudioFingerprintIntroScanner : IIntroScanner
     }
 
     /// <summary>
+    /// Specialized audio cross-correlation to find the exact start timestamp of end credit theme music.
+    /// Extracts audio energy from the tail end (last 6 mins) and finds identical credit theme music.
+    /// Uses a strict backward-expansion threshold (0.80) so it stops PRECISELY at the sample where credit music starts.
+    /// </summary>
+    private (double Start1, double Start2)? FindCreditsAudioSegment(
+        float[] env1, float[] env2, int samplesPerSec)
+    {
+        int probeSec = 15;
+        int probeSamples = probeSec * samplesPerSec;
+        int stepSec = 1;
+        int stepSamples = stepSec * samplesPerSec;
+
+        double bestScore = 0.75; // Require strong initial correlation
+        (double Start1, double Start2)? bestMatch = null;
+
+        for (int o1 = 0; o1 + probeSamples <= env1.Length; o1 += stepSamples)
+        {
+            for (int o2 = 0; o2 + probeSamples <= env2.Length; o2 += stepSamples)
+            {
+                double probeScore = CalculateNormalizedCorrelation(env1, o1, env2, o2, probeSamples);
+                if (probeScore > bestScore)
+                {
+                    int startOffset1 = o1;
+                    int endOffset1 = o1 + probeSamples;
+
+                    // Expand forward as long as credit music continues (threshold 0.75)
+                    while (endOffset1 + samplesPerSec <= env1.Length && 
+                           (o2 + (endOffset1 - o1) + samplesPerSec) <= env2.Length)
+                    {
+                        double check = CalculateNormalizedCorrelation(env1, endOffset1 - samplesPerSec, env2, o2 + (endOffset1 - o1) - samplesPerSec, samplesPerSec * 2);
+                        if (check >= 0.75) endOffset1 += samplesPerSec;
+                        else break;
+                    }
+
+                    // Expand BACKWARD towards the start of credit music (strict threshold 0.80 to stop cleanly before episode scene audio!)
+                    while (startOffset1 - samplesPerSec >= 0 && (o2 - (o1 - startOffset1) - samplesPerSec) >= 0)
+                    {
+                        double check = CalculateNormalizedCorrelation(env1, startOffset1 - samplesPerSec, env2, o2 - (o1 - startOffset1) - samplesPerSec, samplesPerSec * 2);
+                        if (check >= 0.80) startOffset1 -= samplesPerSec;
+                        else break;
+                    }
+
+                    int matchLenSec = (endOffset1 - startOffset1) / samplesPerSec;
+                    // Credits music segment must be at least 8 seconds long
+                    if (matchLenSec >= 8)
+                    {
+                        int startOffset2 = o2 - (o1 - startOffset1);
+                        double matchScore = CalculateNormalizedCorrelation(env1, startOffset1, env2, startOffset2, endOffset1 - startOffset1);
+                        if (matchScore > bestScore)
+                        {
+                            bestScore = matchScore;
+                            bestMatch = (
+                                (double)startOffset1 / samplesPerSec,
+                                (double)startOffset2 / samplesPerSec
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        return bestMatch;
+    }
+
+    /// <summary>
     /// Fast coarse-to-fine cross correlation search to find identical intro music across episode pairs
     /// </summary>
     private (double Start1, double End1, double Start2, double End2)? FindLongestMatchingSegment(
-        float[] env1, float[] env2, int samplesPerSec, int minSec, int maxSec)
+        float[] env1, float[] env2, int samplesPerSec, int minSec, int maxSec, int maxSearchSec = 300)
     {
-        // Intros occur in the first 5 minutes (300 seconds)
-        int maxOffsetSec = 300;
-        int maxOffsetSamples1 = Math.Min(env1.Length, maxOffsetSec * samplesPerSec);
-        int maxOffsetSamples2 = Math.Min(env2.Length, maxOffsetSec * samplesPerSec);
+        int maxOffsetSamples1 = Math.Min(env1.Length, maxSearchSec * samplesPerSec);
+        int maxOffsetSamples2 = Math.Min(env2.Length, maxSearchSec * samplesPerSec);
 
         int probeSec = 20;
         int probeSamples = probeSec * samplesPerSec;

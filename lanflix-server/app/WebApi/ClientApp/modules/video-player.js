@@ -196,13 +196,13 @@ export class VideoPlayer {
    */
   async loadSubtitles() {
     const ccBtn = document.querySelector('.cc-btn');
-    
+
     try {
       const response = await apiClient.getSubtitles(this.contentId, this.episodeId);
-      
+
       // Handle both 'Subtitles' and 'subtitles' for compatibility
       const subtitles = response?.Subtitles || response?.subtitles;
-      
+
       if (subtitles && subtitles.length > 0) {
         this.subtitles = subtitles;
 
@@ -242,7 +242,7 @@ export class VideoPlayer {
     try {
       const info = await apiClient.request(`/stream/episode/${this.episodeId}`);
       this.introStartTime = typeof info?.introStartTime === 'number' ? info.introStartTime : null;
-      this.introEndTime   = typeof info?.introEndTime   === 'number' ? info.introEndTime   : null;
+      this.introEndTime = typeof info?.introEndTime === 'number' ? info.introEndTime : null;
       this.creditsStartTime = typeof info?.creditsStartTime === 'number' ? info.creditsStartTime : null;
 
       if (this.introStartTime !== null) {
@@ -269,7 +269,7 @@ export class VideoPlayer {
       const title = subtitle.title || subtitle.Title;
       const language = subtitle.language || subtitle.Language;
       const displayName = title || language || `Track ${arrayIndex + 1}`;
-      
+
       track.label = displayName;
       track.srclang = language || 'en';
 
@@ -278,7 +278,7 @@ export class VideoPlayer {
       if (!trackUrl.startsWith('http')) {
         trackUrl = `${window.location.origin}${trackUrl}`;
       }
-      
+
       if (this.isTranscoding && this.startOffset > 0) {
         trackUrl += (trackUrl.includes('?') ? '&' : '?') + `startTime=${this.startOffset}`;
       }
@@ -309,7 +309,7 @@ export class VideoPlayer {
       tracks[index].mode = 'showing';
       this.currentSubtitleIndex = index;
       this.updateCCButtonState(true);
-      
+
       const sub = this.subtitles[index];
       const title = sub.title || sub.Title;
       const language = sub.language || sub.Language;
@@ -357,7 +357,7 @@ export class VideoPlayer {
       const title = sub.title || sub.Title;
       const language = sub.language || sub.Language;
       const displayName = title || language || `Track ${index + 1}`;
-      
+
       html += `
         <div class="subtitle-menu-item ${isActive ? 'active' : ''}" data-index="${index}">
           <span>${displayName}</span>
@@ -893,10 +893,10 @@ export class VideoPlayer {
       }
     });
 
-    // Next Episode button listener
-    document.getElementById('next-episode-play-btn')?.addEventListener('click', (e) => {
+    // Cancel Next Episode auto-play button listener
+    document.getElementById('next-episode-cancel-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.playNextEpisode();
+      this.cancelNextEpisodeAutoPlay();
     });
 
     // Keyboard shortcut 'S' or 's' to Skip Intro
@@ -920,6 +920,19 @@ export class VideoPlayer {
     this.setupMouseControls();
   }
 
+  cancelNextEpisodeAutoPlay() {
+    this.nextEpisodeCancelled = true;
+    if (this.autoPlayInterval) {
+      clearInterval(this.autoPlayInterval);
+      this.autoPlayInterval = null;
+    }
+    const nextCard = document.getElementById('next-episode-card');
+    if (nextCard) {
+      nextCard.classList.remove('visible');
+    }
+    this.showNotification('Auto-play cancelled');
+  }
+
   checkIntroAndCreditsMarkers() {
     const skipBtn = document.getElementById('skip-intro-btn');
     const nextCard = document.getElementById('next-episode-card');
@@ -937,33 +950,76 @@ export class VideoPlayer {
       }
     }
 
-    // Next Episode card logic
-    if (this.creditsStartTime !== null && this.duration > 0) {
-      if (this.currentTime >= this.creditsStartTime) {
+    // Next Episode card & 5-second countdown logic (triggers at creditsStartTime or last 20s of video)
+    if (this.creditsStartTime !== null || (this.duration > 0 && this.duration - this.currentTime <= 20)) {
+      const triggerTime = this.creditsStartTime !== null ? this.creditsStartTime : (this.duration - 20);
+
+      if (this.currentTime >= triggerTime && !this.nextEpisodeCancelled) {
         if (nextCard && !nextCard.classList.contains('visible')) {
           nextCard.classList.add('visible');
-        }
-      } else {
-        if (nextCard && nextCard.classList.contains('visible')) {
-          nextCard.classList.remove('visible');
+          this.startNextEpisodeCountdown();
         }
       }
     }
   }
 
+  startNextEpisodeCountdown() {
+    if (this.autoPlayInterval || this.nextEpisodeCancelled) return;
+
+    this.autoPlaySeconds = 5;
+    const timerText = document.getElementById('next-episode-timer-text');
+    if (timerText) timerText.textContent = this.autoPlaySeconds;
+
+    this.autoPlayInterval = setInterval(() => {
+      this.autoPlaySeconds--;
+      if (timerText) timerText.textContent = this.autoPlaySeconds;
+
+      if (this.autoPlaySeconds <= 0) {
+        clearInterval(this.autoPlayInterval);
+        this.autoPlayInterval = null;
+        this.playNextEpisode();
+      }
+    }, 1000);
+  }
+
   async playNextEpisode() {
     if (!this.contentId || !this.episodeId) return;
+
+    if (this.autoPlayInterval) {
+      clearInterval(this.autoPlayInterval);
+      this.autoPlayInterval = null;
+    }
+
     try {
-      const episodes = await apiClient.request(`/series/${this.contentId}/episodes`);
-      if (Array.isArray(episodes)) {
-        const currentIndex = episodes.findIndex(e => e.id == this.episodeId);
-        if (currentIndex !== -1 && currentIndex + 1 < episodes.length) {
-          const nextEp = episodes[currentIndex + 1];
-          window.location.href = `player.html?contentId=${this.contentId}&type=series&episodeId=${nextEp.id}`;
-        }
+      this.showNotification('Loading Next Episode...', 2000);
+
+      const series = await apiClient.getLibraryItem(this.contentId, this.profileId);
+      const episodes = series?.episodes || [];
+
+      if (!Array.isArray(episodes) || episodes.length === 0) {
+        this.showNotification('No episodes found');
+        return;
+      }
+
+      // Sort episodes by season and episode number
+      episodes.sort((a, b) => {
+        if (a.seasonNumber !== b.seasonNumber) return a.seasonNumber - b.seasonNumber;
+        return a.episodeNumber - b.episodeNumber;
+      });
+
+      // Find current episode index
+      const currentIndex = episodes.findIndex(e => e.id == this.episodeId);
+
+      if (currentIndex !== -1 && currentIndex + 1 < episodes.length) {
+        const nextEp = episodes[currentIndex + 1];
+        console.log(`🎬 Navigating to next episode: S${nextEp.seasonNumber}E${nextEp.episodeNumber} (ID: ${nextEp.id})`);
+        window.location.href = `player.html?contentId=${this.contentId}&type=series&episodeId=${nextEp.id}`;
+      } else {
+        this.showNotification('End of Series! No more episodes.');
       }
     } catch (e) {
       console.error('Failed to load next episode:', e);
+      this.showNotification('Failed to load next episode');
     }
   }
 

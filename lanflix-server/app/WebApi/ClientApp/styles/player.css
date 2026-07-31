@@ -671,15 +671,15 @@ video::cue {
   display: flex;
   align-items: center;
   gap: 16px;
-  background: rgba(15, 15, 20, 0.9);
+  background: rgba(15, 15, 20, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: #fff;
   padding: 14px 20px;
   border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-  transition: all 0.3s ease;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   transform: translateY(15px);
   opacity: 0;
   pointer-events: none;
@@ -689,6 +689,28 @@ video::cue {
   transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
+}
+
+.next-episode-cancel-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ccc;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: -4px;
+}
+
+.next-episode-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  transform: scale(1.1);
 }
 
 .next-episode-info {
@@ -704,6 +726,11 @@ video::cue {
   font-weight: 600;
 }
 
+.next-episode-label strong {
+  color: #e50914;
+  font-size: 0.85rem;
+}
+
 .next-episode-title {
   font-size: 0.95rem;
   font-weight: 700;
@@ -715,14 +742,16 @@ video::cue {
   color: #fff;
   border: none;
   border-radius: 6px;
-  padding: 8px 16px;
+  padding: 8px 18px;
   font-weight: 700;
   font-size: 0.85rem;
   cursor: pointer;
-  transition: transform 0.2s, background 0.2s;
+  transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 14px rgba(229, 9, 20, 0.4);
 }
 
 .next-episode-play-btn:hover {
   background: #f40612;
-  transform: scale(1.04);
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(229, 9, 20, 0.6);
 }

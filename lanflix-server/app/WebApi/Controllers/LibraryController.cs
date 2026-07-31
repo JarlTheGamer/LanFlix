@@ -533,6 +533,7 @@ public class LibraryController : ControllerBase
                     watched = false,
                     introStartTime = e.IntroStartTime,
                     introEndTime = e.IntroEndTime,
+                    creditsStartTime = e.CreditsStartTime,
                     addedAt = e.AddedAt
                 }).ToArray();
             }
