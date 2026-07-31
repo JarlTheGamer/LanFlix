@@ -5,6 +5,7 @@ Welcome to the Lanflix documentation. Lanflix is a high-performance media stream
 ## 📖 Main Documentation
 
 - **[Architecture](./ARCHITECTURE.md)** - System design and technology stack.
+- **[Feature Roadmap](./ROADMAP.md)** - Master product roadmap comparing Jellyfin & Plex.
 - **[Build Guide](./BUILD.md)** - How to build and publish the server.
 - **[API Overview](./api/overview.md)** - REST API reference.
 - **[Tasks & Roadmap](./tasks.md)** - Current development status.

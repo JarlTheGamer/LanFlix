@@ -44,24 +44,31 @@ public class SystemTelemetryController : ControllerBase
     {
         long bytesSent = 0;
         long bytesReceived = 0;
-        double speedMbps = 0;
+        double maxSpeedMbps = 0;
 
         try
         {
             var interfaces = NetworkInterface.GetAllNetworkInterfaces()
                 .Where(ni => ni.OperationalStatus == OperationalStatus.Up &&
-                             ni.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                             ni.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+                             ni.NetworkInterfaceType != NetworkInterfaceType.Tunnel)
                 .ToList();
 
             foreach (var ni in interfaces)
             {
-                var stats = ni.GetIPStatistics();
-                bytesSent += stats.BytesSent;
-                bytesReceived += stats.BytesReceived;
-                if (ni.Speed / 1_000_000.0 > speedMbps)
+                try
                 {
-                    speedMbps = ni.Speed / 1_000_000.0;
+                    var stats = ni.GetIPStatistics();
+                    bytesSent += stats.BytesSent;
+                    bytesReceived += stats.BytesReceived;
+
+                    double mbps = ni.Speed / 1_000_000.0;
+                    if (mbps > maxSpeedMbps && mbps < 100_000) // Ignore invalid/unrealistic values
+                    {
+                        maxSpeedMbps = mbps;
+                    }
                 }
+                catch {}
             }
         }
         catch (Exception ex)
@@ -72,7 +79,7 @@ public class SystemTelemetryController : ControllerBase
         return new
         {
             status = "Online",
-            downloadSpeedMbps = speedMbps > 0 ? speedMbps : 100.0,
+            downloadSpeedMbps = maxSpeedMbps > 0 ? maxSpeedMbps : 1000.0,
             bytesSent,
             bytesReceived
         };

@@ -207,6 +207,16 @@ public class DeviceService : IDeviceService
                 setting.UpdatedAt = DateTime.UtcNow;
             }
             await context.SaveChangesAsync();
+
+            if (!enabled)
+            {
+                foreach (var dev in _devices.Values)
+                {
+                    dev.IsPaired = true;
+                }
+                await PersistAsync();
+            }
+
             _logger.LogInformation("Updated RequireDevicePairing setting to {Enabled}", enabled);
         }
         catch (Exception ex)
