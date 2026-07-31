@@ -38,45 +38,22 @@ public class DirectPlayStrategy : IStreamingStrategy
 
         var fileInfo = new FileInfo(request.FilePath);
         var fileStream = new FileStream(request.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-
-        // Handle range requests for seeking
-        Stream dataStream = fileStream;
-        long? rangeStart = null;
-        long? rangeEnd = null;
-        long contentLength = fileInfo.Length;
-
-        if (!string.IsNullOrEmpty(request.RangeHeader))
-        {
-            var (start, end) = ParseRangeHeader(request.RangeHeader, fileInfo.Length);
-            if (start.HasValue)
-            {
-                rangeStart = start.Value;
-                rangeEnd = end ?? fileInfo.Length - 1;
-                contentLength = rangeEnd.Value - rangeStart.Value + 1;
-
-                fileStream.Seek(rangeStart.Value, SeekOrigin.Begin);
-                dataStream = new RangeStream(fileStream, contentLength);
-            }
-        }
-
         var mimeType = GetMimeType(request.MediaInfo.Container);
 
-        _logger.LogInformation("DirectPlay prepared: {Container}, Size: {Size} bytes, Range: {RangeStart}-{RangeEnd}",
-            request.MediaInfo.Container, contentLength, rangeStart, rangeEnd);
+        _logger.LogInformation("DirectPlay prepared: {Container}, Total Size: {Size} bytes",
+            request.MediaInfo.Container, fileInfo.Length);
 
         return Task.FromResult(new StreamResult
         {
-            DataStream = dataStream,
+            DataStream = fileStream,
             ContentType = mimeType,
-            ContentLength = contentLength,
+            ContentLength = fileInfo.Length,
             Mode = StreamingMode.DirectPlay,
             SupportsRangeRequests = true,
-            RangeStart = rangeStart,
-            RangeEnd = rangeEnd,
             CleanupAction = () =>
             {
                 _logger.LogDebug("Cleaning up DirectPlay stream for session {SessionId}", request.SessionId);
-                dataStream.Dispose();
+                fileStream.Dispose();
             }
         });
     }

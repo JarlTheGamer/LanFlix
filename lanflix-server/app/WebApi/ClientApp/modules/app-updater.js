@@ -374,6 +374,7 @@ export class AppUpdater {
     startProgressPolling() {
         this.stopProgressPolling();
         let errorCount = 0;
+        let hasSeenActiveProgress = false;
 
         this.progressInterval = setInterval(async () => {
             try {
@@ -381,11 +382,15 @@ export class AppUpdater {
                 if (response.ok) {
                     errorCount = 0;
                     const progress = await response.json();
-                    this.updateProgressUI(progress);
 
-                    if (progress.status === 'Complete') {
+                    if (progress.status === 'Downloading' || progress.status === 'Extracting' || progress.status === 'Applying') {
+                        hasSeenActiveProgress = true;
+                        this.updateProgressUI(progress);
+                    } else if (progress.status === 'Complete' || (hasSeenActiveProgress && progress.status === 'Idle')) {
                         this.stopProgressPolling();
                         this.handleUpdateComplete();
+                    } else if (progress.status) {
+                        this.updateProgressUI(progress);
                     }
                 }
             } catch (e) {
@@ -402,6 +407,23 @@ export class AppUpdater {
                 }
             }
         }, 800);
+    }
+
+    handleUpdateComplete() {
+        this.stopProgressPolling();
+        const progressBar = document.getElementById('ota-progress-bar');
+        const progressStatus = document.getElementById('ota-progress-status');
+        const progressSubtext = document.getElementById('ota-progress-subtext');
+
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressStatus) progressStatus.textContent = '🎉 Update Complete!';
+        if (progressSubtext) progressSubtext.textContent = 'Lanflix restarted successfully! Reloading...';
+
+        this.triggerConfetti();
+
+        setTimeout(() => {
+            window.location.reload();
+        }, 1200);
     }
 
     updateProgressUI(progress) {
@@ -429,15 +451,7 @@ export class AppUpdater {
                 const response = await fetch('/api/server-update/version', { cache: 'no-store' });
                 if (response.ok) {
                     clearInterval(interval);
-                    const progressBar = document.getElementById('ota-progress-bar');
-                    const progressStatus = document.getElementById('ota-progress-status');
-                    if (progressBar) progressBar.style.width = '100%';
-                    if (progressStatus) progressStatus.textContent = '🎉 Update Complete! Reloading...';
-                    this.triggerConfetti();
-
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1200);
+                    this.handleUpdateComplete();
                 }
             } catch (e) {
                 // Server rebooting

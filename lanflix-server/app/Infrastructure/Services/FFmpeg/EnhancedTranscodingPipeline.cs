@@ -614,6 +614,12 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         // Audio codec
         args.Append($"-c:a {request.TargetAudioCodec} ");
 
+        // Downmix multi-channel audio to stereo AAC for 100% browser compatibility and to prevent FFmpeg 5.1 channel layout error -22
+        if (request.TargetAudioCodec == "aac")
+        {
+            args.Append("-ac 2 ");
+        }
+
         // Audio bitrate
         if (request.TargetAudioBitrate.HasValue)
         {

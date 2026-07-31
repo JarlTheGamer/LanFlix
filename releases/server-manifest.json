@@ -1,10 +1,10 @@
 {
-  "version": "1.4.6",
-  "currentVersion": "1.4.6",
-  "releaseDate": "2026-07-31T09:42:44.046786Z",
-  "downloadUrl": "https://github.com/JarlTheGamer/LanFlix/releases/download/v1.4.6/lanflix-server-v1.4.6.zip",
-  "fileSize": 50993684,
-  "checksum": "0f6086856fd35487418f5fb103f1c2166e8db0b99ce273f46c1e7df3a92bd725",
-  "releaseNotes": "Universal DirectPlay + Release asset manifests",
+  "version": "1.5.0",
+  "currentVersion": "1.5.0",
+  "releaseDate": "2026-07-31T09:55:43.796882Z",
+  "downloadUrl": "https://github.com/JarlTheGamer/LanFlix/releases/download/v1.5.0/lanflix-server-v1.5.0.zip",
+  "fileSize": 50998630,
+  "checksum": "20172921b8545795ecabc0d0291cbed685d3f9fd26522a86f56d3339540cd22b",
+  "releaseNotes": "Fix MOV/MP4 container DirectPlay normalization",
   "isUpdateAvailable": true
 }

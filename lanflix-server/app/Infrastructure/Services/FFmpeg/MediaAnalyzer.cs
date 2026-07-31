@@ -14,6 +14,7 @@ public class MediaAnalyzer : IMediaAnalyzer
 {
     private readonly ILogger<MediaAnalyzer> _logger;
     private readonly string _ffprobePath;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime lastWrite, MediaInfo info)> _cache = new();
 
     public MediaAnalyzer(ILogger<MediaAnalyzer> logger)
     {
@@ -26,6 +27,12 @@ public class MediaAnalyzer : IMediaAnalyzer
         if (!File.Exists(filePath))
         {
             throw new FileNotFoundException($"Media file not found: {filePath}");
+        }
+
+        var fileInfo = new FileInfo(filePath);
+        if (_cache.TryGetValue(filePath, out var cached) && cached.lastWrite == fileInfo.LastWriteTimeUtc)
+        {
+            return cached.info;
         }
 
         _logger.LogInformation("Analyzing media file: {FilePath}", filePath);
@@ -45,14 +52,13 @@ public class MediaAnalyzer : IMediaAnalyzer
                 mediaInfo.Video.Height,
                 mediaInfo.Audio.Count);
 
+            _cache[filePath] = (fileInfo.LastWriteTimeUtc, mediaInfo);
             return mediaInfo;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to analyze media file, using defaults: {FilePath}", filePath);
             
-            // Return basic defaults if analysis fails
-            var fileInfo = new FileInfo(filePath);
             var container = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
 
             return new MediaInfo
@@ -184,9 +190,36 @@ public class MediaAnalyzer : IMediaAnalyzer
             Subtitles = new List<SubtitleStream>(),
             Duration = duration,
             FileSize = fileInfo.Length,
-            Container = probeResult.Format?.FormatName?.Split(',').FirstOrDefault() ?? "unknown",
+            Container = NormalizeContainerName(probeResult.Format?.FormatName, filePath),
             OverallBitrate = bitrate
         };
+    }
+
+    private string NormalizeContainerName(string? formatName, string filePath)
+    {
+        var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(formatName))
+        {
+            var lower = formatName.ToLowerInvariant();
+            if (lower.Contains("mp4") || lower.Contains("m4v") || ext == "mp4" || ext == "m4v")
+            {
+                return "mp4";
+            }
+            if (lower.Contains("matroska") || lower.Contains("mkv") || ext == "mkv")
+            {
+                return "mkv";
+            }
+            if (lower.Contains("webm") || ext == "webm")
+            {
+                return "webm";
+            }
+            if (lower.Contains("mov") || ext == "mov")
+            {
+                return "mov";
+            }
+            return formatName.Split(',').FirstOrDefault() ?? "unknown";
+        }
+        return !string.IsNullOrEmpty(ext) ? ext : "unknown";
     }
 
     private VideoStream ExtractVideoStream(FFprobeResult probeResult)

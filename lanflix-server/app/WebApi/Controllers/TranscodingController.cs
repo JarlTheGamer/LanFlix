@@ -67,7 +67,7 @@ public class TranscodingController : ControllerBase
         
         try
         {
-            _logger.LogInformation("Stream request for content ID: {ContentId}, profileId: {ProfileId}, clientType: {ClientType}, startTime: {StartTime}s, episodeId: {EpisodeId}", 
+            _logger.LogDebug("Stream request for content ID: {ContentId}, profileId: {ProfileId}, clientType: {ClientType}, startTime: {StartTime}s, episodeId: {EpisodeId}", 
                 contentId, profileId, clientType, startTime ?? 0, episodeId);
 
             string filePath;
@@ -140,28 +140,39 @@ public class TranscodingController : ControllerBase
                 return NotFound("Content not found");
             }
 
-            sessionId ??= Guid.NewGuid().ToString();
+            // Analyze media info & decision
+            var mediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
+            var clientProfiles = _streamingService.CreateDefaultProfiles(clientType);
+            var settings = await _settingsProvider.GetSettingsAsync(profileId);
+            var hwAccel = await _hwAccelDetector.DetectAsync();
+            var decision = _streamingService.GetTranscodingDecision(mediaInfo, clientProfiles, hwAccel, settings);
+
+            SetPlaybackModeHeaders(decision);
 
             // Handle HEAD requests - return headers without streaming
             if (Request.Method == "HEAD")
             {
-                Response.ContentType = "video/mp4";
-                Response.Headers["Accept-Ranges"] = "bytes";
-                Response.Headers["Cache-Control"] = "no-cache";
-                
-                // For HEAD requests, we need to determine playback mode to set headers
-                var headMediaInfo = await _mediaAnalyzer.AnalyzeAsync(filePath);
-                var headHwAccel = await _hwAccelDetector.DetectAsync();
-                var headClientProfiles = _streamingService.CreateDefaultProfiles(clientType);
-                var headSettings = await _settingsProvider.GetSettingsAsync(profileId);
-                var headDecision = _streamingService.GetTranscodingDecision(headMediaInfo, headClientProfiles, headHwAccel, headSettings);
-                SetPlaybackModeHeaders(headDecision);
-                
                 return Ok();
             }
 
+            // DirectPlay requires enableRangeProcessing: true for HTML5 video duration & seeking
+            if (decision.PlaybackMethod == PlaybackMethod.DirectPlay)
+            {
+                var container = mediaInfo.Container.ToLowerInvariant();
+                var mimeType = container switch
+                {
+                    "webm" => "video/webm",
+                    "mkv" => "video/x-matroska",
+                    "mov" => "video/quicktime",
+                    _ => "video/mp4"
+                };
+
+                return PhysicalFile(filePath, mimeType, enableRangeProcessing: true);
+            }
+
+            sessionId ??= Guid.NewGuid().ToString();
+
             // Create session key based on content and session ID
-            // We include the unique sessionId to prevent reusing stale sessions from previous playback attempts
             var sessionKey = $"content_{contentId}_{episodeId ?? 0}_{clientType}_{profileId}_{startTime?.ToString("F3") ?? "0"}_{sessionId}";
             
             if (startTime.HasValue && startTime.Value > 0)
@@ -253,17 +264,20 @@ public class TranscodingController : ControllerBase
             // Set response headers
             Response.ContentType = result.ContentType;
             
-            if (result.ContentLength.HasValue)
+            if (result.Mode != Domain.Enums.StreamingMode.DirectPlay)
             {
-                Response.ContentLength = result.ContentLength.Value;
-            }
+                if (result.ContentLength.HasValue)
+                {
+                    Response.ContentLength = result.ContentLength.Value;
+                }
 
-            if (result.SupportsRangeRequests && result.RangeStart.HasValue)
-            {
-                Response.StatusCode = 206; // Partial Content
-                Response.Headers["Accept-Ranges"] = "bytes";
-                Response.Headers["Content-Range"] = 
-                    $"bytes {result.RangeStart.Value}-{result.RangeEnd ?? result.ContentLength - 1}/{result.ContentLength}";
+                if (result.SupportsRangeRequests && result.RangeStart.HasValue)
+                {
+                    Response.StatusCode = 206; // Partial Content
+                    Response.Headers["Accept-Ranges"] = "bytes";
+                    Response.Headers["Content-Range"] = 
+                        $"bytes {result.RangeStart.Value}-{result.RangeEnd ?? result.ContentLength - 1}/{result.ContentLength}";
+                }
             }
 
             // Log seeking performance metrics
@@ -742,7 +756,7 @@ public class TranscodingController : ControllerBase
                 break;
         }
         
-        _logger.LogInformation("Set playback mode headers: Method={Method}, DirectPlay={DirectPlay}", 
+        _logger.LogDebug("Set playback mode headers: Method={Method}, DirectPlay={DirectPlay}", 
             decision.PlaybackMethod, Response.Headers["X-Direct-Play"]);
     }
 

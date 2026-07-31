@@ -26,7 +26,7 @@ public class TranscodingDecisionEngine
         HardwareAcceleration hwAccel,
         TranscodingSettings settings)
     {
-        _logger.LogInformation("Making transcoding decision for media: {Container}, Video: {VideoCodec} {Width}x{Height}, Audio: {AudioCodecs}",
+        _logger.LogDebug("Making transcoding decision for media: {Container}, Video: {VideoCodec} {Width}x{Height}, Audio: {AudioCodec}",
             mediaInfo.Container,
             mediaInfo.Video.Codec,
             mediaInfo.Video.Width,
@@ -37,7 +37,7 @@ public class TranscodingDecisionEngine
         var directPlayResult = TryDirectPlay(mediaInfo, clientProfiles);
         if (directPlayResult != null)
         {
-            _logger.LogInformation("Direct Play selected: {Reason}", directPlayResult.Reason);
+            _logger.LogDebug("Direct Play selected: {Reason}", directPlayResult.Reason);
             return directPlayResult;
         }
 
@@ -45,7 +45,7 @@ public class TranscodingDecisionEngine
         var remuxResult = TryRemux(mediaInfo, clientProfiles);
         if (remuxResult != null)
         {
-            _logger.LogInformation("Remux selected: {Reason}", remuxResult.Reason);
+            _logger.LogDebug("Remux selected: {Reason}", remuxResult.Reason);
             return remuxResult;
         }
 
@@ -53,7 +53,7 @@ public class TranscodingDecisionEngine
         var directStreamResult = TryDirectStream(mediaInfo, clientProfiles, hwAccel, settings);
         if (directStreamResult != null)
         {
-            _logger.LogInformation("Direct Stream selected: {Reason}", directStreamResult.Reason);
+            _logger.LogDebug("Direct Stream selected: {Reason}", directStreamResult.Reason);
             return directStreamResult;
         }
 

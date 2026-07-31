@@ -15,7 +15,8 @@ public class EnhancedHardwareAccelerationDetector : IHardwareAccelerationDetecto
 {
     private readonly ILogger<EnhancedHardwareAccelerationDetector> _logger;
     private readonly string _ffmpegPath;
-    private HardwareAcceleration? _cachedCapabilities;
+    private static string[]? _cachedEncoders;
+    private static HardwareAcceleration? _cachedCapabilities;
 
     public EnhancedHardwareAccelerationDetector(ILogger<EnhancedHardwareAccelerationDetector> logger)
     {
@@ -74,15 +75,16 @@ public class EnhancedHardwareAccelerationDetector : IHardwareAccelerationDetecto
 
             _cachedCapabilities = capabilities;
 
-            _logger.LogInformation("Hardware acceleration detection complete. Preferred method: {Method}, Max sessions: {Sessions}, Tone mapping: {ToneMapping}",
-                preferredMethod, maxSessions, supportsToneMapping);
+            _logger.LogInformation("Hardware acceleration detection complete. Preferred method: {Method}, Max sessions: {Sessions}",
+                preferredMethod, maxSessions);
 
             return capabilities;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error detecting hardware acceleration capabilities");
-            return new HardwareAcceleration { PreferredMethod = HwAccelMethod.None };
+            _logger.LogWarning(ex, "Error detecting hardware acceleration capabilities, using software defaults");
+            _cachedCapabilities = new HardwareAcceleration { PreferredMethod = HwAccelMethod.None };
+            return _cachedCapabilities;
         }
     }
 
@@ -343,65 +345,37 @@ public class EnhancedHardwareAccelerationDetector : IHardwareAccelerationDetecto
 
     private async Task<string[]> GetAvailableEncodersAsync()
     {
+        if (_cachedEncoders != null)
+        {
+            return _cachedEncoders;
+        }
+
         try
         {
             var output = await ExecuteFFmpegAsync("-encoders");
             var encoders = new List<string>();
 
-            _logger.LogInformation("FFmpeg -encoders output length: {Length} characters", output.Length);
-            _logger.LogInformation("FFmpeg -encoders output preview: {Preview}", 
-                output.Length > 500 ? output.Substring(0, 500) + "..." : output);
-
             var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            _logger.LogInformation("Processing {LineCount} lines from FFmpeg output", lines.Length);
-
             foreach (var line in lines)
             {
-                // Log first few lines to see the format
-                if (encoders.Count < 5)
-                {
-                    _logger.LogInformation("Processing line: '{Line}'", line);
-                }
-
-                // Look for video encoders - they start with "V" (format: "V....D encodername description")
                 if (line.StartsWith(" V") && line.Length > 7)
                 {
                     var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                     if (parts.Length >= 2)
                     {
-                        var encoderName = parts[1];
-                        encoders.Add(encoderName);
-                        
-                        if (encoders.Count <= 10)
-                        {
-                            _logger.LogInformation("Found encoder: '{Encoder}' from line: '{Line}'", encoderName, line);
-                        }
+                        encoders.Add(parts[1]);
                     }
                 }
             }
 
-            _logger.LogInformation("Found {Count} video encoders: {Encoders}", 
-                encoders.Count, string.Join(", ", encoders.Take(10))); // Log first 10 encoders
+            _cachedEncoders = encoders.ToArray();
+            _logger.LogDebug("FFmpeg detection found {Count} video encoders.", _cachedEncoders.Length);
 
-            // Log specifically hardware encoders
-            var hwEncoders = encoders.Where(e => 
-                e.Contains("nvenc") || e.Contains("qsv") || e.Contains("amf") || 
-                e.Contains("vaapi") || e.Contains("videotoolbox") || e.Contains("rkmpp")).ToList();
-            
-            if (hwEncoders.Any())
-            {
-                _logger.LogInformation("Hardware encoders found: {HwEncoders}", string.Join(", ", hwEncoders));
-            }
-            else
-            {
-                _logger.LogWarning("No hardware encoders found in FFmpeg build");
-            }
-
-            return encoders.ToArray();
+            return _cachedEncoders;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get available encoders");
+            _logger.LogDebug(ex, "Failed to get available encoders from FFmpeg");
             return Array.Empty<string>();
         }
     }

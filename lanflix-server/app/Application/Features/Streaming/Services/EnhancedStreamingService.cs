@@ -165,7 +165,7 @@ public class EnhancedStreamingService
             {
                 Id = "web-high",
                 Name = "Web Browser High Quality",
-                SupportedContainers = new[] { "mp4", "webm", "mkv" },
+                SupportedContainers = new[] { "mp4", "webm", "mkv", "mov", "m4v" },
                 VideoCodecs = new[]
                 {
                     new VideoCodecProfile { Codec = "h264", MaxBitrate = 20_000_000, MaxResolution = VideoResolution.UHD4K },
@@ -188,7 +188,7 @@ public class EnhancedStreamingService
             {
                 Id = "web-medium",
                 Name = "Web Browser Medium Quality",
-                SupportedContainers = new[] { "mp4", "webm" },
+                SupportedContainers = new[] { "mp4", "webm", "mov", "m4v" },
                 VideoCodecs = new[]
                 {
                     new VideoCodecProfile { Codec = "h264", MaxBitrate = 8_000_000, MaxResolution = VideoResolution.HD1080p },
@@ -196,13 +196,13 @@ public class EnhancedStreamingService
                 },
                 AudioCodecs = new[]
                 {
-                    new AudioCodecProfile { Codec = "aac", MaxBitrate = 192_000, MaxChannels = 6 },
-                    new AudioCodecProfile { Codec = "opus", MaxBitrate = 128_000, MaxChannels = 6 }
+                    new AudioCodecProfile { Codec = "aac", MaxBitrate = 512_000, MaxChannels = 8 },
+                    new AudioCodecProfile { Codec = "opus", MaxBitrate = 256_000, MaxChannels = 8 }
                 },
-                MaxBitrate = 10_000_000,
+                MaxBitrate = 12_000_000,
                 MaxResolution = VideoResolution.HD1080p,
                 SupportsHDR = false,
-                MaxAudioChannels = 6
+                MaxAudioChannels = 8
             }
         };
     }

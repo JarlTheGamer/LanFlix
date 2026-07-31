@@ -55,7 +55,7 @@ public class TranscodingSettingsProvider
             // Build transcoding settings
             var enableHwAccel = userSettings.UseHardwareAccel && streamingSettings.VideoTranscoding;
             
-            _logger.LogInformation("Building transcoding settings - HW Accel: {EnableHwAccel} (User: {UserHwAccel}, Video Transcoding: {VideoTranscoding})", 
+            _logger.LogDebug("Building transcoding settings - HW Accel: {EnableHwAccel} (User: {UserHwAccel}, Video Transcoding: {VideoTranscoding})", 
                 enableHwAccel, userSettings.UseHardwareAccel, streamingSettings.VideoTranscoding);
 
             return new TranscodingSettings
@@ -100,7 +100,7 @@ public class TranscodingSettingsProvider
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             var settings = JsonSerializer.Deserialize<UserSettings>(json, options) ?? new UserSettings();
             
-            _logger.LogInformation("Parsed user settings - UseHardwareAccel: {UseHardwareAccel}, TranscodePreset: {TranscodePreset}", 
+            _logger.LogDebug("Parsed user settings - UseHardwareAccel: {UseHardwareAccel}, TranscodePreset: {TranscodePreset}", 
                 settings.UseHardwareAccel, settings.TranscodePreset);
                 
             return settings;

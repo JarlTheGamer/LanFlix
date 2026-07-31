@@ -376,8 +376,6 @@ export class VideoPlayer {
    * Setup stream and detect playback mode
    */
   async setupStream(startPosition = 0) {
-
-
     try {
       // Get stream URL
       const streamUrl = this.getStreamUrl(startPosition);
@@ -387,6 +385,23 @@ export class VideoPlayer {
 
       // Set video source
       this.videoElement.src = streamUrl;
+
+      // Handle initial position seek for DirectPlay once metadata is loaded
+      if (!this.isTranscoding && startPosition > 0) {
+        const seekInitialTime = () => {
+          try {
+            this.videoElement.currentTime = startPosition;
+          } catch (e) {
+            console.warn('Could not set initial currentTime on video element:', e);
+          }
+        };
+
+        if (this.videoElement.readyState >= 1) {
+          seekInitialTime();
+        } else {
+          this.videoElement.addEventListener('loadedmetadata', seekInitialTime, { once: true });
+        }
+      }
 
       // Wait for video to be ready
       await this.waitForVideoReady();
@@ -532,8 +547,9 @@ export class VideoPlayer {
       params.append('episodeId', this.episodeId.toString());
     }
 
-    // Always include startTime parameter for consistent server behavior
-    params.append('startTime', startTime.toString());
+    if (startTime > 0) {
+      params.append('startTime', startTime.toString());
+    }
 
     return `${apiClient.baseURL}/transcoding/stream/${this.contentId}?${params.toString()}`;
   }
@@ -617,9 +633,9 @@ export class VideoPlayer {
 
     // Time updates
     this.videoElement.addEventListener('timeupdate', () => {
-      // For transcoded streams, add the start offset to get actual position
+      // For transcoded streams, add the start offset to get actual position; for DirectPlay, currentTime is already exact
       const rawTime = this.videoElement.currentTime;
-      this.currentTime = rawTime + this.startOffset;
+      this.currentTime = this.isTranscoding ? (rawTime + this.startOffset) : rawTime;
       this.updateProgressBar();
     });
 
@@ -627,17 +643,10 @@ export class VideoPlayer {
     this.videoElement.addEventListener('loadedmetadata', () => {
       const elementDuration = this.videoElement.duration;
 
-      // For transcoded streams, video element duration is often incorrect
-      if (this.isTranscoding) {
-        return;
-      }
-
-      // Only use video element duration if we don't have it from API
-      if (!this.duration || this.duration <= 0) {
-        if (Number.isFinite(elementDuration) && elementDuration > 0) {
-          this.duration = elementDuration;
-          this.updateDurationDisplay();
-        }
+      // For DirectPlay, sync video element duration with exact container length
+      if (!this.isTranscoding && Number.isFinite(elementDuration) && elementDuration > 0) {
+        this.duration = elementDuration;
+        this.updateDurationDisplay();
       }
     });
 
