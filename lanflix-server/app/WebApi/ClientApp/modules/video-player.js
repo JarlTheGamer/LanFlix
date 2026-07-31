@@ -57,6 +57,7 @@ export class VideoPlayer {
     this.syncPlayClient = syncPlayClient;
     this.isSyncEvent = false;
     this.syncDrawerOpen = false;
+    this.seekGeneration = 0; // Incremented on every seekTo to cancel stale canplay handlers
   }
 
   /**
@@ -666,9 +667,8 @@ export class VideoPlayer {
       if (!this.isSyncEvent && this.syncPlayClient.currentRoom) {
         if (this.syncPlayClient.isHost()) {
           this.syncPlayClient.sendPlaybackAction('Play', this.currentTime, true, 1.0, this.profileId, this.profileName);
-        } else {
-          this.showNotification('Only the host can control playback');
         }
+        // Guests cannot control playback — controls are hidden, no notification needed
       }
     });
 
@@ -682,8 +682,6 @@ export class VideoPlayer {
       if (!this.isSyncEvent && this.syncPlayClient.currentRoom) {
         if (this.syncPlayClient.isHost()) {
           this.syncPlayClient.sendPlaybackAction('Pause', this.currentTime, false, 1.0, this.profileId, this.profileName);
-        } else {
-          this.showNotification('Only the host can control playback');
         }
       }
     });
@@ -692,8 +690,6 @@ export class VideoPlayer {
       if (!this.isSyncEvent && this.syncPlayClient.currentRoom) {
         if (this.syncPlayClient.isHost()) {
           this.syncPlayClient.sendPlaybackAction('Seek', this.currentTime, this.isPlaying, 1.0, this.profileId, this.profileName);
-        } else {
-          this.showNotification('Only the host can control playback');
         }
       }
     });
@@ -725,6 +721,8 @@ export class VideoPlayer {
       // For transcoded streams, add the start offset to get actual position; for DirectPlay, currentTime is already exact
       const rawTime = this.videoElement.currentTime;
       this.currentTime = this.isTranscoding ? (rawTime + this.startOffset) : rawTime;
+      // Expose to syncplay ping loop (which reads from the DOM element directly)
+      this.videoElement.dataset.currentTime = this.currentTime;
       this.updateProgressBar();
       this.checkIntroAndCreditsMarkers();
     });
@@ -1262,6 +1260,11 @@ export class VideoPlayer {
       // Load new source
       this.videoElement.src = newStreamUrl;
 
+      // Broadcast seek IMMEDIATELY so guests start buffering in parallel with the host
+      if (this.syncPlayClient?.currentRoom && this.syncPlayClient.isHost()) {
+        this.syncPlayClient.sendPlaybackAction('Seek', time, wasPlaying, 1.0, this.profileId, this.profileName);
+      }
+
       // Wait for video to be ready
       await this.waitForVideoReady();
 
@@ -1271,11 +1274,6 @@ export class VideoPlayer {
       // Resume playback if it was playing
       if (wasPlaying) {
         await this.play();
-      }
-
-      // Now broadcast the seek to guests with the correct position
-      if (this.syncPlayClient?.currentRoom && this.syncPlayClient.isHost()) {
-        this.syncPlayClient.sendPlaybackAction('Seek', time, wasPlaying, 1.0, this.profileId, this.profileName);
       }
 
     } catch (error) {
@@ -2029,7 +2027,8 @@ export class VideoPlayer {
     chatContainer.scrollTop = chatContainer.scrollHeight;
   }
 
-  seekTo(targetTime) {
+  // shouldPlay: explicitly pass desired play state (null = use this.isPlaying)
+  seekTo(targetTime, shouldPlay = null) {
     if (!Number.isFinite(targetTime) || targetTime < 0) return;
 
     console.log(`Seeking player to ${targetTime}s (Transcoding: ${this.isTranscoding})`);
@@ -2037,19 +2036,34 @@ export class VideoPlayer {
 
     if (this.isTranscoding) {
       const streamUrl = this.getStreamUrl(targetTime);
-      const wasPlaying = this.isPlaying;
+      // Resolve desired play state BEFORE async work starts
+      const wantToPlay = shouldPlay !== null ? shouldPlay : this.isPlaying;
 
-      // Suppress all browser-generated events (pause/seeked/play) while src is reloading
+      // Increment generation — any older canplay handler will see a stale generation and bail
+      const myGeneration = ++this.seekGeneration;
+
       this.isSyncEvent = true;
       this.videoElement.src = streamUrl;
       this.startOffset = targetTime;
 
-      // Release the sync guard once the new segment is ready
       this.videoElement.addEventListener('canplay', () => {
-        if (wasPlaying) {
-          this.videoElement.play().catch(e => console.warn('Play after seek failed:', e));
+        // A newer seekTo was called after us — bail out to avoid overriding newer state
+        if (myGeneration !== this.seekGeneration) return;
+
+        if (wantToPlay) {
+          // Keep isSyncEvent true through the play event so it doesn't look like a guest action
+          this.videoElement.addEventListener('play', () => {
+            if (myGeneration === this.seekGeneration) {
+              setTimeout(() => { this.isSyncEvent = false; }, 50);
+            }
+          }, { once: true });
+          this.videoElement.play().catch(e => {
+            console.warn('Play after seek failed:', e);
+            if (myGeneration === this.seekGeneration) this.isSyncEvent = false;
+          });
+        } else {
+          this.isSyncEvent = false;
         }
-        this.isSyncEvent = false;
       }, { once: true });
     } else {
       this.videoElement.currentTime = targetTime;
@@ -2064,19 +2078,30 @@ export class VideoPlayer {
 
     if (action.actionType === 'Pause') {
       this.videoElement.pause();
-      this.showSyncPlayToast(`${action.profileName} paused playback`);
-    } else if (action.actionType === 'Play') {
-      if (drift > 2.5) {
-        this.seekTo(targetTime);
+      // Seek guest to host's exact position so they're frame-perfect when play resumes.
+      // Pass shouldPlay=false so a stale seek doesn't auto-play after a rapid play→pause.
+      if (drift > 0.1) {
+        this.seekTo(targetTime, false);
       }
-      this.videoElement.play().catch(() => {});
+      this.showSyncPlayToast(`${action.profileName} paused playback`);
+
+    } else if (action.actionType === 'Play') {
+      if (drift > 0.5) {
+        // seekTo handles play() internally via shouldPlay=true; don't call play() again
+        this.seekTo(targetTime, true);
+      } else {
+        this.videoElement.play().catch(() => {});
+      }
       this.showSyncPlayToast(`${action.profileName} resumed playback`);
+
     } else if (action.actionType === 'Seek') {
-      this.seekTo(targetTime);
+      // Seek without auto-play — a separate Play action will follow if needed
+      this.seekTo(targetTime, this.isPlaying);
       this.showSyncPlayToast(`${action.profileName} seeked to ${this.formatTime(targetTime)}`);
     }
 
-    setTimeout(() => { this.isSyncEvent = false; }, 300);
+    // Safety reset for non-transcoded paths (transcoded paths manage isSyncEvent themselves)
+    setTimeout(() => { if (!this.isTranscoding) this.isSyncEvent = false; }, 300);
   }
 
   handleIncomingMediaChange(mediaChange, room) {

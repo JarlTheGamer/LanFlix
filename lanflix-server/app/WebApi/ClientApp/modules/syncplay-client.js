@@ -160,11 +160,12 @@ export class SyncPlayClient {
         if (this.pingIntervalId) clearInterval(this.pingIntervalId);
         this.pingIntervalId = setInterval(async () => {
             if (this.connection && this.connection.state === signalR.HubConnectionState.Connected) {
+                // Use data-current-time attribute set by VideoPlayer (includes startOffset for transcoded streams)
                 const videoEl = document.getElementById('video-player');
-                const currentTime = videoEl ? videoEl.currentTime : 0;
+                const currentTime = videoEl ? parseFloat(videoEl.dataset.currentTime || videoEl.currentTime || 0) : 0;
                 await this.connection.invoke('Ping', Date.now(), currentTime).catch(() => {});
             }
-        }, 1500);
+        }, 1000);
     }
 
     /**
