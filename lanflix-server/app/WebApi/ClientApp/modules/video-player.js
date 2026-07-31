@@ -120,12 +120,9 @@ export class VideoPlayer {
     this.videoElement.setAttribute('webkit-playsinline', '');
 
     // Fire TV specific settings
-    // Fire TV specific settings
-    if (isFireTV) {
-      this.videoElement.setAttribute('preload', 'metadata'); // Less aggressive preloading
-      this.videoElement.removeAttribute('crossorigin'); // Remove CORS for Fire TV
-    } else {
-      this.videoElement.setAttribute('preload', 'auto');
+    // Use 'metadata' preloading to prevent Chrome from aggressively pre-fetching dozens of chunks on load
+    this.videoElement.setAttribute('preload', 'metadata');
+    if (!isFireTV) {
       this.videoElement.setAttribute('crossorigin', 'anonymous');
     }
 
@@ -377,11 +374,12 @@ export class VideoPlayer {
    */
   async setupStream(startPosition = 0) {
     try {
-      // Get stream URL
-      const streamUrl = this.getStreamUrl(startPosition);
+      // First detect playback mode using base stream URL
+      const detectUrl = this.getStreamUrl(0);
+      await this.detectPlaybackMode(detectUrl);
 
-      // Test stream availability and get playback mode
-      await this.detectPlaybackMode(streamUrl);
+      // Get actual stream URL (includes startTime parameter only if transcoding)
+      const streamUrl = this.getStreamUrl(startPosition);
 
       // Set video source
       this.videoElement.src = streamUrl;
@@ -547,7 +545,8 @@ export class VideoPlayer {
       params.append('episodeId', this.episodeId.toString());
     }
 
-    if (startTime > 0) {
+    // Only append startTime when transcoding. For DirectPlay, native HTML5 currentTime seek is used.
+    if (this.isTranscoding && startTime > 0) {
       params.append('startTime', startTime.toString());
     }
 

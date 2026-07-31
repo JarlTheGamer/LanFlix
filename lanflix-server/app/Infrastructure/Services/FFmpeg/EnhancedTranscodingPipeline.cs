@@ -337,13 +337,20 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         // Add format-specific options for streaming
         if (outputFormat == "mp4")
         {
-            // MP4 streaming options optimized for duration metadata
-            // Use default_base_moof instead of empty_moov to include duration info
-            args.Append("-movflags frag_keyframe+default_base_moof+faststart ");
-            
-            // Add fragment duration settings for better streaming
-            args.Append("-min_frag_duration 1000000 "); // 1 second fragments
-            args.Append("-frag_duration 2000000 ");     // 2 second max fragments
+            if (string.IsNullOrEmpty(outputPath))
+            {
+                // Streaming output to stdout MUST be fragmented
+                args.Append("-movflags frag_keyframe+empty_moov ");
+                
+                // Add fragment duration settings for better streaming
+                args.Append("-min_frag_duration 1000000 "); // 1 second fragments
+                args.Append("-frag_duration 2000000 ");     // 2 second max fragments
+            }
+            else
+            {
+                // File output (offline transcoding) MUST be standard MP4 with faststart, NOT fragmented
+                args.Append("-movflags +faststart ");
+            }
         }
         else if (outputFormat == "mpegts")
         {
