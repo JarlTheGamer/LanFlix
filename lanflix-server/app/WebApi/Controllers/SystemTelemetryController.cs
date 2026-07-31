@@ -40,6 +40,55 @@ public class SystemTelemetryController : ControllerBase
         }
     }
 
+    [HttpGet("server-info")]
+    public IActionResult GetServerInfo()
+    {
+        var localIp = GetPrimaryLanIPv4Address() ?? "127.0.0.1";
+        var port = HttpContext.Connection.LocalPort > 0 ? HttpContext.Connection.LocalPort : 5037;
+        var scheme = HttpContext.Request.Scheme ?? "http";
+
+        return Ok(new
+        {
+            lanIp = localIp,
+            port = port,
+            baseUrl = $"{scheme}://{localIp}:{port}",
+            serverName = Environment.MachineName
+        });
+    }
+
+    private static string? GetPrimaryLanIPv4Address()
+    {
+        try
+        {
+            foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus != OperationalStatus.Up) continue;
+                if (ni.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+
+                var name = ni.Name.ToLowerInvariant();
+                var desc = ni.Description.ToLowerInvariant();
+
+                if (name.Contains("vethernet") || name.Contains("wsl") || name.Contains("virtual") ||
+                    name.Contains("hyper-v") || name.Contains("vmnet") || name.Contains("docker") || name.Contains("zerotier") ||
+                    desc.Contains("virtual") || desc.Contains("hyper-v") || desc.Contains("vmware") || desc.Contains("wsl"))
+                {
+                    continue;
+                }
+
+                foreach (var ua in ni.GetIPProperties().UnicastAddresses)
+                {
+                    if (ua.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !System.Net.IPAddress.IsLoopback(ua.Address))
+                    {
+                        return ua.Address.ToString();
+                    }
+                }
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
     private object GetNetworkStats()
     {
         long bytesSent = 0;

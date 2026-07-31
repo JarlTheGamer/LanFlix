@@ -145,7 +145,7 @@ public class SyncPlayHub : Hub
             Emoji = emoji
         };
 
-        await Clients.Group(GetGroupName(room.RoomCode)).SendAsync("EmojiReactionReceived", emojiDto);
+        await Clients.OthersInGroup(GetGroupName(room.RoomCode)).SendAsync("EmojiReactionReceived", emojiDto);
     }
 
     public async Task ChangeMedia(int contentId, string contentType, int? episodeId, string mediaTitle)

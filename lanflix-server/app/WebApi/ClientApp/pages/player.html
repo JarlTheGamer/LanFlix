@@ -42,6 +42,57 @@
     </button>
   </div>
 
+  <!-- Android "Open in App" smart banner (only shown on Android with syncRoom) -->
+  <div id="android-app-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:99999;
+      background: linear-gradient(135deg, #1a1a2e, #16213e); border-bottom: 1px solid rgba(229,9,20,0.4);
+      padding: 12px 16px; align-items: center; gap: 12px; font-family: 'Poppins', sans-serif;">
+    <div style="font-size: 1.6rem;">🍿</div>
+    <div style="flex: 1;">
+      <div style="color: #fff; font-weight: 700; font-size: 0.9rem; line-height: 1.2;">Open in Lanflix App</div>
+      <div style="color: rgba(255,255,255,0.6); font-size: 0.75rem;">Better experience in the native app</div>
+    </div>
+    <a id="android-open-btn" href="#" style="background: linear-gradient(135deg, #e50914, #b20710); color: #fff;
+        padding: 8px 16px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; text-decoration: none;
+        white-space: nowrap; box-shadow: 0 4px 12px rgba(229,9,20,0.4);">Open App</a>
+    <button id="android-banner-close" style="background: none; border: none; color: rgba(255,255,255,0.5);
+        font-size: 1.2rem; cursor: pointer; padding: 4px 8px; line-height: 1;">✕</button>
+  </div>
+  <script>
+    // Show "Open in App" banner on Android when visiting a Watch Party or player link
+    (function () {
+      const ua = navigator.userAgent || '';
+      const isNativeApp = /Lanflix-AndroidApp|LanflixApp/i.test(ua) || typeof window.Android !== 'undefined';
+      if (isNativeApp) return; // Already inside the native Android app — skip banner & deep link redirect
+
+      const isAndroid = /Android/i.test(ua);
+      if (!isAndroid) return;
+
+      const params = new URLSearchParams(window.location.search);
+      const contentId = params.get('contentId');
+      const type = params.get('type') || 'movie';
+      const episodeId = params.get('episodeId');
+      const syncRoom = params.get('syncRoom');
+      if (!contentId) return;
+
+      const origin = encodeURIComponent(window.location.origin);
+      const deepLink = `lanflix://player?contentId=${contentId}&type=${type}${episodeId ? `&episodeId=${episodeId}` : ''}${syncRoom ? `&syncRoom=${syncRoom}` : ''}&serverUrl=${origin}`;
+      const intentUrl = `intent://player?contentId=${contentId}&type=${type}${episodeId ? `&episodeId=${episodeId}` : ''}${syncRoom ? `&syncRoom=${syncRoom}` : ''}&serverUrl=${origin}#Intent;scheme=lanflix;package=com.lanflix.webview;end;`;
+
+      const banner = document.getElementById('android-app-banner');
+      const openBtn = document.getElementById('android-open-btn');
+      const closeBtn = document.getElementById('android-banner-close');
+
+      if (banner && openBtn) {
+        openBtn.href = intentUrl;
+        openBtn.addEventListener('click', (e) => {
+          try { window.location.href = deepLink; } catch (_) {}
+        });
+        banner.style.display = 'flex';
+        closeBtn?.addEventListener('click', () => { banner.style.display = 'none'; });
+      }
+    })();
+  </script>
+
   <script type="module">
     import VideoPlayer from '../modules/video-player.js';
     import apiClient from '../modules/api-client.js';
@@ -63,26 +114,27 @@
     let profileId = stateManager.currentProfileId;
     const syncRoom = urlParams.get('syncRoom');
 
-    if (!profileId) {
-      if (syncRoom) {
-        try {
-          const profiles = await stateManager.getProfiles();
-          const guestProfile = profiles.find(p => p.isGuest) || profiles[0];
-          profileId = guestProfile ? guestProfile.id : 1;
+    if (syncRoom) {
+      // Watch Party join links MUST always switch to the Guest profile
+      try {
+        const profiles = await stateManager.getProfiles();
+        const guestProfile = profiles.find(p => p.isGuest) || profiles.find(p => p.name?.toLowerCase().includes('guest')) || profiles[profiles.length - 1];
+        if (guestProfile) {
+          profileId = guestProfile.id;
           stateManager.currentProfileId = profileId;
           stateManager.saveState();
-          console.log('🍿 Watch Party guest link: Auto-assigned Guest profile', profileId);
-        } catch (err) {
-          profileId = 1;
-          stateManager.currentProfileId = 1;
-          stateManager.saveState();
+          console.log('🍿 Watch Party guest link: Force-switched to Guest profile ID', profileId);
         }
-      } else {
-        console.error('No profile selected, redirecting to profiles page');
-        alert('Please select a profile first');
-        window.location.href = 'profiles.html';
-        throw new Error('No profile selected');
+      } catch (err) {
+        console.warn('Failed to load guest profile for Watch Party:', err);
       }
+    }
+
+    if (!profileId) {
+      console.error('No profile selected, redirecting to profiles page');
+      alert('Please select a profile first');
+      window.location.href = 'profiles.html';
+      throw new Error('No profile selected');
     }
 
     // Initialize video player

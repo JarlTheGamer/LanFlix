@@ -104,11 +104,24 @@ export class VideoPlayer {
       const createSync = urlParams.get('createSync');
 
       if (syncRoom) {
+        // Ask guest for their display name before joining
+        const chosenName = await this.promptGuestName();
+        if (chosenName) this.profileName = chosenName;
+
         const room = await this.joinSyncPlayRoom(syncRoom);
-        this.toggleSyncPlayDrawer(true);
-        if (room && typeof room.currentTimeSeconds === 'number' && room.currentTimeSeconds > 0) {
-          startPosition = room.currentTimeSeconds;
-          console.log(`🍿 Watch Party initial sync position from host room: ${startPosition}s`);
+        if (room) {
+          this.toggleSyncPlayDrawer(true);
+          if (typeof room.currentTimeSeconds === 'number' && room.currentTimeSeconds > 0) {
+            startPosition = room.currentTimeSeconds;
+            console.log(`🍿 Watch Party initial sync position from host room: ${startPosition}s`);
+          }
+        } else {
+          console.warn('❌ Invalid or expired Watch Party link.');
+          this.hideGuestSyncOverlay();
+          this.updateWatchPartyControlsVisibility();
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('syncRoom');
+          window.history.replaceState({}, document.title, cleanUrl.toString());
         }
       } else if (createSync === 'true') {
         await this.createSyncPlayRoom();
@@ -1206,6 +1219,9 @@ export class VideoPlayer {
    * Toggle play/pause
    */
   togglePlayPause() {
+    if (this.syncPlayClient?.currentRoom && !this.syncPlayClient.isHost()) {
+      return; // Guest controls restricted
+    }
     if (this.isPlaying) {
       this.pause();
     } else {
@@ -1217,10 +1233,12 @@ export class VideoPlayer {
    * Seek to specific time
    */
   async seek(targetTime) {
+    if (this.syncPlayClient?.currentRoom && !this.syncPlayClient.isHost()) {
+      return; // Guest controls restricted
+    }
     if (!this.duration || this.duration <= 0) {
       return;
     }
-
 
     const clampedTime = Math.max(0, Math.min(targetTime, this.duration));
 
@@ -1694,20 +1712,15 @@ export class VideoPlayer {
 
       <div id="syncplay-initial-view" style="padding: 24px 20px; display: flex; flex-direction: column; gap: 16px;">
         <p style="font-size: 0.9rem; color: rgba(255,255,255,0.7); line-height: 1.5; margin: 0;">
-          Watch movies and TV shows together with friends in exact real-time sync.
+          Watch movies and TV shows together with friends in real-time sync. Create a room and share the link with friends to watch together!
         </p>
-        <button id="syncplay-create-btn" style="background: linear-gradient(135deg, #e50914, #ff5252); border: none; color: #fff; padding: 12px; border-radius: 12px; font-weight: 600; cursor: pointer; font-size: 0.95rem;">
+        <div style="margin-bottom: 4px;">
+          <label style="font-size: 0.75rem; color: rgba(255,255,255,0.5); text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 6px;">Your Display Name</label>
+          <input type="text" id="syncplay-drawer-name-input" value="${this.escapeHtml(this.profileName || '')}" placeholder="Your Name" style="width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 10px 14px; color: #fff; font-size: 0.85rem; outline: none;">
+        </div>
+        <button id="syncplay-create-btn" style="width: 100%; background: linear-gradient(135deg, #e50914, #b20710); border: none; color: #fff; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; font-size: 0.95rem; box-shadow: 0 4px 15px rgba(229,9,20,0.4);">
           ✨ Create Watch Party Room
         </button>
-        <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0;">
-          <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
-          <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4); text-transform: uppercase;">or join room</span>
-          <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="syncplay-code-input" placeholder="Enter Room Code" style="flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 10px 14px; color: #fff; font-size: 0.85rem; outline: none;">
-          <button id="syncplay-join-btn" style="background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.85rem;">Join</button>
-        </div>
       </div>
 
       <div id="syncplay-active-view" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
@@ -1749,14 +1762,19 @@ export class VideoPlayer {
     // Attach Drawer DOM listeners
     document.getElementById('syncplay-close-btn')?.addEventListener('click', () => this.toggleSyncPlayDrawer(false));
     document.getElementById('syncplay-create-btn')?.addEventListener('click', () => this.createSyncPlayRoom());
-    document.getElementById('syncplay-join-btn')?.addEventListener('click', () => {
-      const code = document.getElementById('syncplay-code-input')?.value;
-      if (code) this.joinSyncPlayRoom(code);
-    });
 
-    document.getElementById('syncplay-copy-link-btn')?.addEventListener('click', () => {
+    document.getElementById('syncplay-copy-link-btn')?.addEventListener('click', async () => {
       if (this.syncPlayClient.currentRoom) {
-        const shareUrl = `${window.location.origin}${window.location.pathname}?contentId=${this.contentId}&type=${this.contentType}${this.episodeId ? `&episodeId=${this.episodeId}` : ''}&syncRoom=${this.syncPlayClient.currentRoom.roomCode}`;
+        // Build the share URL using the server's real LAN IP so mobile devices
+        // can connect directly without needing mDNS (.local resolution)
+        let baseUrl = window.location.origin;
+        try {
+          const info = await apiClient.getServerInfo();
+          if (info?.baseUrl) baseUrl = info.baseUrl;
+        } catch (_) { /* fall back to window.location.origin */ }
+
+        const path = window.location.pathname;
+        const shareUrl = `${baseUrl}${path}?contentId=${this.contentId}&type=${this.contentType}${this.episodeId ? `&episodeId=${this.episodeId}` : ''}&syncRoom=${this.syncPlayClient.currentRoom.roomCode}`;
         this.copyToClipboard(shareUrl);
       }
     });
@@ -1846,16 +1864,28 @@ export class VideoPlayer {
       overlay.style.cssText = `
         position: absolute; inset: 0; z-index: 500;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
-        cursor: pointer; text-align: center; color: white;
+        background: rgba(0,0,0,0.75); backdrop-filter: blur(10px);
+        text-align: center; color: white; padding: 20px;
       `;
       overlay.innerHTML = `
-        <div style="background: linear-gradient(135deg, #e50914, #b20710); color: white; padding: 20px 40px; border-radius: 40px; font-weight: 700; font-size: 1.25rem; box-shadow: 0 10px 30px rgba(229,9,20,0.6); display: flex; align-items: center; gap: 12px;">
-          <span>🍿 Click to Join Watch Party & Start Video</span>
+        <div style="background: rgba(24, 24, 30, 0.95); border: 1px solid rgba(255,255,255,0.18); padding: 30px 40px; border-radius: 28px; box-shadow: 0 20px 60px rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center; gap: 16px; max-width: 380px; width: 90%;">
+          <div style="font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px;">🍿 Join Watch Party</div>
+          <div style="width: 100%; text-align: left;">
+            <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">Choose Display Name</label>
+            <input type="text" id="syncplay-guest-name-input" value="${this.escapeHtml(this.profileName || 'Guest')}" placeholder="Your display name..." style="width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 1rem; outline: none;" />
+          </div>
+          <button id="syncplay-start-btn" style="width: 100%; background: linear-gradient(135deg, #e50914, #b20710); color: white; border: none; padding: 14px 24px; border-radius: 30px; font-weight: 700; font-size: 1.05rem; cursor: pointer; box-shadow: 0 8px 25px rgba(229,9,20,0.5); transition: transform 0.2s;">
+            🍿 Join Watch Party & Start Video
+          </button>
+          <div style="opacity: 0.6; font-size: 0.8rem;">(Required by browser policy to enable video audio)</div>
         </div>
-        <div style="margin-top: 14px; opacity: 0.8; font-size: 0.95rem;">(Required by browser policy to start audio & video)</div>
       `;
-      overlay.addEventListener('click', () => {
+      const startBtn = overlay.querySelector('#syncplay-start-btn');
+      startBtn?.addEventListener('click', () => {
+        const nameInput = overlay.querySelector('#syncplay-guest-name-input');
+        if (nameInput && nameInput.value.trim()) {
+          this.profileName = nameInput.value.trim();
+        }
         this.videoElement.play().then(() => {
           this.isPlaying = true;
           this.hideGuestSyncOverlay();
@@ -1917,6 +1947,10 @@ export class VideoPlayer {
 
   async createSyncPlayRoom() {
     try {
+      const nameInput = document.getElementById('syncplay-drawer-name-input');
+      if (nameInput && nameInput.value.trim()) {
+        this.profileName = nameInput.value.trim();
+      }
       this.showSyncPlayToast('Creating Watch Party Room...');
       const room = await this.syncPlayClient.createRoom(
         this.profileId,
@@ -1942,14 +1976,101 @@ export class VideoPlayer {
     }
   }
 
+  /**
+   * Shows a full-screen name prompt overlay before a guest joins a Watch Party.
+   * Returns a Promise<string> with the entered name (or the existing profileName if cancelled).
+   */
+  promptGuestName() {
+    return new Promise((resolve) => {
+      // Remove any stale overlay
+      document.getElementById('syncplay-name-overlay')?.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'syncplay-name-overlay';
+      overlay.style.cssText = [
+        'position:fixed', 'inset:0', 'z-index:999999',
+        'background:rgba(0,0,0,0.85)',
+        'display:flex', 'align-items:center', 'justify-content:center',
+        'font-family:Poppins,sans-serif',
+        'backdrop-filter:blur(12px)',
+      ].join(';');
+
+      overlay.innerHTML = `
+        <div style="background:linear-gradient(145deg,#1a1a2e,#16213e);border:1px solid rgba(229,9,20,0.3);
+            border-radius:20px;padding:36px 32px;width:min(400px,90vw);box-shadow:0 24px 80px rgba(0,0,0,0.7);
+            display:flex;flex-direction:column;gap:20px;">
+          <div style="text-align:center;">
+            <div style="font-size:2.5rem;margin-bottom:8px;">🍿</div>
+            <h2 style="color:#fff;margin:0;font-size:1.3rem;font-weight:700;">Join Watch Party</h2>
+            <p style="color:rgba(255,255,255,0.55);margin:8px 0 0;font-size:0.85rem;line-height:1.5;">
+              What should others call you?</p>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:rgba(255,255,255,0.45);text-transform:uppercase;
+                font-weight:700;letter-spacing:.08em;display:block;margin-bottom:8px;">Your Display Name</label>
+            <input id="syncplay-guest-name-input" type="text"
+              value="${this.escapeHtml(this.profileName || '')}"
+              placeholder="e.g. Alex"
+              maxlength="32"
+              style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.08);
+                  border:1.5px solid rgba(255,255,255,0.18);border-radius:12px;
+                  padding:12px 16px;color:#fff;font-size:1rem;outline:none;
+                  font-family:inherit;transition:border-color .2s;"
+            >
+          </div>
+          <button id="syncplay-guest-join-btn"
+            style="width:100%;background:linear-gradient(135deg,#e50914,#b20710);border:none;
+                color:#fff;padding:14px;border-radius:12px;font-weight:700;cursor:pointer;
+                font-size:1rem;box-shadow:0 6px 20px rgba(229,9,20,0.45);
+                font-family:inherit;transition:opacity .15s;">
+            Join Watch Party
+          </button>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      const input = document.getElementById('syncplay-guest-name-input');
+      const btn = document.getElementById('syncplay-guest-join-btn');
+
+      // Auto-focus & select all for quick edit
+      setTimeout(() => { input?.focus(); input?.select(); }, 80);
+
+      // Focus ring on input
+      input?.addEventListener('focus', () => { input.style.borderColor = 'rgba(229,9,20,0.7)'; });
+      input?.addEventListener('blur',  () => { input.style.borderColor = 'rgba(255,255,255,0.18)'; });
+
+      const submit = () => {
+        const name = input?.value.trim() || this.profileName || 'Guest';
+        overlay.remove();
+        resolve(name);
+      };
+
+      btn?.addEventListener('click', submit);
+      input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    });
+  }
+
   async joinSyncPlayRoom(roomCode) {
     try {
-      this.showSyncPlayToast(`Joining room ${roomCode}...`);
+      const nameInput = document.getElementById('syncplay-drawer-name-input');
+      if (nameInput && nameInput.value.trim()) {
+        this.profileName = nameInput.value.trim();
+      }
+      this.showSyncPlayToast(`Joining Watch Party...`);
       const room = await this.syncPlayClient.joinRoom(roomCode, this.profileId, this.profileName, this.profileAvatar);
+      if (!room) {
+        throw new Error("Watch Party room not found or link has expired.");
+      }
       return room;
     } catch (e) {
       console.error('Failed to join SyncPlay room:', e);
-      this.showSyncPlayToast('Failed to join room.');
+      this.showSyncPlayToast('❌ Watch Party room not found or link has ended.');
+      this.hideGuestSyncOverlay();
+      this.updateWatchPartyControlsVisibility();
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('syncRoom');
+      window.history.replaceState({}, document.title, cleanUrl.toString());
       return null;
     }
   }
@@ -2128,11 +2249,14 @@ export class VideoPlayer {
     floating.className = 'syncplay-floating-emoji';
     floating.textContent = emoji;
 
-    // Slight random offset
-    const randomRight = 380 + Math.floor(Math.random() * 80 - 40);
+    // Slight random offset & tilt for organic feel
+    const randomRight = 360 + Math.floor(Math.random() * 80 - 40);
+    const randomRotation = Math.floor(Math.random() * 30 - 15);
     floating.style.right = `${randomRight}px`;
+    floating.style.transform = `rotate(${randomRotation}deg)`;
 
-    document.body.appendChild(floating);
+    const container = document.querySelector('.player-container') || document.body;
+    container.appendChild(floating);
     setTimeout(() => floating.remove(), 2500);
   }
 

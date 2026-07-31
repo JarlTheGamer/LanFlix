@@ -68,8 +68,11 @@ class MainActivity : AppCompatActivity() {
         setupUpdateManager()
         setupWebView()
         setupSwipeRefresh()
-        loadWebApp()
-        handleDeepLinkIntent(intent)
+        if (intent?.data != null) {
+            handleDeepLinkIntent(intent)
+        } else {
+            loadWebApp()
+        }
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -82,6 +85,20 @@ class MainActivity : AppCompatActivity() {
         val uri: Uri = intent?.data ?: return
         lifecycleScope.launch {
             try {
+                // Extract and update server URL if provided in intent or HTTP link host
+                val passedServerUrl = uri.getQueryParameter("serverUrl")
+                if (!passedServerUrl.isNullOrBlank()) {
+                    currentServerUrl = ServerManager.formatServerUrl(passedServerUrl)
+                    ServerManager.saveServer(this@MainActivity, currentServerUrl)
+                } else if (uri.scheme == "http" || uri.scheme == "https") {
+                    val host = uri.host
+                    val port = if (uri.port != -1) ":${uri.port}" else ""
+                    if (!host.isNullOrBlank() && host != "lanflix.local") {
+                        currentServerUrl = ServerManager.formatServerUrl("http://$host$port")
+                        ServerManager.saveServer(this@MainActivity, currentServerUrl)
+                    }
+                }
+
                 val baseUrl = ServerManager.resolveUrlForConnection(this@MainActivity, currentServerUrl).trimEnd('/')
                 val targetUrl = when {
                     uri.scheme == "lanflix" -> {
@@ -104,6 +121,8 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (!targetUrl.isNullOrEmpty() && ::webView.isInitialized) {
+                    binding.serverUnreachableLayout.visibility = View.GONE
+                    binding.webView.visibility = View.VISIBLE
                     webView.loadUrl(targetUrl)
                 }
             } catch (e: Exception) {
@@ -285,6 +304,13 @@ class MainActivity : AppCompatActivity() {
                 error: WebResourceError?
             ) {
                 super.onReceivedError(view, request, error)
+                val failingUrl = request?.url?.toString().orEmpty()
+                val errDesc = error?.description?.toString().orEmpty()
+
+                if (failingUrl.startsWith("lanflix://") || failingUrl.startsWith("intent://") || errDesc.contains("ERR_UNKNOWN_URL_SCHEME")) {
+                    return // Ignore custom scheme redirects inside app WebView
+                }
+
                 if (request == null || request.isForMainFrame) {
                     showUnreachableOverlay("Could not connect to $currentServerUrl\n${error?.description}")
                     lifecycleScope.launch {
@@ -309,7 +335,11 @@ class MainActivity : AppCompatActivity() {
                 view: WebView?,
                 request: WebResourceRequest?
             ): Boolean {
-                val url = request?.url.toString()
+                val url = request?.url?.toString().orEmpty()
+                // Block custom scheme navigation from triggering error pages
+                if (url.startsWith("lanflix://") || url.startsWith("intent://")) {
+                    return true
+                }
                 if (url.startsWith("http://") || url.startsWith("https://")) {
                     val parsed = runCatching { Uri.parse(url) }.getOrNull()
                     val targetHost = parsed?.host?.lowercase(Locale.US)

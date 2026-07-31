@@ -966,6 +966,14 @@ class ApiClient {
       body: JSON.stringify({ pinCode })
     });
   }
+
+  /**
+   * GET /api/system/server-info
+   * Returns the server's LAN IP address and base URL for share links.
+   */
+  async getServerInfo() {
+    return this.request('/system/server-info');
+  }
 }
 
 // Create singleton instance
