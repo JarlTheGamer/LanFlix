@@ -66,6 +66,64 @@ class ApiClient {
   }
 
   /**
+   * Get or create local persistent device ID
+   */
+  getDeviceId() {
+    let deviceId = localStorage.getItem('lanflix_device_id');
+    if (!deviceId) {
+      deviceId = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('lanflix_device_id', deviceId);
+    }
+    return deviceId;
+  }
+
+  /**
+   * Register device with server & check pairing status
+   */
+  async registerDevice(clientType = 'web') {
+    const deviceId = this.getDeviceId();
+    return await this.request('/devices/register', {
+      method: 'POST',
+      body: JSON.stringify({ deviceId, clientType })
+    });
+  }
+
+  /**
+   * Get device pairing status
+   */
+  async checkDeviceStatus() {
+    const deviceId = this.getDeviceId();
+    return await this.request(`/devices/status/${deviceId}`);
+  }
+
+  /**
+   * Get all devices (Admin / Settings UI)
+   */
+  async getAllDevices() {
+    return await this.request('/devices');
+  }
+
+  /**
+   * Pair a device using 6-character pairing code
+   */
+  async pairDevice(code) {
+    return await this.request('/devices/pair', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    });
+  }
+
+  /**
+   * Unpair / delete a device
+   */
+  async unpairDevice(deviceId) {
+    return await this.request(`/devices/${deviceId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  /**
    * Make HTTP request with retry logic and error handling
    */
   async request(endpoint, options = {}, retryCount = 0) {
@@ -151,8 +209,10 @@ class ApiClient {
         return this.request(endpoint, options, retryCount + 1);
       }
 
-      // Mark as offline after all retries failed
-      this.markOffline();
+      // Only mark as offline for actual network connection drops (not HTTP status code responses like 404)
+      if (!error.statusCode) {
+        this.markOffline();
+      }
 
       // Log error
       console.error(`API Error [${endpoint}]:`, error);
@@ -781,7 +841,7 @@ class ApiClient {
    * POST /api/notifications/register
    * Register device for push notifications
    */
-  async registerDevice(profileId, deviceToken, platform) {
+  async registerPushNotificationDevice(profileId, deviceToken, platform) {
     return this.request('/notifications/register', {
       method: 'POST',
       body: JSON.stringify({ profileId, deviceToken, platform })

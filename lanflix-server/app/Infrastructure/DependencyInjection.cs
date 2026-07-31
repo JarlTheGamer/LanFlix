@@ -3,6 +3,7 @@ using Lanflix.Domain.ValueObjects;
 using Lanflix.Infrastructure.Persistence;
 using Lanflix.Infrastructure.Services.AppUpdate;
 using Lanflix.Infrastructure.Services.Authentication;
+using Lanflix.Infrastructure.Services.Devices;
 using Lanflix.Infrastructure.Services.Caching;
 using Lanflix.Infrastructure.Services.ExternalApis;
 using Lanflix.Infrastructure.Services.FFmpeg;
@@ -62,6 +63,9 @@ public static class DependencyInjection
         services.AddSingleton<IReleaseMetadataService, ReleaseMetadataService>();
         services.AddScoped<IServerUpdateService, ServerUpdateService>();
         services.AddScoped<IAppUpdateService, AppUpdateService>();
+
+        // Device Pairing & Management Services
+        services.AddSingleton<IDeviceService, DeviceService>();
 
         // Discovery Services (mDNS lanflix.local)
         services.AddHostedService<Lanflix.Infrastructure.Services.Discovery.MDnsDiscoveryService>();

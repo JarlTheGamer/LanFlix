@@ -32,6 +32,23 @@ export class SettingsManager {
     this.updateVersionDisplay();
     this.updateFocus();
 
+    const pairBtn = document.getElementById('pair-device-btn');
+    const pairInput = document.getElementById('pair-code-input');
+    if (pairBtn && pairInput) {
+      pairBtn.addEventListener('click', async () => {
+        const code = pairInput.value.trim();
+        if (!code) return;
+        try {
+          await apiClient.pairDevice(code);
+          pairInput.value = '';
+          alert('Device successfully paired!');
+          this.loadDevices();
+        } catch (e) {
+          alert('Failed to pair device: ' + e.message);
+        }
+      });
+    }
+
     document.addEventListener('keydown', (e) => this.handleKeyboard(e));
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.custom-select-wrapper')) {
@@ -281,7 +298,105 @@ export class SettingsManager {
     const targetSection = document.getElementById(sectionId);
     if (targetSection) targetSection.classList.add('active');
 
+    if (sectionId === 'devices') {
+      this.loadDevices();
+    }
+
     this.focusedContentIndex = 0;
+  }
+
+  async loadDevices() {
+    try {
+      const devices = await apiClient.getAllDevices();
+      this.renderDevices(devices);
+
+      const toggle = document.getElementById('require-pairing-toggle');
+      if (toggle) {
+        try {
+          const res = await apiClient.request('/devices/require-pairing');
+          toggle.checked = res.requirePairing !== false;
+        } catch (e) {}
+
+        if (!toggle.dataset.listenerAttached) {
+          toggle.dataset.listenerAttached = 'true';
+          toggle.addEventListener('change', async () => {
+            try {
+              await apiClient.request('/devices/require-pairing', {
+                method: 'POST',
+                body: JSON.stringify({ enabled: toggle.checked })
+              });
+            } catch (e) {
+              console.error('Failed to save require pairing setting:', e);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load devices:', e);
+    }
+  }
+
+  renderDevices(devices) {
+    const container = document.getElementById('device-list-container');
+    if (!container) return;
+
+    if (!devices || devices.length === 0) {
+      container.innerHTML = '<div style="color: #888; padding: 12px 0;">No devices registered yet.</div>';
+      return;
+    }
+
+    const currentDeviceId = apiClient.getDeviceId();
+
+    container.innerHTML = devices.map(dev => `
+      <div class="device-item" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div style="width: 42px; height: 42px; background: ${dev.isPaired ? 'rgba(38,222,129,0.15)' : 'rgba(255,167,38,0.15)'}; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: ${dev.isPaired ? '#26de81' : '#ffa726'};">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+          </div>
+          <div>
+            <div style="font-weight: 600; color: #fff; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+              ${dev.deviceName}
+              ${dev.deviceId === currentDeviceId ? '<span style="background: rgba(229,9,20,0.2); color: #e50914; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">THIS DEVICE</span>' : ''}
+              ${dev.isPaired ? '<span style="background: rgba(38,222,129,0.2); color: #26de81; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">PAIRED</span>' : '<span style="background: rgba(255,167,38,0.2); color: #ffa726; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">CODE: ' + dev.pairingCode + '</span>'}
+            </div>
+            <div style="font-size: 0.8rem; color: #888; margin-top: 2px;">
+              IP: ${dev.ipAddress} &bull; Code: <strong style="color: #fff; font-family: monospace;">${dev.pairingCode}</strong> &bull; Last Seen: ${new Date(dev.lastSeen).toLocaleTimeString()}
+            </div>
+          </div>
+        </div>
+        <div>
+          ${!dev.isPaired ? `<button class="action-btn pair-code-btn" data-code="${dev.pairingCode}" style="background: #26de81; color: #000; border: none; padding: 8px 16px; font-weight: 700; border-radius: 6px; cursor: pointer; margin-right: 8px; height: 34px; display: inline-flex; align-items: center; white-space: nowrap;">Approve</button>` : ''}
+          <button class="action-btn unpair-device-btn" data-device-id="${dev.deviceId}" style="background: rgba(255,255,255,0.08); color: #ff6b6b; border: 1px solid rgba(255,107,107,0.3); padding: 8px 16px; font-weight: 600; border-radius: 6px; cursor: pointer; height: 34px; display: inline-flex; align-items: center; white-space: nowrap;">${dev.isPaired ? 'Unpair' : 'Reject'}</button>
+        </div>
+      </div>
+    `).join('');
+
+    // Attach button events
+    container.querySelectorAll('.pair-code-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const code = btn.dataset.code;
+        try {
+          await apiClient.pairDevice(code);
+          this.loadDevices();
+        } catch (e) {
+          alert('Failed to pair device: ' + e.message);
+        }
+      });
+    });
+
+    container.querySelectorAll('.unpair-device-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const devId = btn.dataset.deviceId;
+        if (confirm('Are you sure you want to unpair/remove this device?')) {
+          try {
+            await apiClient.unpairDevice(devId);
+            this.loadDevices();
+          } catch (e) {
+            alert('Failed to unpair device: ' + e.message);
+          }
+        }
+      });
+    });
   }
 
   initializeCustomSelects() {

@@ -168,4 +168,35 @@ public class ProfilesController : ControllerBase
 
         return Ok(new { inWatchlist = result });
     }
+
+    /// <summary>
+    /// Delete a profile
+    /// </summary>
+    [HttpDelete("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteProfile(
+        int id,
+        [FromServices] Lanflix.Application.Common.Interfaces.IApplicationDbContext dbContext,
+        [FromServices] IOutputCacheStore cacheStore,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Deleting profile {ProfileId}", id);
+
+        var profile = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+            dbContext.Profiles, p => p.Id == id, cancellationToken);
+
+        if (profile == null)
+        {
+            return NotFound(new { message = "Profile not found" });
+        }
+
+        dbContext.Profiles.Remove(profile);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await cacheStore.EvictByTagAsync("profiles", cancellationToken);
+        _logger.LogInformation("Deleted profile {ProfileId} successfully", id);
+
+        return Ok(new { message = "Profile deleted successfully" });
+    }
 }

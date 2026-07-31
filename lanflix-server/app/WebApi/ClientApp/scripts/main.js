@@ -5,9 +5,14 @@ import searchModule from '../modules/search.js';
 import stateManager from '../modules/data.js';
 import { notificationBadge } from '../modules/notification-badge.js';
 import { checkFirstRun, isNativeApp } from '../modules/first-run.js';
+import { devicePairingManager } from '../modules/device-pairing.js';
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
+  // Check device pairing status first
+  const isPaired = await devicePairingManager.checkAndEnforcePairing();
+  if (!isPaired) return;
+
   // Check for first-run configuration (Android app only)
   if (isNativeApp() && !checkFirstRun()) {
     return; // Will redirect to config page

@@ -41,6 +41,15 @@ public class NotificationsController : ControllerBase
         
         return Ok(new { message = "Response recorded" });
     }
+
+    /// <summary>
+    /// Register device for notifications
+    /// </summary>
+    [HttpPost("register")]
+    public IActionResult RegisterNotificationDevice([FromBody] object body)
+    {
+        return Ok(new { message = "Notification device registered" });
+    }
 }
 
 public class NotificationResponse

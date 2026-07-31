@@ -1,8 +1,11 @@
 import { ProfileManager } from '../modules/profile-manager.js';
 import stateManager from '../modules/data.js';
+import { devicePairingManager } from '../modules/device-pairing.js';
 
 // Initialize profiles page
 document.addEventListener('DOMContentLoaded', async () => {
+  const isPaired = await devicePairingManager.checkAndEnforcePairing();
+  if (!isPaired) return;
   try {
     const profileManager = new ProfileManager();
 
