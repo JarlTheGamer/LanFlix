@@ -412,7 +412,8 @@
                         <div class="settings-item">
                             <div class="settings-item-info">
                                 <label>Require Device Pairing</label>
-                                <p class="settings-item-description">Require new devices to enter a 6-character code before accessing media</p>
+                                <p class="settings-item-description">Require new devices to enter a 6-character code
+                                    before accessing media</p>
                             </div>
                             <label class="settings-toggle">
                                 <input type="checkbox" id="require-pairing-toggle" checked />
@@ -424,17 +425,23 @@
                     <div class="settings-group">
                         <h2 class="settings-group-title">Pair New Device</h2>
                         <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
-                            <input type="text" id="pair-code-input" class="modal-input" placeholder="ENTER 6-CHARACTER CODE" style="width: 280px; font-family: monospace; font-size: 1rem; text-transform: uppercase; letter-spacing: 2px; padding: 12px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff;" maxlength="6" />
-                            <button class="action-btn" id="pair-device-btn" style="background: #e50914; color: #fff; border: none; padding: 12px 24px; font-weight: 700; font-size: 0.95rem; cursor: pointer; border-radius: 8px; white-space: nowrap; height: 44px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(229,9,20,0.3);">
+                            <input type="text" id="pair-code-input" class="modal-input"
+                                placeholder="ENTER 6-CHARACTER CODE"
+                                style="width: 280px; font-family: monospace; font-size: 1rem; text-transform: uppercase; letter-spacing: 2px; padding: 12px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff;"
+                                maxlength="6" />
+                            <button class="action-btn" id="pair-device-btn"
+                                style="background: #e50914; color: #fff; border: none; padding: 12px 24px; font-weight: 700; font-size: 0.95rem; cursor: pointer; border-radius: 8px; white-space: nowrap; height: 44px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(229,9,20,0.3);">
                                 Approve & Pair
                             </button>
                         </div>
-                        <p class="settings-item-description" style="margin-top: 8px;">Enter the code shown on your TV, phone, or new browser screen to authorize access.</p>
+                        <p class="settings-item-description" style="margin-top: 8px;">Enter the code shown on your TV,
+                            phone, or new browser screen to authorize access.</p>
                     </div>
 
                     <div class="settings-group">
                         <h2 class="settings-group-title">Connected Devices</h2>
-                        <div class="device-list" id="device-list-container" style="display: flex; flex-direction: column; gap: 12px;">
+                        <div class="device-list" id="device-list-container"
+                            style="display: flex; flex-direction: column; gap: 12px;">
                             <div style="color: #888; padding: 12px 0;">Loading devices...</div>
                         </div>
                     </div>
@@ -499,7 +506,7 @@
                         </div>
                         <div class="settings-item">
                             <button class="settings-link-btn"
-                                onclick="window.open('https://github.com/YOUR_USERNAME/lanflix', '_blank')">
+                                onclick="window.open('https://github.com/JarlTheGamer/lanflix', '_blank')">
                                 View on GitHub
                             </button>
                         </div>
@@ -525,6 +532,11 @@
                 <div class="modal-field">
                     <label for="profile-name">Profile Name</label>
                     <input type="text" id="profile-name" class="modal-input" placeholder="Enter profile name" />
+                </div>
+                <div class="modal-field">
+                    <label for="profile-pin">Profile PIN Code (4 Digits)</label>
+                    <input type="password" id="profile-pin" class="modal-input" maxlength="4"
+                        placeholder="Leave empty for no PIN (e.g. 1234)" pattern="[0-9]*" inputmode="numeric" />
                 </div>
                 <div class="modal-field">
                     <label>Avatar Color</label>
@@ -601,32 +613,45 @@
                 <h2 class="modal-title" id="ota-modal-title">Lanflix Update Available</h2>
                 <button class="modal-close" id="close-ota-modal" aria-label="Close">
                     <svg viewBox="0 0 24 24">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                        <path
+                            d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
                     </svg>
                 </button>
             </div>
             <div class="modal-body">
                 <div id="ota-update-info">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                        <span style="font-weight: 600; color: #fff; font-size: 1.1rem;" id="ota-version-text">Version 1.2.7</span>
-                        <span style="background: rgba(229, 9, 20, 0.2); color: #e50914; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.8rem;" id="ota-size-badge">Update Available</span>
+                    <div
+                        style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <span style="font-weight: 600; color: #fff; font-size: 1.1rem;" id="ota-version-text">Version
+                            1.2.7</span>
+                        <span
+                            style="background: rgba(229, 9, 20, 0.2); color: #e50914; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.8rem;"
+                            id="ota-size-badge">Update Available</span>
                     </div>
-                    <div style="background: rgba(255, 255, 255, 0.05); padding: 14px; border-radius: 10px; max-height: 160px; overflow-y: auto; margin-bottom: 16px;">
-                        <p style="font-size: 0.85rem; color: #bbb; margin-bottom: 6px; font-weight: 600;">What's New:</p>
-                        <div id="ota-release-notes" style="font-size: 0.85rem; color: #ddd; white-space: pre-line;">Bug fixes and performance improvements.</div>
+                    <div
+                        style="background: rgba(255, 255, 255, 0.05); padding: 14px; border-radius: 10px; max-height: 160px; overflow-y: auto; margin-bottom: 16px;">
+                        <p style="font-size: 0.85rem; color: #bbb; margin-bottom: 6px; font-weight: 600;">What's New:
+                        </p>
+                        <div id="ota-release-notes" style="font-size: 0.85rem; color: #ddd; white-space: pre-line;">Bug
+                            fixes and performance improvements.</div>
                     </div>
                 </div>
                 <div id="ota-progress-container" style="display: none; text-align: center; padding: 16px 0;">
-                    <div style="font-size: 1rem; color: #fff; font-weight: 600; margin-bottom: 8px;" id="ota-progress-status">Downloading update from GitHub...</div>
-                    <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-                        <div id="ota-progress-bar" style="width: 0%; height: 100%; background: #e50914; transition: width 0.3s ease;"></div>
+                    <div style="font-size: 1rem; color: #fff; font-weight: 600; margin-bottom: 8px;"
+                        id="ota-progress-status">Downloading update from GitHub...</div>
+                    <div
+                        style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+                        <div id="ota-progress-bar"
+                            style="width: 0%; height: 100%; background: #e50914; transition: width 0.3s ease;"></div>
                     </div>
-                    <div style="font-size: 0.8rem; color: #aaa;" id="ota-progress-subtext">Please wait... Lanflix will restart automatically.</div>
+                    <div style="font-size: 0.8rem; color: #aaa;" id="ota-progress-subtext">Please wait... Lanflix will
+                        restart automatically.</div>
                 </div>
             </div>
             <div class="modal-footer" id="ota-modal-footer">
                 <button class="modal-btn modal-btn-secondary" id="cancel-ota-btn">Later</button>
-                <button class="modal-btn modal-btn-primary" id="apply-ota-btn" style="background: #e50914; border-color: #e50914;">Download &amp; Update Now</button>
+                <button class="modal-btn modal-btn-primary" id="apply-ota-btn"
+                    style="background: #e50914; border-color: #e50914;">Download &amp; Update Now</button>
             </div>
         </div>
     </div>

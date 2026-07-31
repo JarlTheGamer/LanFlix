@@ -1,10 +1,20 @@
 import { SettingsManager } from '../modules/settings-manager.js';
 import { appUpdater } from '../modules/app-updater.js';
 import { devicePairingManager } from '../modules/device-pairing.js';
+import stateManager from '../modules/data.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const isPaired = await devicePairingManager.checkAndEnforcePairing();
   if (!isPaired) return;
+
+  const profileId = stateManager.currentProfileId;
+  const profiles = await stateManager.getProfiles();
+  const currentProfile = profiles.find(p => p.id === profileId);
+
+  if (currentProfile && (currentProfile.isGuest || !currentProfile.canManageSettings)) {
+    window.location.href = 'index.html';
+    return;
+  }
 
   try {
     const settingsManager = new SettingsManager();

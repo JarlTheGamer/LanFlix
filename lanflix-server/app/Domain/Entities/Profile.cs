@@ -39,6 +39,21 @@ public class Profile : BaseEntity, IAuditableEntity
     /// </summary>
     public bool IsDefault { get; set; }
 
+    /// <summary>
+    /// Indicates whether this is a temporary/restricted guest profile
+    /// </summary>
+    public bool IsGuest { get; set; }
+
+    /// <summary>
+    /// Permission to download offline media
+    /// </summary>
+    public bool CanDownload { get; set; } = true;
+
+    /// <summary>
+    /// Permission to access and manage server settings
+    /// </summary>
+    public bool CanManageSettings { get; set; } = true;
+
     // Navigation properties
 
     /// <summary>

@@ -8,21 +8,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!isPaired) return;
   try {
     const profileManager = new ProfileManager();
-
-    // Override selectProfile to not call hide() during initialization
-    const originalSelectProfile = profileManager.selectProfile.bind(profileManager);
-    profileManager.selectProfile = function (profileId) {
-      this.selectedProfileId = profileId;
-      const selectedProfile = this.profiles.find(p => p.id === profileId);
-
-      // Save selected profile to state
-      stateManager.currentProfileId = profileId;
-      stateManager.saveState();
-
-      // Redirect to home page instead of hiding
-      window.location.href = 'index.html';
-    };
-
     await profileManager.initialize();
 
     // Always show profile selection on this page

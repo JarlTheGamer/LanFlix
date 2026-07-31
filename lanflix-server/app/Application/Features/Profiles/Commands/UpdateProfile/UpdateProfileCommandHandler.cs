@@ -32,9 +32,18 @@ public class UpdateProfileCommandHandler : IRequestHandler<UpdateProfileCommand,
             throw new NotFoundException(nameof(Profile), request.Id);
         }
 
-        profile.Name = request.Name;
-        profile.AvatarPath = request.AvatarPath;
+        if (!string.IsNullOrWhiteSpace(request.Name)) profile.Name = request.Name;
+        if (request.AvatarPath != null) profile.AvatarPath = request.AvatarPath;
         profile.IsKidsProfile = request.IsKidsProfile;
+        
+        if (request.PinCode != null)
+        {
+            profile.PinCode = string.IsNullOrWhiteSpace(request.PinCode) ? null : request.PinCode.Trim();
+        }
+
+        if (request.IsGuest.HasValue) profile.IsGuest = request.IsGuest.Value;
+        if (request.CanDownload.HasValue) profile.CanDownload = request.CanDownload.Value;
+        if (request.CanManageSettings.HasValue) profile.CanManageSettings = request.CanManageSettings.Value;
         
         if (request.Preferences != null)
         {
@@ -53,6 +62,10 @@ public class UpdateProfileCommandHandler : IRequestHandler<UpdateProfileCommand,
             Name = profile.Name,
             AvatarPath = profile.AvatarPath,
             IsKidsProfile = profile.IsKidsProfile,
+            HasPin = !string.IsNullOrEmpty(profile.PinCode),
+            IsGuest = profile.IsGuest,
+            CanDownload = profile.CanDownload,
+            CanManageSettings = profile.CanManageSettings,
             Preferences = profile.Preferences,
             CreatedAt = profile.CreatedAt
         };

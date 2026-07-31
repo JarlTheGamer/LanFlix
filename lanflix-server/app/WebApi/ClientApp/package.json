@@ -19,6 +19,7 @@
     "@capacitor/android": "^7.4.4",
     "@capacitor/cli": "^7.4.4",
     "@capacitor/core": "^7.4.4",
+    "@microsoft/signalr": "^10.0.0",
     "axios": "^1.6.0",
     "video.js": "^8.6.1"
   },

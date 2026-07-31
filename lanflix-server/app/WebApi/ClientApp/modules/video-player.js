@@ -5,11 +5,14 @@
 
 import apiClient from './api-client.js';
 import PlayerNavigation from './player-navigation.js';
+import syncPlayClient from './syncplay-client.js';
 
 export class VideoPlayer {
   constructor(videoElement, profileId) {
     this.videoElement = videoElement;
     this.profileId = profileId;
+    this.profileName = 'User';
+    this.profileAvatar = null;
 
     // Content info
     this.contentId = null;
@@ -49,6 +52,11 @@ export class VideoPlayer {
     this.subtitles = [];
     this.currentSubtitleIndex = -1; // -1 = off
     this.subtitleMenuVisible = false;
+
+    // SyncPlay State
+    this.syncPlayClient = syncPlayClient;
+    this.isSyncEvent = false;
+    this.syncDrawerOpen = false;
   }
 
   /**
@@ -65,6 +73,18 @@ export class VideoPlayer {
     this.startOffset = startPosition;
 
     try {
+      // Fetch current profile details for SyncPlay
+      try {
+        const profiles = await apiClient.getProfiles();
+        const curProfile = profiles.find(p => p.id == this.profileId);
+        if (curProfile) {
+          this.profileName = curProfile.name;
+          this.profileAvatar = curProfile.avatarUrl || null;
+        }
+      } catch (e) {
+        console.warn('Could not load profile details for SyncPlay:', e);
+      }
+
       // Setup video element
       this.setupVideoElement();
 
@@ -73,6 +93,26 @@ export class VideoPlayer {
 
       // Setup controls UI
       this.setupControls();
+
+      // Setup SyncPlay UI and SignalR listeners
+      this.setupSyncPlay();
+
+      // Auto-join or auto-create SyncPlay room if URL parameter is present
+      const urlParams = new URLSearchParams(window.location.search);
+      const syncRoom = urlParams.get('syncRoom');
+      const createSync = urlParams.get('createSync');
+
+      if (syncRoom) {
+        const room = await this.joinSyncPlayRoom(syncRoom);
+        this.toggleSyncPlayDrawer(true);
+        if (room && typeof room.currentTimeSeconds === 'number' && room.currentTimeSeconds > 0) {
+          startPosition = room.currentTimeSeconds;
+          console.log(`🍿 Watch Party initial sync position from host room: ${startPosition}s`);
+        }
+      } else if (createSync === 'true') {
+        await this.createSyncPlayRoom();
+        this.toggleSyncPlayDrawer(true);
+      }
 
       // Load media metadata first to get duration (with Fire TV fallback)
       await this.loadMediaMetadataWithFallback();
@@ -623,6 +663,13 @@ export class VideoPlayer {
       // Start auto-hiding controls when playing
       this.showControls();
 
+      if (!this.isSyncEvent && this.syncPlayClient.currentRoom) {
+        if (this.syncPlayClient.isHost()) {
+          this.syncPlayClient.sendPlaybackAction('Play', this.currentTime, true, 1.0, this.profileId, this.profileName);
+        } else {
+          this.showNotification('Only the host can control playback');
+        }
+      }
     });
 
     this.videoElement.addEventListener('pause', () => {
@@ -631,6 +678,24 @@ export class VideoPlayer {
       this.updatePlayPauseButton();
       // Show controls when paused (and keep them visible)
       this.showControls();
+
+      if (!this.isSyncEvent && this.syncPlayClient.currentRoom) {
+        if (this.syncPlayClient.isHost()) {
+          this.syncPlayClient.sendPlaybackAction('Pause', this.currentTime, false, 1.0, this.profileId, this.profileName);
+        } else {
+          this.showNotification('Only the host can control playback');
+        }
+      }
+    });
+
+    this.videoElement.addEventListener('seeked', () => {
+      if (!this.isSyncEvent && this.syncPlayClient.currentRoom) {
+        if (this.syncPlayClient.isHost()) {
+          this.syncPlayClient.sendPlaybackAction('Seek', this.currentTime, this.isPlaying, 1.0, this.profileId, this.profileName);
+        } else {
+          this.showNotification('Only the host can control playback');
+        }
+      }
     });
 
     this.videoElement.addEventListener('ended', () => {
@@ -782,6 +847,7 @@ export class VideoPlayer {
             </span>
           </div>
           <div class="player-controls-right">
+            <button class="player-btn syncplay-trigger-btn" title="Watch Party (SyncPlay)">🍿</button>
             <div class="subtitle-container">
               <button class="player-btn cc-btn" title="Subtitles">
                 <svg viewBox="0 0 24 24">
@@ -1176,6 +1242,9 @@ export class VideoPlayer {
     const wasPlaying = this.isPlaying;
 
     try {
+      // Suppress pause/play/seeked events during reload so they don't broadcast wrong positions
+      this.isSyncEvent = true;
+
       // Pause and show loading
       this.pause();
       this.showLoadingSpinner();
@@ -1185,6 +1254,7 @@ export class VideoPlayer {
 
       // Update start offset
       this.startOffset = time;
+      this.currentTime = time;
 
       // Get new stream URL with start time
       const newStreamUrl = this.getStreamUrl(time);
@@ -1203,11 +1273,17 @@ export class VideoPlayer {
         await this.play();
       }
 
+      // Now broadcast the seek to guests with the correct position
+      if (this.syncPlayClient?.currentRoom && this.syncPlayClient.isHost()) {
+        this.syncPlayClient.sendPlaybackAction('Seek', time, wasPlaying, 1.0, this.profileId, this.profileName);
+      }
+
     } catch (error) {
       console.error('❌ Failed to reload stream:', error);
       this.showNotification('Failed to seek in video');
     } finally {
       this.hideLoadingSpinner();
+      this.isSyncEvent = false;
     }
   }
 
@@ -1422,19 +1498,33 @@ export class VideoPlayer {
       return;
     }
 
+    const isGuestInRoom = this.syncPlayClient?.currentRoom && !this.syncPlayClient.isHost();
+
     // Handle desktop/web keyboard controls
     switch (event.key) {
       case ' ':
       case 'k':
         event.preventDefault();
+        if (isGuestInRoom) {
+          this.showNotification('Only the host can control playback');
+          return;
+        }
         this.togglePlayPause();
         break;
       case 'ArrowLeft':
         event.preventDefault();
+        if (isGuestInRoom) {
+          this.showNotification('Only the host can control playback');
+          return;
+        }
         this.seek(this.currentTime - 10);
         break;
       case 'ArrowRight':
         event.preventDefault();
+        if (isGuestInRoom) {
+          this.showNotification('Only the host can control playback');
+          return;
+        }
         this.seek(this.currentTime + 10);
         break;
       case 'ArrowUp':
@@ -1565,6 +1655,507 @@ export class VideoPlayer {
     if (spinner) {
       spinner.style.display = 'none';
     }
+  }
+
+  // ==================== SYNCPLAY (WATCH PARTY) ====================
+
+  setupSyncPlay() {
+    this.createSyncPlayDrawerUI();
+    this.setupSyncPlayListeners();
+
+    // Attach trigger button handler
+    const triggerBtn = document.querySelector('.syncplay-trigger-btn');
+    if (triggerBtn) {
+      triggerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleSyncPlayDrawer();
+      });
+    }
+  }
+
+  createSyncPlayDrawerUI() {
+    if (document.getElementById('syncplay-drawer')) return;
+
+    const drawer = document.createElement('div');
+    drawer.id = 'syncplay-drawer';
+    drawer.className = 'syncplay-drawer';
+    drawer.innerHTML = `
+      <div class="syncplay-header">
+        <div class="syncplay-title">
+          <span>🍿 Watch Party</span>
+          <button id="syncplay-copy-link-btn" class="syncplay-copy-link-btn" style="display:none;" title="Copy Watch Party Link for Guests">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            <span>Share Link</span>
+          </button>
+        </div>
+        <button id="syncplay-close-btn" class="syncplay-close-btn">✕</button>
+      </div>
+
+      <div id="syncplay-initial-view" style="padding: 24px 20px; display: flex; flex-direction: column; gap: 16px;">
+        <p style="font-size: 0.9rem; color: rgba(255,255,255,0.7); line-height: 1.5; margin: 0;">
+          Watch movies and TV shows together with friends in exact real-time sync.
+        </p>
+        <button id="syncplay-create-btn" style="background: linear-gradient(135deg, #e50914, #ff5252); border: none; color: #fff; padding: 12px; border-radius: 12px; font-weight: 600; cursor: pointer; font-size: 0.95rem;">
+          ✨ Create Watch Party Room
+        </button>
+        <div style="display: flex; align-items: center; gap: 10px; margin: 8px 0;">
+          <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+          <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4); text-transform: uppercase;">or join room</span>
+          <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="syncplay-code-input" placeholder="Enter Room Code" style="flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 10px 14px; color: #fff; font-size: 0.85rem; outline: none;">
+          <button id="syncplay-join-btn" style="background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.85rem;">Join</button>
+        </div>
+      </div>
+
+      <div id="syncplay-active-view" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+        <div class="syncplay-participants-section">
+          <div class="syncplay-section-label">Participants (<span id="syncplay-participant-count">0</span>)</div>
+          <div id="syncplay-participants-list" class="syncplay-participants-list"></div>
+        </div>
+
+        <div class="syncplay-chat-section">
+          <div id="syncplay-chat-messages" class="syncplay-chat-messages">
+            <div class="syncplay-msg system">Welcome to Watch Party! Chat and send reactions below.</div>
+          </div>
+        </div>
+
+        <div class="syncplay-emoji-bar">
+          <button class="syncplay-emoji-btn" data-emoji="❤️">❤️</button>
+          <button class="syncplay-emoji-btn" data-emoji="😂">😂</button>
+          <button class="syncplay-emoji-btn" data-emoji="🍿">🍿</button>
+          <button class="syncplay-emoji-btn" data-emoji="👏">👏</button>
+          <button class="syncplay-emoji-btn" data-emoji="🔥">🔥</button>
+          <button class="syncplay-emoji-btn" data-emoji="🎉">🎉</button>
+        </div>
+
+        <div class="syncplay-chat-input-container">
+          <input type="text" id="syncplay-chat-input" class="syncplay-chat-input" placeholder="Send a message...">
+          <button id="syncplay-send-btn" class="syncplay-chat-send-btn">➔</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(drawer);
+
+    // Create Toast Overlay Container
+    const toast = document.createElement('div');
+    toast.id = 'syncplay-toast';
+    toast.className = 'syncplay-toast';
+    document.body.appendChild(toast);
+
+    // Attach Drawer DOM listeners
+    document.getElementById('syncplay-close-btn')?.addEventListener('click', () => this.toggleSyncPlayDrawer(false));
+    document.getElementById('syncplay-create-btn')?.addEventListener('click', () => this.createSyncPlayRoom());
+    document.getElementById('syncplay-join-btn')?.addEventListener('click', () => {
+      const code = document.getElementById('syncplay-code-input')?.value;
+      if (code) this.joinSyncPlayRoom(code);
+    });
+
+    document.getElementById('syncplay-copy-link-btn')?.addEventListener('click', () => {
+      if (this.syncPlayClient.currentRoom) {
+        const shareUrl = `${window.location.origin}${window.location.pathname}?contentId=${this.contentId}&type=${this.contentType}${this.episodeId ? `&episodeId=${this.episodeId}` : ''}&syncRoom=${this.syncPlayClient.currentRoom.roomCode}`;
+        this.copyToClipboard(shareUrl);
+      }
+    });
+
+    document.getElementById('syncplay-send-btn')?.addEventListener('click', () => this.sendSyncPlayChat());
+    document.getElementById('syncplay-chat-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this.sendSyncPlayChat();
+    });
+
+    document.querySelectorAll('.syncplay-emoji-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const emoji = e.target.getAttribute('data-emoji');
+        if (emoji) this.sendSyncPlayEmoji(emoji);
+      });
+    });
+  }
+
+  setupSyncPlayListeners() {
+    this.syncPlayClient.on('roomJoined', (room) => {
+      this.renderSyncPlayDrawer(room);
+      this.syncToRoomState(room);
+    });
+    this.syncPlayClient.on('userJoined', ({ participant, room }) => {
+      this.showSyncPlayToast(`${participant.profileName} joined Watch Party 🍿`);
+      this.renderSyncPlayDrawer(room);
+      if (this.syncPlayClient.isHost()) {
+        this.syncPlayClient.sendPlaybackAction(
+          this.isPlaying ? 'Play' : 'Seek',
+          this.currentTime,
+          this.isPlaying,
+          1.0,
+          this.profileId,
+          this.profileName
+        );
+      } else {
+        this.syncToRoomState(room);
+      }
+    });
+    this.syncPlayClient.on('userLeft', ({ participant, room }) => {
+      this.showSyncPlayToast(`${participant.profileName} left the room`);
+      if (room) this.renderSyncPlayDrawer(room);
+    });
+    this.syncPlayClient.on('roomClosed', () => {
+      this.showSyncPlayToast('Watch Party room closed');
+      this.renderSyncPlayDrawer(null);
+    });
+    this.syncPlayClient.on('playbackStateSynced', ({ action, room }) => this.handleIncomingSyncAction(action, room));
+    this.syncPlayClient.on('chatMessageReceived', (chatMsg) => this.renderSyncPlayChatMessage(chatMsg));
+    this.syncPlayClient.on('emojiReactionReceived', (reaction) => this.renderFloatingEmoji(reaction.emoji));
+    this.syncPlayClient.on('mediaChanged', ({ mediaChange, room }) => this.handleIncomingMediaChange(mediaChange, room));
+    this.syncPlayClient.on('joinFailed', (reason) => this.showSyncPlayToast(`❌ ${reason}`));
+  }
+
+  syncToRoomState(room) {
+    if (!room) return;
+    this.isSyncEvent = true;
+
+    const hostPos = room.currentPositionSeconds || 0;
+    if (Math.abs(this.currentTime - hostPos) > 1.0) {
+      console.log(`Syncing video to host position: ${hostPos}s`);
+      this.seekTo(hostPos);
+    }
+
+    if (room.isPlaying) {
+      this.videoElement.play().then(() => {
+        this.isPlaying = true;
+        this.hideGuestSyncOverlay();
+      }).catch(e => {
+        console.warn('Auto-play blocked by browser:', e);
+        if (!this.syncPlayClient.isHost()) {
+          this.showGuestSyncOverlay();
+        }
+      });
+    } else {
+      this.videoElement.pause();
+      this.isPlaying = false;
+    }
+
+    setTimeout(() => { this.isSyncEvent = false; }, 500);
+  }
+
+  showGuestSyncOverlay() {
+    let overlay = document.getElementById('syncplay-guest-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'syncplay-guest-overlay';
+      overlay.style.cssText = `
+        position: absolute; inset: 0; z-index: 500;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+        cursor: pointer; text-align: center; color: white;
+      `;
+      overlay.innerHTML = `
+        <div style="background: linear-gradient(135deg, #e50914, #b20710); color: white; padding: 20px 40px; border-radius: 40px; font-weight: 700; font-size: 1.25rem; box-shadow: 0 10px 30px rgba(229,9,20,0.6); display: flex; align-items: center; gap: 12px;">
+          <span>🍿 Click to Join Watch Party & Start Video</span>
+        </div>
+        <div style="margin-top: 14px; opacity: 0.8; font-size: 0.95rem;">(Required by browser policy to start audio & video)</div>
+      `;
+      overlay.addEventListener('click', () => {
+        this.videoElement.play().then(() => {
+          this.isPlaying = true;
+          this.hideGuestSyncOverlay();
+          if (this.syncPlayClient.currentRoom) {
+            this.syncToRoomState(this.syncPlayClient.currentRoom);
+          }
+        }).catch(e => {
+          console.error('Play click error:', e);
+        });
+      });
+      const container = document.querySelector('.player-container') || document.body;
+      container.appendChild(overlay);
+    }
+    overlay.style.display = 'flex';
+  }
+
+  hideGuestSyncOverlay() {
+    const overlay = document.getElementById('syncplay-guest-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  updateWatchPartyControlsVisibility() {
+    const isGuestInRoom = this.syncPlayClient?.currentRoom && !this.syncPlayClient.isHost();
+    const playPauseBtn = document.querySelector('.play-pause-btn');
+    const centerPlayBtn = document.querySelector('.center-play-button');
+    const skipBackBtn = document.querySelector('.skip-back-btn');
+    const skipForwardBtn = document.querySelector('.skip-forward-btn');
+    const progressContainer = document.querySelector('.player-progress-container, .progress-bar-container, .timeline-container');
+    const skipBtns = document.querySelectorAll('.skip-btn, .skip-intro-btn');
+
+    if (isGuestInRoom) {
+      if (playPauseBtn) playPauseBtn.style.display = 'none';
+      if (centerPlayBtn) centerPlayBtn.style.display = 'none';
+      if (skipBackBtn) skipBackBtn.style.display = 'none';
+      if (skipForwardBtn) skipForwardBtn.style.display = 'none';
+      if (progressContainer) progressContainer.style.display = 'none';
+      skipBtns.forEach(b => b.style.display = 'none');
+    } else {
+      if (playPauseBtn) playPauseBtn.style.display = '';
+      if (centerPlayBtn) centerPlayBtn.style.display = '';
+      if (skipBackBtn) skipBackBtn.style.display = '';
+      if (skipForwardBtn) skipForwardBtn.style.display = '';
+      if (progressContainer) progressContainer.style.display = '';
+      skipBtns.forEach(b => b.style.display = '');
+    }
+  }
+
+  toggleSyncPlayDrawer(forceState = null) {
+    const drawer = document.getElementById('syncplay-drawer');
+    if (!drawer) return;
+
+    this.syncDrawerOpen = forceState !== null ? forceState : !this.syncDrawerOpen;
+    if (this.syncDrawerOpen) {
+      drawer.classList.add('open');
+    } else {
+      drawer.classList.remove('open');
+    }
+  }
+
+  async createSyncPlayRoom() {
+    try {
+      this.showSyncPlayToast('Creating Watch Party Room...');
+      const room = await this.syncPlayClient.createRoom(
+        this.profileId,
+        this.profileName,
+        this.profileAvatar,
+        this.contentId,
+        this.contentType,
+        this.episodeId
+      );
+      if (room) {
+        await this.syncPlayClient.sendPlaybackAction(
+          this.isPlaying ? 'Play' : 'Seek',
+          this.currentTime,
+          this.isPlaying,
+          1.0,
+          this.profileId,
+          this.profileName
+        );
+      }
+    } catch (e) {
+      console.error('Failed to create SyncPlay room:', e);
+      this.showSyncPlayToast('Failed to create room. Please try again.');
+    }
+  }
+
+  async joinSyncPlayRoom(roomCode) {
+    try {
+      this.showSyncPlayToast(`Joining room ${roomCode}...`);
+      const room = await this.syncPlayClient.joinRoom(roomCode, this.profileId, this.profileName, this.profileAvatar);
+      return room;
+    } catch (e) {
+      console.error('Failed to join SyncPlay room:', e);
+      this.showSyncPlayToast('Failed to join room.');
+      return null;
+    }
+  }
+
+  async sendSyncPlayChat() {
+    const input = document.getElementById('syncplay-chat-input');
+    if (!input || !input.value.trim()) return;
+
+    const msg = input.value.trim();
+    input.value = '';
+    await this.syncPlayClient.sendChatMessage(msg, this.profileId, this.profileName, this.profileAvatar);
+  }
+
+  async sendSyncPlayEmoji(emoji) {
+    await this.syncPlayClient.sendEmojiReaction(emoji, this.profileId, this.profileName);
+    this.renderFloatingEmoji(emoji);
+  }
+
+  renderSyncPlayDrawer(room) {
+    const initialView = document.getElementById('syncplay-initial-view');
+    const activeView = document.getElementById('syncplay-active-view');
+    const copyLinkBtn = document.getElementById('syncplay-copy-link-btn');
+    const triggerBtn = document.querySelector('.syncplay-trigger-btn');
+
+    this.updateWatchPartyControlsVisibility();
+
+    if (!room) {
+      if (initialView) initialView.style.display = 'flex';
+      if (activeView) activeView.style.display = 'none';
+      if (copyLinkBtn) copyLinkBtn.style.display = 'none';
+      if (triggerBtn) triggerBtn.classList.remove('visible');
+      return;
+    }
+
+    if (triggerBtn) triggerBtn.classList.add('visible');
+    if (initialView) initialView.style.display = 'none';
+    if (activeView) activeView.style.display = 'flex';
+    if (copyLinkBtn) copyLinkBtn.style.display = 'flex';
+
+    // Render Participants List
+    const countEl = document.getElementById('syncplay-participant-count');
+    const listEl = document.getElementById('syncplay-participants-list');
+
+    if (countEl) countEl.textContent = room.participants.length;
+    if (listEl) {
+      listEl.innerHTML = room.participants.map(p => `
+        <div class="syncplay-participant-chip" title="${p.profileName} ${p.isHost ? '(Host)' : ''}">
+          <div class="syncplay-participant-avatar">
+            ${p.profileAvatar ? `<img src="${p.profileAvatar}" alt="${p.profileName}">` : p.profileName.charAt(0).toUpperCase()}
+          </div>
+          <span>${p.profileName}</span>
+          ${p.isHost ? '<span class="syncplay-host-crown">👑</span>' : ''}
+        </div>
+      `).join('');
+    }
+  }
+
+  renderSyncPlayChatMessage(chatMsg) {
+    const chatContainer = document.getElementById('syncplay-chat-messages');
+    if (!chatContainer) return;
+
+    const msgEl = document.createElement('div');
+    if (chatMsg.isSystem) {
+      msgEl.className = 'syncplay-msg system';
+      msgEl.textContent = chatMsg.message;
+    } else {
+      msgEl.className = 'syncplay-msg user';
+      msgEl.innerHTML = `
+        <div class="syncplay-msg-author">${chatMsg.profileName}</div>
+        <div class="syncplay-msg-text">${this.escapeHtml(chatMsg.message)}</div>
+      `;
+    }
+
+    chatContainer.appendChild(msgEl);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+  }
+
+  seekTo(targetTime) {
+    if (!Number.isFinite(targetTime) || targetTime < 0) return;
+
+    console.log(`Seeking player to ${targetTime}s (Transcoding: ${this.isTranscoding})`);
+    this.currentTime = targetTime;
+
+    if (this.isTranscoding) {
+      const streamUrl = this.getStreamUrl(targetTime);
+      const wasPlaying = this.isPlaying;
+
+      // Suppress all browser-generated events (pause/seeked/play) while src is reloading
+      this.isSyncEvent = true;
+      this.videoElement.src = streamUrl;
+      this.startOffset = targetTime;
+
+      // Release the sync guard once the new segment is ready
+      this.videoElement.addEventListener('canplay', () => {
+        if (wasPlaying) {
+          this.videoElement.play().catch(e => console.warn('Play after seek failed:', e));
+        }
+        this.isSyncEvent = false;
+      }, { once: true });
+    } else {
+      this.videoElement.currentTime = targetTime;
+    }
+    this.updateProgressBar();
+  }
+
+  handleIncomingSyncAction(action, room) {
+    this.isSyncEvent = true;
+    const targetTime = action.positionSeconds;
+    const drift = Math.abs(this.currentTime - targetTime);
+
+    if (action.actionType === 'Pause') {
+      this.videoElement.pause();
+      this.showSyncPlayToast(`${action.profileName} paused playback`);
+    } else if (action.actionType === 'Play') {
+      if (drift > 2.5) {
+        this.seekTo(targetTime);
+      }
+      this.videoElement.play().catch(() => {});
+      this.showSyncPlayToast(`${action.profileName} resumed playback`);
+    } else if (action.actionType === 'Seek') {
+      this.seekTo(targetTime);
+      this.showSyncPlayToast(`${action.profileName} seeked to ${this.formatTime(targetTime)}`);
+    }
+
+    setTimeout(() => { this.isSyncEvent = false; }, 300);
+  }
+
+  handleIncomingMediaChange(mediaChange, room) {
+    this.showSyncPlayToast(`Host changed media to ${mediaChange.mediaTitle}`);
+    const newUrl = `player.html?contentId=${mediaChange.contentId}&type=${mediaChange.contentType}${mediaChange.episodeId ? `&episodeId=${mediaChange.episodeId}` : ''}&syncRoom=${room.roomCode}`;
+    window.location.href = newUrl;
+  }
+
+  showSyncPlayToast(message) {
+    const toast = document.getElementById('syncplay-toast');
+    if (!toast) return;
+
+    toast.textContent = message;
+    toast.classList.add('show');
+
+    clearTimeout(this._toastTimeout);
+    this._toastTimeout = setTimeout(() => {
+      toast.classList.remove('show');
+    }, 3000);
+  }
+
+  renderFloatingEmoji(emoji) {
+    const floating = document.createElement('div');
+    floating.className = 'syncplay-floating-emoji';
+    floating.textContent = emoji;
+
+    // Slight random offset
+    const randomRight = 380 + Math.floor(Math.random() * 80 - 40);
+    floating.style.right = `${randomRight}px`;
+
+    document.body.appendChild(floating);
+    setTimeout(() => floating.remove(), 2500);
+  }
+
+  copyToClipboard(text) {
+    const onSuccess = () => this.showSyncPlayToast('📋 Share link copied to clipboard!');
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text)
+        .then(onSuccess)
+        .catch(() => this.fallbackCopyText(text, onSuccess));
+    } else {
+      this.fallbackCopyText(text, onSuccess);
+    }
+  }
+
+  fallbackCopyText(text, onSuccess) {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.top = '0';
+      textArea.style.left = '-999999px';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+
+      if (successful) {
+        if (onSuccess) onSuccess();
+      } else {
+        prompt('Copy Watch Party link:', text);
+      }
+    } catch (err) {
+      console.warn('Fallback copy failed:', err);
+      prompt('Copy Watch Party link:', text);
+    }
+  }
+
+  escapeHtml(str) {
+    return str.replace(/[&<>"']/g, (m) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[m]);
   }
 
   // ==================== CLEANUP ====================

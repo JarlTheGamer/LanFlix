@@ -65,11 +65,38 @@
         <!-- Main WebView Activity -->
         <activity
             android:name=".MainActivity"
-            android:exported="false"
-            android:launchMode="singleTop"
+            android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:screenOrientation="sensor"
-            android:theme="@style/Theme.Lanflix.NoActionBar" />
+            android:theme="@style/Theme.Lanflix.NoActionBar">
+
+            <!-- Deep Link Intent Filters -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="lanflix" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="lanflix.local" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:pathPattern=".*player\\.html.*" />
+            </intent-filter>
+        </activity>
             
         <!-- OTA Update Service -->
         <service

@@ -69,6 +69,47 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
         setupSwipeRefresh()
         loadWebApp()
+        handleDeepLinkIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLinkIntent(intent)
+    }
+
+    private fun handleDeepLinkIntent(intent: Intent?) {
+        val uri: Uri = intent?.data ?: return
+        lifecycleScope.launch {
+            try {
+                val baseUrl = ServerManager.resolveUrlForConnection(this@MainActivity, currentServerUrl).trimEnd('/')
+                val targetUrl = when {
+                    uri.scheme == "lanflix" -> {
+                        val contentId = uri.getQueryParameter("contentId")
+                        val type = uri.getQueryParameter("type") ?: "movie"
+                        val episodeId = uri.getQueryParameter("episodeId")
+                        val syncRoom = uri.getQueryParameter("syncRoom") ?: uri.getQueryParameter("code")
+
+                        if (!contentId.isNullOrEmpty()) {
+                            "$baseUrl/pages/player.html?contentId=$contentId&type=$type${if (!episodeId.isNullOrEmpty()) "&episodeId=$episodeId" else ""}${if (!syncRoom.isNullOrEmpty()) "&syncRoom=$syncRoom" else ""}"
+                        } else if (!syncRoom.isNullOrEmpty()) {
+                            "$baseUrl/pages/index.html?syncRoom=$syncRoom"
+                        } else null
+                    }
+                    uri.path?.contains("player.html") == true || uri.getQueryParameter("syncRoom") != null -> {
+                        val relativePath = uri.encodedPath + if (uri.encodedQuery != null) "?${uri.encodedQuery}" else ""
+                        "$baseUrl$relativePath"
+                    }
+                    else -> null
+                }
+
+                if (!targetUrl.isNullOrEmpty() && ::webView.isInitialized) {
+                    webView.loadUrl(targetUrl)
+                }
+            } catch (e: Exception) {
+                // Ignore fallback
+            }
+        }
     }
 
     override fun onResume() {
@@ -246,6 +287,10 @@ class MainActivity : AppCompatActivity() {
                 super.onReceivedError(view, request, error)
                 if (request == null || request.isForMainFrame) {
                     showUnreachableOverlay("Could not connect to $currentServerUrl\n${error?.description}")
+                    lifecycleScope.launch {
+                        kotlinx.coroutines.delay(1000)
+                        openServerBrowser()
+                    }
                 }
             }
 
@@ -389,11 +434,21 @@ class MainActivity : AppCompatActivity() {
     private fun loadWebApp() {
         lifecycleScope.launch {
             try {
+                binding.progressBar.visibility = View.VISIBLE
+                val isOnline = ServerManager.pingServer(this@MainActivity, currentServerUrl, timeoutMs = 2000)
+                if (!isOnline) {
+                    showUnreachableOverlay("Server at $currentServerUrl is unreachable. Opening Server Browser...")
+                    kotlinx.coroutines.delay(800)
+                    openServerBrowser()
+                    return@launch
+                }
+
                 val connectionUrl = ServerManager.resolveUrlForConnection(this@MainActivity, currentServerUrl)
                 webView.clearCache(true)
                 webView.loadUrl(connectionUrl)
             } catch (e: Exception) {
                 showUnreachableOverlay("Error loading server: ${e.message}")
+                openServerBrowser()
             }
         }
     }

@@ -27,6 +27,10 @@ public class GetProfilesQueryHandler : IRequestHandler<GetProfilesQuery, List<Pr
                 Name = p.Name,
                 AvatarPath = p.AvatarPath,
                 IsKidsProfile = p.IsKidsProfile,
+                HasPin = !string.IsNullOrEmpty(p.PinCode),
+                IsGuest = p.IsGuest,
+                CanDownload = p.CanDownload,
+                CanManageSettings = p.CanManageSettings,
                 Preferences = p.Preferences,
                 CreatedAt = p.CreatedAt
             })

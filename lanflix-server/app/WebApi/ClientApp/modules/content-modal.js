@@ -210,6 +210,12 @@ export class ContentModal {
                 <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                 My List
               </button>
+              ${!isDiscovery ? `
+                <button class="modal-btn secondary" data-action="watchparty" title="Start Watch Party">
+                  <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                  Watch Party
+                </button>
+              ` : ''}
             </div>
           </div>
         </div>
@@ -534,6 +540,13 @@ export class ContentModal {
             }
         });
 
+        // Hide download options for Guest / restricted profiles
+        const selectedProfileId = this.profileManager?.selectedProfileId;
+        const currentProfile = this.profileManager?.profiles?.find(p => p.id === selectedProfileId);
+        if (currentProfile && (currentProfile.isGuest || !currentProfile.canDownload)) {
+            modal.querySelectorAll('[data-action="queue-all"], .season-download-btn, .episode-download-btn').forEach(el => el.style.display = 'none');
+        }
+
         // Queue/Download all button
         modal.querySelector('[data-action="queue-all"]')?.addEventListener('click', async () => {
             await this.queueDownload(content);
@@ -543,6 +556,18 @@ export class ContentModal {
         modal.querySelector('[data-action="watchlist"]')?.addEventListener('click', async () => {
             await this.toggleWatchlist(content.id);
         });
+
+        // Watch Party button
+        modal.querySelector('[data-action="watchparty"]')?.addEventListener('click', () => {
+            let url = `player.html?contentId=${content.id}&type=${content.type}&createSync=true`;
+            if (content.type === 'series') {
+                const targetEpId = modal.querySelector('[data-action="play"]')?.dataset.episodeId;
+                if (targetEpId) {
+                    url += `&episodeId=${targetEpId}`;
+                }
+            }
+            window.location.href = url;
+        });
     }
 
     /**
@@ -550,7 +575,13 @@ export class ContentModal {
      */
     async queueDownload(content) {
         try {
-            const profileId = this.profileManager.selectedProfileId;
+            const profileId = this.profileManager?.selectedProfileId;
+            const currentProfile = this.profileManager?.profiles?.find(p => p.id === profileId);
+            if (currentProfile && (currentProfile.isGuest || !currentProfile.canDownload)) {
+                alert('Guest and restricted profiles are not permitted to request or download media.');
+                return;
+            }
+
             if (!profileId) {
                 alert('Please select a profile first');
                 return;

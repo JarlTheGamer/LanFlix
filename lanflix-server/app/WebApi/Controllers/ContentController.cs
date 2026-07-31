@@ -412,6 +412,16 @@ public class ContentController : ControllerBase
             _logger.LogInformation("Queueing download: Id={Id}, Type={Type}, Title={Title}, ProfileId={ProfileId}", 
                 id, request.Type, request.Title, request.ProfileId);
 
+            if (request.ProfileId > 0)
+            {
+                var requestProfile = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(_context.Profiles, p => p.Id == request.ProfileId, cancellationToken);
+                if (requestProfile != null && (requestProfile.IsGuest || !requestProfile.CanDownload))
+                {
+                    _logger.LogWarning("Blocked download/queue request for restricted profile ProfileId={ProfileId}", request.ProfileId);
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Guest profiles are not permitted to request or download media." });
+                }
+            }
+
             if (request.Type == "movie")
             {
                 // Get settings to use configured media paths

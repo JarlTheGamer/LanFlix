@@ -479,6 +479,11 @@ export class ContentDisplay {
 
     const meta = [type, year, rating].filter(Boolean);
 
+    const profileId = stateManager.currentProfileId;
+    const profiles = this.profileManager?.profiles || [];
+    const currentProfile = profiles.find(p => p.id === profileId);
+    const canDownload = currentProfile ? (!currentProfile.isGuest && currentProfile.canDownload !== false) : true;
+
     heroSection.innerHTML = `
       <div class="hero-background" style="background-image: url('${backdropUrl}')"></div>
       <div class="hero-overlay"></div>
@@ -489,15 +494,17 @@ export class ContentDisplay {
           <div class="hero-meta">${meta.map((m) => `<span>${m}</span>`).join('')}</div>
           <p class="hero-description">${item.overview || 'No description available.'}</p>
           <div class="hero-actions">
-            <button class="cta primary" data-action="queue">
-              <span>+ Add to Queue</span>
-            </button>
+            ${canDownload ? `
+              <button class="cta primary" data-action="queue">
+                <span>+ Add to Queue</span>
+              </button>
+            ` : ''}
             <button class="cta ghost" data-action="info">
               <span>More Info</span>
             </button>
           </div>
         </div>
-        <div class="hero-secondary"><span>Discover</span> Available to download</div>
+        <div class="hero-secondary"><span>Discover</span> ${canDownload ? 'Available to download' : 'Explore media catalog'}</div>
       </div>
     `;
 

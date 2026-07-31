@@ -25,6 +25,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    const currentProfileId = stateManager.currentProfileId;
+    const isAuth = sessionStorage.getItem('auth_profile_' + currentProfileId);
+    if (!isAuth) {
+      const profiles = await stateManager.getProfiles();
+      const currentProfile = profiles.find(p => p.id === currentProfileId);
+      if (currentProfile && currentProfile.hasPin) {
+        console.warn('Profile is PIN protected and session is not authenticated. Redirecting to profiles.html');
+        window.location.replace('profiles.html');
+        return;
+      }
+    }
+
     // Create instances
     const profileManager = new ProfileManager();
     const navigation = new Navigation(null, profileManager); // Will be set after contentDisplay creation

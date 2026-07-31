@@ -55,6 +55,33 @@ public class DatabaseSeeder
                 
                 _logger.LogInformation("✅ Default profile created successfully");
             }
+
+            // Ensure a Guest profile exists
+            var hasGuestProfile = await _context.Profiles.AnyAsync(p => p.IsGuest);
+            if (!hasGuestProfile)
+            {
+                _logger.LogInformation("Creating default Guest profile...");
+                var guestProfile = new Profile
+                {
+                    Name = "Guest",
+                    IsKidsProfile = false,
+                    IsGuest = true,
+                    CanDownload = false,
+                    CanManageSettings = false,
+                    Preferences = new UserPreferences
+                    {
+                        PreferredAudioLanguage = "en",
+                        PreferredSubtitleLanguage = "en",
+                        AutoPlayNextEpisode = true,
+                        MaxResolution = "1080p"
+                    },
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Profiles.Add(guestProfile);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("✅ Default Guest profile created successfully");
+            }
         }
         catch (Exception ex)
         {

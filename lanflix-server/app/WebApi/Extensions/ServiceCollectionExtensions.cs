@@ -5,6 +5,7 @@ using Lanflix.Application;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Infrastructure;
 using Lanflix.Infrastructure.Telemetry;
+using Lanflix.Infrastructure.Services.SyncPlay;
 using Lanflix.WebApi.Authorization;
 using Lanflix.WebApi.Helpers;
 using Lanflix.WebApi.Services;
@@ -352,6 +353,7 @@ public static class ServiceCollectionExtensions
         }
 
         services.AddSingleton<IProgressBroadcaster, SignalRProgressBroadcaster>();
+        services.AddSingleton<ISyncPlayRoomService, SyncPlayRoomService>();
 
         return services;
     }

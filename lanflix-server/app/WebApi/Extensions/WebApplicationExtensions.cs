@@ -146,6 +146,7 @@ public static class WebApplicationExtensions
     {
         app.MapControllers();
         app.MapHub<NotificationHub>("/hubs/notifications");
+        app.MapHub<SyncPlayHub>("/hubs/syncplay");
 
         // SPA fallback routing - serve index.html for all non-API routes
         app.MapFallback(context =>
@@ -249,6 +250,24 @@ public static class WebApplicationExtensions
             {
                 await context.Database.ExecuteSqlRawAsync(
                     "ALTER TABLE Contents ADD COLUMN CollectionName TEXT NULL");
+            }
+            catch { /* Column already exists */ }
+            try
+            {
+                await context.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE Profiles ADD COLUMN IsGuest INTEGER NOT NULL DEFAULT 0");
+            }
+            catch { /* Column already exists */ }
+            try
+            {
+                await context.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE Profiles ADD COLUMN CanDownload INTEGER NOT NULL DEFAULT 1");
+            }
+            catch { /* Column already exists */ }
+            try
+            {
+                await context.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE Profiles ADD COLUMN CanManageSettings INTEGER NOT NULL DEFAULT 1");
             }
             catch { /* Column already exists */ }
             

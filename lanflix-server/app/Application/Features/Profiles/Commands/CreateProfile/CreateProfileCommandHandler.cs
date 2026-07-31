@@ -28,6 +28,10 @@ public class CreateProfileCommandHandler : IRequestHandler<CreateProfileCommand,
             Name = request.Name,
             AvatarPath = request.AvatarPath,
             IsKidsProfile = request.IsKidsProfile,
+            PinCode = request.PinCode,
+            IsGuest = request.IsGuest,
+            CanDownload = request.CanDownload,
+            CanManageSettings = request.CanManageSettings,
             Preferences = request.Preferences ?? new UserPreferences(),
             CreatedAt = DateTime.UtcNow
         };
@@ -44,6 +48,10 @@ public class CreateProfileCommandHandler : IRequestHandler<CreateProfileCommand,
             Name = profile.Name,
             AvatarPath = profile.AvatarPath,
             IsKidsProfile = profile.IsKidsProfile,
+            HasPin = !string.IsNullOrEmpty(profile.PinCode),
+            IsGuest = profile.IsGuest,
+            CanDownload = profile.CanDownload,
+            CanManageSettings = profile.CanManageSettings,
             Preferences = profile.Preferences,
             CreatedAt = profile.CreatedAt
         };

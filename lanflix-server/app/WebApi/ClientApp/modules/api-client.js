@@ -296,6 +296,54 @@ class ApiClient {
     }
   }
 
+  // ==================== PROFILE ENDPOINTS ====================
+
+  /**
+   * GET /api/profiles
+   */
+  async getProfiles() {
+    return this.request('/profiles');
+  }
+
+  /**
+   * POST /api/profiles
+   */
+  async createProfile(data) {
+    return this.request('/profiles', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  /**
+   * PUT /api/profiles/:id
+   */
+  async updateProfile(id, data) {
+    return this.request(`/profiles/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  }
+
+  /**
+   * DELETE /api/profiles/:id
+   */
+  async deleteProfile(id) {
+    return this.request(`/profiles/${id}`, {
+      method: 'DELETE'
+    });
+  }
+
+  /**
+   * POST /api/profiles/:id/verify-pin
+   */
+  async verifyProfilePin(id, pin) {
+    return this.request(`/profiles/${id}/verify-pin`, {
+      method: 'POST',
+      body: JSON.stringify({ pinCode: pin })
+    });
+  }
+
   /**
    * Check if error is retryable
    */
@@ -905,6 +953,17 @@ class ApiClient {
   async triggerJob(jobName) {
     return this.request(`/jobs/${jobName}/trigger`, {
       method: 'POST'
+    });
+  }
+
+  /**
+   * POST /api/profiles/:id/verify-pin
+   * Verify profile PIN code
+   */
+  async verifyProfilePin(profileId, pinCode) {
+    return this.request(`/profiles/${profileId}/verify-pin`, {
+      method: 'POST',
+      body: JSON.stringify({ pinCode })
     });
   }
 }

@@ -695,19 +695,27 @@ export class SettingsManager {
 
     document.getElementById('save-profile')?.addEventListener('click', async () => {
       const name = document.getElementById('profile-name').value;
+      const pinCode = document.getElementById('profile-pin')?.value?.trim() || '';
       const profileId = this.currentProfileCard?.dataset.profileId;
 
-      if (!name || !profileId || !this.selectedColor) {
-        alert('Please fill in all fields');
+      if (!name || !profileId) {
+        alert('Please fill in profile name');
         return;
       }
 
-      const [primary, secondary] = this.selectedColor.split(',');
-      await this.updateExistingProfile(parseInt(profileId), {
-        name,
-        avatarColorPrimary: primary,
-        avatarColorSecondary: secondary
-      });
+      if (pinCode && !/^\d{4}$/.test(pinCode)) {
+        alert('PIN code must be exactly 4 digits (e.g. 1234)');
+        return;
+      }
+
+      const updates = { name, pinCode };
+      if (this.selectedColor) {
+        const [primary, secondary] = this.selectedColor.split(',');
+        updates.avatarColorPrimary = primary;
+        updates.avatarColorSecondary = secondary;
+      }
+
+      await this.updateExistingProfile(parseInt(profileId), updates);
     });
 
     document.getElementById('create-profile')?.addEventListener('click', async () => {
@@ -790,6 +798,8 @@ export class SettingsManager {
     this.currentProfileCard = profileCard;
 
     document.getElementById('profile-name').value = profileName;
+    const pinInput = document.getElementById('profile-pin');
+    if (pinInput) pinInput.value = '';
 
     const colorOption = modal.querySelector(`[data-color]`);
     if (colorOption) {
@@ -1099,9 +1109,9 @@ export class SettingsManager {
   async updateExistingProfile(profileId, updates) {
     try {
       await apiClient.updateProfile(profileId, updates);
-      await this.loadProfiles();
       this.closeModal();
-      alert('Profile updated successfully!');
+      this.showSaveNotification('Profile updated successfully!');
+      setTimeout(() => location.reload(), 500);
     } catch (error) {
       console.error('Failed to update profile:', error);
       alert('Failed to update profile. Please try again.');

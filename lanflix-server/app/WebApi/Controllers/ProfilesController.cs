@@ -94,6 +94,26 @@ public class ProfilesController : ControllerBase
     }
 
     /// <summary>
+    /// Verify profile PIN code
+    /// </summary>
+    [HttpPost("{id:int}/verify-pin")]
+    [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<bool>> VerifyPin(
+        int id,
+        [FromBody] VerifyProfilePinRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = new Lanflix.Application.Features.Profiles.Commands.VerifyProfilePin.VerifyProfilePinCommand
+        {
+            ProfileId = id,
+            PinCode = request.PinCode
+        };
+        var isValid = await _mediator.Send(command, cancellationToken);
+        return Ok(isValid);
+    }
+
+    /// <summary>
     /// Get watch history for a profile
     /// </summary>
     [HttpGet("{id:int}/history")]
@@ -200,3 +220,5 @@ public class ProfilesController : ControllerBase
         return Ok(new { message = "Profile deleted successfully" });
     }
 }
+
+public record VerifyProfilePinRequest(string PinCode);

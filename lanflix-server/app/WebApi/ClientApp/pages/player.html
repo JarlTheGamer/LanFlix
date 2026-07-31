@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="../styles/player.css">
+  <link rel="stylesheet" href="../styles/syncplay-drawer.css">
 
   <!-- Google Cast SDK -->
   <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
@@ -59,22 +60,41 @@
     }
 
     // Get current profile from state manager
-    const profileId = stateManager.currentProfileId;
+    let profileId = stateManager.currentProfileId;
+    const syncRoom = urlParams.get('syncRoom');
 
     if (!profileId) {
-      console.error('No profile selected, redirecting to profiles page');
-      alert('Please select a profile first');
-      window.location.href = 'profiles.html';
-      throw new Error('No profile selected');
+      if (syncRoom) {
+        try {
+          const profiles = await stateManager.getProfiles();
+          const guestProfile = profiles.find(p => p.isGuest) || profiles[0];
+          profileId = guestProfile ? guestProfile.id : 1;
+          stateManager.currentProfileId = profileId;
+          stateManager.saveState();
+          console.log('🍿 Watch Party guest link: Auto-assigned Guest profile', profileId);
+        } catch (err) {
+          profileId = 1;
+          stateManager.currentProfileId = 1;
+          stateManager.saveState();
+        }
+      } else {
+        console.error('No profile selected, redirecting to profiles page');
+        alert('Please select a profile first');
+        window.location.href = 'profiles.html';
+        throw new Error('No profile selected');
+      }
     }
 
     // Initialize video player
     const videoElement = document.getElementById('video-player');
     const player = new VideoPlayer(videoElement, profileId);
 
-    // Get watch progress (unless start time is explicitly provided in URL)
+    // Get watch progress (unless start time is explicitly provided in URL or in Watch Party)
     let startPosition = 0;
-    if (urlStartTime) {
+    if (syncRoom) {
+      console.log('🍿 Watch Party mode: Syncing position from host, ignoring personal history');
+      startPosition = 0;
+    } else if (urlStartTime) {
       // Use URL start time if provided (from Resume button)
       startPosition = parseInt(urlStartTime, 10);
       console.log('Using start time from URL:', startPosition);
@@ -82,18 +102,14 @@
       // Otherwise, check for saved progress
       try {
         if (episodeId && contentType === 'series') {
-          // For series episodes, we need to find the specific episode progress from history
-          // We can fetch recent history and find the entry for this episode
           const history = await apiClient.getWatchHistory(profileId, 50);
           const episodeProgress = history.find(h => h.episodeId == episodeId);
 
           if (episodeProgress && !episodeProgress.isCompleted) {
-            // Convert ticks to seconds (10,000,000 ticks = 1 second)
             startPosition = episodeProgress.positionTicks ? Math.floor(episodeProgress.positionTicks / 10_000_000) : 0;
             console.log(`Loaded episode progress: ${startPosition}s`);
           }
         } else {
-          // For movies, getLibraryItem might return progress (if it's simple content)
           const content = await apiClient.getLibraryItem(contentId, profileId);
           if (content && content.watchProgress && !content.watchProgress.completed) {
             startPosition = content.watchProgress.progressSeconds || 0;
@@ -113,6 +129,9 @@
       await player.play();
     } catch (e) {
       console.warn('Auto-play failed:', e);
+      if (syncRoom || (player.syncPlayClient && player.syncPlayClient.currentRoom)) {
+        player.showGuestSyncOverlay();
+      }
     }
 
     // Handle Auto-Play Next
