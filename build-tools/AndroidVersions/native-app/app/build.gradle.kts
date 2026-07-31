@@ -11,8 +11,8 @@ android {
         applicationId = "com.lanflix.webview"
         minSdk = 21
         targetSdk = 34
-        versionCode = 43
-        versionName = "1.4.3"
+        versionCode = 46
+        versionName = "1.4.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

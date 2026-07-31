@@ -54,50 +54,64 @@ public class ReleaseMetadataService : IReleaseMetadataService
 
     private async Task<ServerUpdateInfo?> FetchServerManifestAsync(CancellationToken cancellationToken)
     {
-        try
+        var manifestUrls = new[]
         {
-            var manifestUrl = $"https://raw.githubusercontent.com/{_githubRepo}/main/releases/server-manifest.json";
-            var request = new HttpRequestMessage(HttpMethod.Get, manifestUrl);
-            request.Headers.UserAgent.ParseAdd("Lanflix-Server");
+            $"https://github.com/{_githubRepo}/releases/latest/download/server-manifest.json",
+            $"https://raw.githubusercontent.com/{_githubRepo}/main/releases/server-manifest.json"
+        };
 
-            var response = await _httpClient.SendAsync(request, cancellationToken);
-            if (response.IsSuccessStatusCode)
-            {
-                var manifest = await response.Content.ReadFromJsonAsync<ServerUpdateInfo>(
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
-                    cancellationToken);
-                _logger.LogDebug("Fetched server manifest from GitHub: {Url}", manifestUrl);
-                return manifest;
-            }
-            _logger.LogWarning("Failed to fetch server manifest. Status: {Status}", response.StatusCode);
-        }
-        catch (Exception ex)
+        foreach (var manifestUrl in manifestUrls)
         {
-            _logger.LogWarning(ex, "Failed to fetch server manifest from {Repo}", _githubRepo);
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, manifestUrl);
+                request.Headers.UserAgent.ParseAdd("Lanflix-Server");
+
+                var response = await _httpClient.SendAsync(request, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    var manifest = await response.Content.ReadFromJsonAsync<ServerUpdateInfo>(
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+                        cancellationToken);
+                    _logger.LogDebug("Fetched server manifest from GitHub: {Url}", manifestUrl);
+                    return manifest;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch server manifest from {Url}", manifestUrl);
+            }
         }
         return null;
     }
 
     private async Task<AppReleaseMetadata?> FetchAppManifestAsync(CancellationToken cancellationToken)
     {
-        try
+        var manifestUrls = new[]
         {
-            var manifestUrl = $"https://raw.githubusercontent.com/{_githubRepo}/main/releases/app-manifest.json";
-            var request = new HttpRequestMessage(HttpMethod.Get, manifestUrl);
-            request.Headers.UserAgent.ParseAdd("Lanflix-Server");
+            $"https://github.com/{_githubRepo}/releases/latest/download/app-manifest.json",
+            $"https://raw.githubusercontent.com/{_githubRepo}/main/releases/app-manifest.json"
+        };
 
-            var response = await _httpClient.SendAsync(request, cancellationToken);
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<AppReleaseMetadata>(
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
-                    cancellationToken);
-            }
-            _logger.LogWarning("Failed to fetch app manifest. Status: {Status}", response.StatusCode);
-        }
-        catch (Exception ex)
+        foreach (var manifestUrl in manifestUrls)
         {
-            _logger.LogWarning(ex, "Failed to fetch app manifest from {Repo}", _githubRepo);
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, manifestUrl);
+                request.Headers.UserAgent.ParseAdd("Lanflix-Server");
+
+                var response = await _httpClient.SendAsync(request, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<AppReleaseMetadata>(
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+                        cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch app manifest from {Url}", manifestUrl);
+            }
         }
         return null;
     }

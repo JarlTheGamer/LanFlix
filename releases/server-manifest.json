@@ -1,10 +1,10 @@
 {
-  "version": "1.4.3",
-  "currentVersion": "1.4.3",
-  "releaseDate": "2026-07-30T23:58:33.102259Z",
-  "downloadUrl": "https://github.com/JarlTheGamer/LanFlix/releases/download/v1.4.3/lanflix-server-v1.4.3.zip",
-  "fileSize": 50993643,
-  "checksum": "e433f342a097199f160e1bfe8f685bfb46b654dccbe12e9061f6db66c60d8afd",
-  "releaseNotes": "Fix duplicate update toast notification listeners",
+  "version": "1.4.6",
+  "currentVersion": "1.4.6",
+  "releaseDate": "2026-07-31T09:42:44.046786Z",
+  "downloadUrl": "https://github.com/JarlTheGamer/LanFlix/releases/download/v1.4.6/lanflix-server-v1.4.6.zip",
+  "fileSize": 50993684,
+  "checksum": "0f6086856fd35487418f5fb103f1c2166e8db0b99ce273f46c1e7df3a92bd725",
+  "releaseNotes": "Universal DirectPlay + Release asset manifests",
   "isUpdateAvailable": true
 }

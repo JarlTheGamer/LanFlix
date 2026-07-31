@@ -832,21 +832,22 @@ public class TranscodingController : ControllerBase
             var hwAccel = await _hwAccelDetector.DetectAsync();
             var settings = await _settingsProvider.GetSettingsAsync(1); // Use default profile for offline
 
-            // Build transcode request - prefer copying streams if compatible with MP4
+            // Build transcode request - ensure 100% universal DirectPlay compatibility across all browsers/devices:
+            // Video MUST be H.264 (8-bit yuv420p) and Audio MUST be AAC in an MP4 container with faststart.
             var sourceMedia = await _mediaAnalyzer.AnalyzeAsync(originalPath);
             var videoCodec = "libx264";
             var audioCodec = "aac";
             
-            // Check if video is already H.264 or H.265 (most common MP4 compatible codecs)
-            if (sourceMedia.Video.Codec == "h264" || sourceMedia.Video.Codec == "hevc")
+            // Only copy video if source is ALREADY H.264 and container is compatible
+            if (string.Equals(sourceMedia.Video.Codec, "h264", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(sourceMedia.Video.PixelFormat, "yuv420p10le", StringComparison.OrdinalIgnoreCase))
             {
                 videoCodec = "copy";
             }
             
-            // Check if audio is already AAC, MP3, AC3 or E-AC3 (standard MP4 compatible)
+            // Only copy audio if source is ALREADY AAC
             var primaryAudio = sourceMedia.Audio.FirstOrDefault();
-            if (primaryAudio != null && (primaryAudio.Codec == "aac" || primaryAudio.Codec == "mp3" || 
-                primaryAudio.Codec == "ac3" || primaryAudio.Codec == "eac3"))
+            if (primaryAudio != null && string.Equals(primaryAudio.Codec, "aac", StringComparison.OrdinalIgnoreCase))
             {
                 audioCodec = "copy";
             }
@@ -864,10 +865,10 @@ public class TranscodingController : ControllerBase
                 SourceMedia = sourceMedia,
                 TargetVideoCodec = videoCodec,
                 TargetAudioCodec = audioCodec,
-                TargetVideoBitrate = null, // Use CQ/CRF for transcode
+                TargetVideoBitrate = null, // Use CQ/CRF for maximum quality
                 TargetAudioBitrate = audioCodec == "copy" ? null : 320000, 
-                TargetWidth = null, // Keep original
-                TargetHeight = null, // Keep original
+                TargetWidth = null, // Keep original resolution
+                TargetHeight = null, // Keep original resolution
                 HwAccelMethod = hwAccel.PreferredMethod,
                 OutputFormat = "mp4",
                 SessionId = $"offline_{Guid.NewGuid().ToString().Substring(0, 8)}",
@@ -879,9 +880,9 @@ public class TranscodingController : ControllerBase
             {
                 try
                 {
-                    _logger.LogInformation("Starting background transcoding for {Title} to {Path}", title, outputFilePath);
+                    _logger.LogInformation("Starting universal DirectPlay pre-transcode for {Title} -> {Path}", title, outputFilePath);
                     await _transcodingPipeline.TranscodeToFileAsync(transcodeRequest, outputFilePath, CancellationToken.None);
-                    _logger.LogInformation("Background transcoding completed for {Title}", title);
+                    _logger.LogInformation("Pre-transcoding completed successfully for {Title}", title);
 
                     // Update database with the new .mp4 path
                     using (var scope = _scopeFactory.CreateScope())
@@ -894,7 +895,7 @@ public class TranscodingController : ControllerBase
                             {
                                 content.FilePath = outputFilePath;
                                 await dbContext.SaveChangesAsync(CancellationToken.None);
-                                _logger.LogInformation("Updated database for movie {Id} with new path: {Path}", request.ContentId, outputFilePath);
+                                _logger.LogInformation("Updated database for movie {Id} with DirectPlay path: {Path}", request.ContentId, outputFilePath);
                             }
                         }
                         else if (request.Type.ToLowerInvariant() == "episode")
@@ -904,18 +905,32 @@ public class TranscodingController : ControllerBase
                             {
                                 episode.FilePath = outputFilePath;
                                 await dbContext.SaveChangesAsync(CancellationToken.None);
-                                _logger.LogInformation("Updated database for episode {Id} with new path: {Path}", request.ContentId, outputFilePath);
+                                _logger.LogInformation("Updated database for episode {Id} with DirectPlay path: {Path}", request.ContentId, outputFilePath);
                             }
+                        }
+                    }
+
+                    // Delete original backup file to free disk space after successful conversion
+                    if (System.IO.File.Exists(originalPath) && !string.Equals(originalPath, outputFilePath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            System.IO.File.Delete(originalPath);
+                            _logger.LogInformation("Cleaned up original file backup: {Path}", originalPath);
+                        }
+                        catch (Exception delEx)
+                        {
+                            _logger.LogWarning(delEx, "Could not delete original file backup: {Path}", originalPath);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Background transcoding failed for {Title}", title);
+                    _logger.LogError(ex, "Background pre-transcoding failed for {Title}", title);
                 }
             });
 
-            return Ok(new { success = true, message = $"Transcoding started for {title}" });
+            return Ok(new { success = true, message = $"Pre-transcoding started for {title}. File will be converted to universal H.264/AAC MP4 for 100% DirectPlay compatibility." });
         }
         catch (Exception ex)
         {

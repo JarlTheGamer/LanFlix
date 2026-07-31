@@ -331,10 +331,52 @@ def github_upload_release_asset(version: str, zip_path: Path, notes: str, token:
         asset = json.loads(res.read())
         print(f"✅ Uploaded asset: {asset['browser_download_url']}")
 
-def git_push_release(version: str, notes: str, zip_path: Path = None):
-    """Performs Git add, commit, tag, push, and optionally uploads ZIP to GitHub Releases."""
+def publish_github_release(version: str, notes: str, zip_path: Path = None):
+    """Publishes a GitHub Release and uploads release ZIP + server-manifest.json as assets without requiring git commits."""
+    tag_name = f"v{version}"
+    manifest_path = RELEASES_DIR / "server-manifest.json"
+
     print("=" * 60)
-    print("🐙 Executing Git Release Push...")
+    print(f"📦 Publishing Release Assets for {tag_name} to GitHub Releases...")
+    print("=" * 60)
+
+    clean_env = {k: v for k, v in os.environ.items() if k != 'GITHUB_TOKEN'}
+    assets_to_upload = []
+    if zip_path and zip_path.exists():
+        assets_to_upload.append(str(zip_path))
+
+    server_manifest = RELEASES_DIR / "server-manifest.json"
+    if server_manifest.exists():
+        assets_to_upload.append(str(server_manifest))
+
+    app_manifest = RELEASES_DIR / "app-manifest.json"
+    if app_manifest.exists():
+        assets_to_upload.append(str(app_manifest))
+
+    if not assets_to_upload:
+        print("⚠️ No release files found to upload.")
+        return
+
+    # Try creating GitHub release with attached assets
+    cmd_create = ["gh", "release", "create", tag_name] + assets_to_upload + ["--notes", notes, "--latest"]
+    gh_res = subprocess.run(cmd_create, cwd=PROJECT_ROOT, env=clean_env)
+
+    if gh_res.returncode != 0:
+        # If release tag exists, upload assets to existing release
+        cmd_upload = ["gh", "release", "upload", tag_name] + assets_to_upload + ["--clobber"]
+        gh_res = subprocess.run(cmd_upload, cwd=PROJECT_ROOT, env=clean_env)
+
+    if gh_res.returncode == 0:
+        print(f"✅ Successfully published {tag_name} assets to GitHub Releases (No Git commit needed)!")
+    else:
+        token = os.environ.get("GITHUB_TOKEN", "")
+        if token and zip_path:
+            github_upload_release_asset(version, zip_path, notes, token)
+
+def git_push_release(version: str, notes: str):
+    """Performs optional Git add, commit, tag, and push to origin remote repository."""
+    print("=" * 60)
+    print("🐙 Executing Optional Git Commit & Tag Push...")
     print("=" * 60)
 
     tag_name = f"v{version}"
@@ -350,24 +392,6 @@ def git_push_release(version: str, notes: str, zip_path: Path = None):
     else:
         print(f"⚠️ Git push completed with status code {res.returncode}")
 
-    # Upload ZIP to GitHub Releases via gh CLI or token
-    if zip_path and zip_path.exists():
-        try:
-            print(f"📦 Uploading release asset {zip_path.name} to GitHub Releases...")
-            clean_env = {k: v for k, v in os.environ.items() if k != 'GITHUB_TOKEN'}
-            gh_res = subprocess.run(["gh", "release", "create", tag_name, str(zip_path), "--notes", notes], cwd=PROJECT_ROOT, env=clean_env)
-            if gh_res.returncode != 0:
-                gh_res = subprocess.run(["gh", "release", "upload", tag_name, str(zip_path), "--clobber"], cwd=PROJECT_ROOT, env=clean_env)
-            if gh_res.returncode == 0:
-                print(f"✅ Successfully uploaded {zip_path.name} to GitHub Release {tag_name}!")
-            else:
-                print(f"⚠️ GitHub CLI upload failed with status {gh_res.returncode}")
-                token = os.environ.get("GITHUB_TOKEN", "")
-                if token:
-                    github_upload_release_asset(version, zip_path, notes, token)
-        except Exception as e:
-            print(f"⚠️ GitHub release asset upload failed: {e}")
-
 def main():
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
@@ -376,7 +400,7 @@ def main():
     parser.add_argument("--apk", action="store_true", help="Build and publish Android APK update")
     parser.add_argument("--server", action="store_true", help="Build and publish Server release ZIP")
     parser.add_argument("--all", action="store_true", help="Build and publish both APK and Server updates")
-    parser.add_argument("--git", action="store_true", help="Automatically git add, commit, tag, and push release to remote repository")
+    parser.add_argument("--git", action="store_true", help="Optionally git add, commit, tag, and push to remote git branch")
     parser.add_argument("--notes", type=str, default="Release update with performance improvements and bug fixes", help="Release notes text")
     parser.add_argument("--version", type=str, default=None, help="Server release version string (e.g. 1.2.8)")
     parser.add_argument("--bump", action="store_true", help="Auto-bump version number to next patch release")
@@ -404,8 +428,12 @@ def main():
     if args.server or args.all:
         zip_path = build_server(version_name=version_name, notes=args.notes, host_url=args.host)
 
+    # Publish release directly to GitHub Releases (Uploads ZIP + server-manifest.json - ZERO Git commits!)
+    publish_github_release(version=version_name, notes=args.notes, zip_path=zip_path)
+
+    # Optional git commit & push ONLY if user passed --git flag
     if args.git:
-        git_push_release(version=version_name, notes=args.notes, zip_path=zip_path)
+        git_push_release(version=version_name, notes=args.notes)
 
     print("\n🎉 OTA Publish Pipeline Completed Successfully!")
 
