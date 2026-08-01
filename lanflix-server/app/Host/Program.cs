@@ -22,20 +22,24 @@ using Lanflix.Modules.Music;
 using Lanflix.Modules.LiveTV;
 using Lanflix.Modules.Social;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
+LanflixBanner.Write();
 var builder = WebApplication.CreateBuilder(args);
 var applicationDirectory = AppContext.BaseDirectory;
 var configurationDirectory = Path.Combine(applicationDirectory, "config");
 Directory.CreateDirectory(configurationDirectory);
+var generatedConfiguration = MediaEnvironment.Ensure(applicationDirectory, configurationDirectory);
 builder.Configuration
-    .AddJsonFile(Path.Combine(configurationDirectory, "lanflix.json"), optional: true, reloadOnChange: true)
+    .AddJsonFile(generatedConfiguration, optional: false, reloadOnChange: true)
     .AddJsonFile(PersistentSecretConfiguration.Ensure(configurationDirectory), optional: false, reloadOnChange: false);
 
-builder.Host.UseSerilog((context, logger) => logger
+builder.Host.UseSerilog((context, _, logger) => logger
     .ReadFrom.Configuration(context.Configuration)
     .Enrich.FromLogContext()
     .Enrich.WithProperty("Application", "Lanflix.Host"));
@@ -76,11 +80,12 @@ builder.Services.AddRealtimeModule();
 builder.Services.AddSocialModule();
 builder.Services.AddLanflixModuleAdapters();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
+builder.Services.AddTransient<TmdbRateLimitHandler>();
 builder.Services.AddHttpClient<ITmdbClient, TmdbClient>(client =>
 {
     client.BaseAddress = new Uri("https://api.themoviedb.org/3/");
     client.Timeout = TimeSpan.FromSeconds(20);
-});
+}).AddHttpMessageHandler<TmdbRateLimitHandler>();
 builder.Services.AddHttpClient("LiveTvMetadata", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHttpClient("LiveTvStream", client => client.Timeout = Timeout.InfiniteTimeSpan);
 

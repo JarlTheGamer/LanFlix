@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
+import com.lanflix.webview.ServerManager
+import java.security.MessageDigest
 
 data class LanflixAccount(
     val id: String = "",
@@ -20,11 +22,11 @@ data class AuthTokens(
     val account: LanflixAccount = LanflixAccount()
 )
 
-class LanflixSessionStore(context: Context) {
+class LanflixSessionStore(context: Context, serverUrl: String = ServerManager.activeServerUrl) {
     private val gson = Gson()
     private val preferences = EncryptedSharedPreferences.create(
         context.applicationContext,
-        "lanflix_secure_session",
+        "lanflix_secure_session_${serverKey(serverUrl)}",
         MasterKey.Builder(context.applicationContext).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
@@ -46,4 +48,10 @@ class LanflixSessionStore(context: Context) {
     }
 
     fun clear() = preferences.edit().clear().apply()
+
+    private companion object {
+        fun serverKey(value: String): String = MessageDigest.getInstance("SHA-256")
+            .digest(ServerManager.formatServerUrl(value).lowercase().toByteArray())
+            .take(8).joinToString("") { "%02x".format(it) }
+    }
 }

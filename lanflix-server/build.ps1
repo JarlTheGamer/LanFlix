@@ -1,123 +1,62 @@
-# Lanflix Server Build Script
-# Usage: .\build.ps1 [options]
+# Builds the modular Lanflix.Host as the Windows production artifact.
+# Usage: .\build.ps1 [-Configuration Release] [-Runtime win-x64] [-Clean]
 
-param (
-    [switch]$SkipFrontend = $false,
-    [switch]$SkipBackend = $false,
-    [switch]$Clean = $false,
-    [string]$Configuration = "Release"
+param(
+    [ValidateSet("Debug", "Release")]
+    [string]$Configuration = "Release",
+    [ValidatePattern("^[a-z0-9-]+$")]
+    [string]$Runtime = "win-x64",
+    [switch]$Clean
 )
 
 $ErrorActionPreference = "Stop"
+$scriptRoot = $PSScriptRoot
+$hostProject = Join-Path $scriptRoot "app\Host\Lanflix.Host.csproj"
+$publishDirectory = Join-Path $scriptRoot "publish"
+$expectedExecutable = Join-Path $publishDirectory "Lanflix.Host.exe"
 
-# Setup Paths
-$ScriptRoot = $PSScriptRoot
-$FrontendPath = Join-Path $ScriptRoot "app\WebApi\ClientApp"
-$BackendPath = Join-Path $ScriptRoot "app\WebApi"
-$PublishPath = Join-Path $ScriptRoot "publish"
-
-# Helper Functions
-function Write-Step {
-    param([string]$Message)
-    Write-Host "`n>>> $Message" -ForegroundColor Cyan
-}
-
-function Write-Success {
-    param([string]$Message)
-    Write-Host "[OK] $Message" -ForegroundColor Green
-}
-
-function Write-ErrorMsg {
-    param([string]$Message)
-    Write-Host "[ERROR] $Message" -ForegroundColor Red
-}
+function Write-Step([string]$message) { Write-Host "`n>>> $message" -ForegroundColor Cyan }
+function Write-Success([string]$message) { Write-Host "[OK] $message" -ForegroundColor Green }
 
 try {
-    # 1. Pre-flight Checks
-    Write-Step "Checking prerequisites..."
-    
-    if (-not (Get-Command "dotnet" -ErrorAction SilentlyContinue)) {
-        throw "dotnet SDK is not installed or not in PATH."
-    }
-    
-    if (-not (Get-Command "npm" -ErrorAction SilentlyContinue)) {
-        throw "npm is not installed or not in PATH."
-    }
+    Write-Step "Checking the .NET SDK and modular Host project"
+    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw ".NET SDK is not available in PATH." }
+    if (-not (Test-Path -LiteralPath $hostProject -PathType Leaf)) { throw "Lanflix.Host project was not found: $hostProject" }
 
-    Write-Success "Prerequisites met."
-
-    # 2. Cleaning
-    if ($Clean) {
-        Write-Step "Cleaning previous builds..."
-        
-        if (Test-Path $PublishPath) {
-            Remove-Item $PublishPath -Recurse -Force
-            Write-Host "Cleaned publish directory."
-        }
-        
-        # Clean bin/obj folders
-        Get-ChildItem -Path $ScriptRoot -Include bin,obj -Recurse | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Success "Clean completed."
+    $resolvedRoot = [System.IO.Path]::GetFullPath($scriptRoot)
+    $resolvedPublish = [System.IO.Path]::GetFullPath($publishDirectory)
+    if (-not $resolvedPublish.StartsWith($resolvedRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Publish directory resolved outside the Lanflix server workspace."
     }
 
-    # 3. Build Frontend
-    if (-not $SkipFrontend) {
-        Write-Step "Building Frontend..."
-        
-        if (-not (Test-Path $FrontendPath)) {
-            throw "Frontend directory not found at $FrontendPath"
-        }
+    if (Test-Path -LiteralPath $resolvedPublish) {
+        Write-Step "Removing the previous publish artifact"
+        Remove-Item -LiteralPath $resolvedPublish -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $resolvedPublish -Force | Out-Null
 
-        Push-Location $FrontendPath
-        try {
-            if (-not (Test-Path "node_modules")) {
-                Write-Host "Installing dependencies..."
-                npm install --no-audit --no-fund
-            }
-            
-            Write-Host "Compiling assets..."
-            npm run build
-            
-            if ($LASTEXITCODE -ne 0) {
-                throw "Frontend build failed."
-            }
-        }
-        finally {
-            Pop-Location
-        }
-        Write-Success "Frontend built successfully."
+    Write-Step "Running server tests"
+    dotnet test (Join-Path $scriptRoot "app\Tests\Host.Tests\Lanflix.Host.Tests.csproj") -c $Configuration --nologo
+    if ($LASTEXITCODE -ne 0) { throw "Host tests failed." }
+
+    Write-Step "Publishing Lanflix.Host for $Runtime"
+    dotnet publish $hostProject -c $Configuration -r $Runtime --self-contained true -o $resolvedPublish `
+        /p:PublishSingleFile=true /p:DebugType=None /p:DebugSymbols=false --nologo
+    if ($LASTEXITCODE -ne 0) { throw "Lanflix.Host publish failed." }
+    if (-not (Test-Path -LiteralPath $expectedExecutable -PathType Leaf)) {
+        throw "Publish completed without the expected Lanflix.Host.exe artifact."
+    }
+    $publishedFiles = @(Get-ChildItem -LiteralPath $resolvedPublish -File -Recurse)
+    if ($publishedFiles.Count -ne 1 -or $publishedFiles[0].FullName -ne $expectedExecutable) {
+        throw "Single-file publish produced unexpected companion files: $($publishedFiles.Name -join ', ')"
     }
 
-    # 4. Build Backend
-    if (-not $SkipBackend) {
-        Write-Step "Building Backend..."
-        
-        if (-not (Test-Path $BackendPath)) {
-            throw "Backend directory not found at $BackendPath"
-        }
-
-        # Ensure publish directory exists
-        if (-not (Test-Path $PublishPath)) {
-            New-Item -ItemType Directory -Path $PublishPath | Out-Null
-        }
-
-        # Run dotnet publish
-        Write-Host "Publishing backend..."
-        dotnet publish $BackendPath -c $Configuration -o $PublishPath /p:DebugType=None /p:DebugSymbols=false /nologo /v:m
-
-        if ($LASTEXITCODE -ne 0) {
-            throw "Backend build failed."
-        }
-        
-        Write-Success "Backend published to: $PublishPath"
-    }
-
-    Write-Step "Build Summary"
-    Write-Success "Build completed successfully!"
-    Write-Host "Executable: $(Join-Path $PublishPath 'Lanflix.WebApi.exe')"
-
+    $artifact = Get-Item -LiteralPath $expectedExecutable
+    Write-Success "Build completed"
+    Write-Host "Executable: $($artifact.FullName)"
+    Write-Host "Size: $([Math]::Round($artifact.Length / 1MB, 2)) MB"
 }
 catch {
-    Write-ErrorMsg "Build Failed: $($_.Exception.Message)"
+    Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }

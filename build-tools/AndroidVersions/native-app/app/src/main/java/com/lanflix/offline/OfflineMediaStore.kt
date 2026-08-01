@@ -45,6 +45,14 @@ class OfflineMediaStore(context: Context) {
 
     fun localFile(item: ContentItem): File? = item.localFilePath?.let(::File)?.takeIf { it.isFile }
 
+    suspend fun removeDownload(item: ContentItem) {
+        localFile(item)?.delete()
+        val key = mediaKey(item)
+        dao.get(key)?.let { dao.upsertAll(listOf(it.copy(localFilePath = null, updatedAtUtc = System.currentTimeMillis()))) }
+    }
+
+    suspend fun clearMetadataCache() = dao.clearMetadataOnly()
+
     private suspend fun migrateLegacyCatalogIfNeeded() {
         if (!legacyCatalogFile.isFile || dao.getAll().isNotEmpty()) return
         val type = object : TypeToken<List<ContentItem>>() {}.type

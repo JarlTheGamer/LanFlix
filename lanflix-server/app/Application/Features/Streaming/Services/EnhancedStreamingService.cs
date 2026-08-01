@@ -150,6 +150,8 @@ public class EnhancedStreamingService
         {
             "web" => CreateWebProfiles(),
             "mobile" => CreateMobileProfiles(),
+            "mobile-high" => new[] { CreateMobileProfiles()[0] },
+            "mobile-low" => new[] { CreateMobileProfiles()[1] },
             "tv" => CreateTvProfiles(),
             "chromecast" => CreateChromecastProfiles(),
             "roku" => CreateRokuProfiles(),

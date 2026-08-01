@@ -12,7 +12,7 @@ public sealed record ArtworkPaletteDto(
     string OnBackground,
     int AlgorithmVersion)
 {
-    public static ArtworkPaletteDto Fallback { get; } = new("#111827", "#030712", "#1F3A5F", "#F59E0B", "#FFFFFF", 1);
+    public static ArtworkPaletteDto Fallback { get; } = new("#173B57", "#07131F", "#287CA4", "#F59E0B", "#FFFFFF", 3);
 }
 
 public sealed class ArtworkPalette : Entity<int>

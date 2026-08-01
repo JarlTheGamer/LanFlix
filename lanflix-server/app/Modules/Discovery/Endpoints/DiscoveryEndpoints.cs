@@ -17,6 +17,12 @@ public static class DiscoveryEndpoints
                 return Results.Problem(statusCode: 400, title: "Search text must contain at least two characters");
             return Results.Ok(await provider.SearchAsync(q.Trim(), type ?? "all", ct));
         });
+        discovery.MapGet("/{type}/{tmdbId:int}/logo", async (string type, int tmdbId, IDiscoveryProvider provider, CancellationToken ct) =>
+        {
+            if (type is not ("movie" or "series")) return Results.BadRequest();
+            var url = await provider.GetLogoUrlAsync(tmdbId, type, ct);
+            return url is null ? Results.NotFound() : Results.Redirect(url, permanent: false);
+        }).AllowAnonymous();
         discovery.MapPost("/{tmdbId:int}/acquire", async (int tmdbId, AcquireMediaRequest request, IDiscoveryProvider provider, CancellationToken ct) =>
         {
             var result = await provider.AcquireAsync(tmdbId, request, ct);

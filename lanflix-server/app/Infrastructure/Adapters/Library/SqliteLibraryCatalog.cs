@@ -17,6 +17,7 @@ namespace Lanflix.Infrastructure.Adapters.Library;
 internal sealed class SqliteLibraryCatalog(
     ApplicationDbContext db,
     ITmdbClient tmdb,
+    IMetadataService metadata,
     IMemoryCache cache,
     ArtworkPaletteService palettes) : ILibraryCatalog
 {
@@ -171,18 +172,41 @@ internal sealed class SqliteLibraryCatalog(
 
     public async Task<ArtworkFileDto?> GetEpisodeArtworkAsync(int episodeId, CancellationToken cancellationToken)
     {
-        var episode = await db.Episodes.AsNoTracking().Where(item => item.Id == episodeId)
-            .Select(item => new { item.FilePath, item.StillPath }).SingleOrDefaultAsync(cancellationToken);
+        var episode = await db.Episodes.Include(item => item.Content)
+            .SingleOrDefaultAsync(item => item.Id == episodeId, cancellationToken);
         if (episode is null) return null;
 
         if (!string.IsNullOrWhiteSpace(episode.StillPath) && File.Exists(episode.StillPath))
             return CreateArtworkFile(episode.StillPath);
         if (string.IsNullOrWhiteSpace(episode.FilePath)) return null;
-
         var folder = Path.GetDirectoryName(episode.FilePath);
         if (string.IsNullOrWhiteSpace(folder)) return null;
-        var stem = Path.GetFileNameWithoutExtension(episode.FilePath);
-        return CreateArtworkFile(Path.Combine(folder, $"{stem}.jpg"));
+
+        var canonicalStill = Path.Combine(folder, $"S{episode.SeasonNumber:00}E{episode.EpisodeNumber:00}.jpg");
+        if (File.Exists(canonicalStill))
+        {
+            if (!string.Equals(episode.StillPath, canonicalStill, StringComparison.OrdinalIgnoreCase))
+            {
+                episode.StillPath = canonicalStill;
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            return CreateArtworkFile(canonicalStill);
+        }
+
+        var remoteStill = episode.StillPath?.StartsWith('/') == true ? episode.StillPath : null;
+        if (remoteStill is null && episode.Content.TmdbId > 0)
+        {
+            var season = await tmdb.GetSeasonDetailsAsync(episode.Content.TmdbId, episode.SeasonNumber, cancellationToken);
+            remoteStill = season?.Episodes.FirstOrDefault(item => item.EpisodeNumber == episode.EpisodeNumber)?.StillPath;
+        }
+        if (string.IsNullOrWhiteSpace(remoteStill)) return null;
+
+        var downloaded = await metadata.DownloadEpisodeStillAsync(
+            remoteStill, folder, episode.SeasonNumber, episode.EpisodeNumber, cancellationToken);
+        if (string.IsNullOrWhiteSpace(downloaded) || !File.Exists(downloaded)) return null;
+        episode.StillPath = downloaded;
+        await db.SaveChangesAsync(cancellationToken);
+        return CreateArtworkFile(downloaded);
     }
 
     private async Task<IReadOnlyList<MediaItemDto>> MapAsync(IEnumerable<Content> entities, CancellationToken cancellationToken)
@@ -239,7 +263,6 @@ internal sealed class SqliteLibraryCatalog(
     {
         if (string.IsNullOrWhiteSpace(path)) return null;
         if (path.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return path;
-        if (path.StartsWith('/')) return $"https://image.tmdb.org/t/p/w780{path}";
         return $"/api/v2/artwork/episode/{id}/still";
     }
 

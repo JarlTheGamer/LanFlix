@@ -18,7 +18,11 @@ data class DevicePreferences(
     val wifiOnlyDownloads: Boolean = true,
     val reducedMotion: Boolean = false,
     val dynamicArtworkColors: Boolean = true,
-    val notificationsEnabled: Boolean = true
+    val notificationsEnabled: Boolean = true,
+    val playbackQuality: String = "High",
+    val preferredAudioLanguage: String = "en",
+    val preferredSubtitleLanguage: String = "en",
+    val automaticSubtitles: Boolean = true
 )
 
 class DevicePreferencesRepository(private val context: Context) {
@@ -29,6 +33,10 @@ class DevicePreferencesRepository(private val context: Context) {
         val reducedMotion = booleanPreferencesKey("reduced_motion")
         val dynamicArtworkColors = booleanPreferencesKey("dynamic_artwork_colors")
         val notificationsEnabled = booleanPreferencesKey("notifications_enabled")
+        val playbackQuality = stringPreferencesKey("playback_quality")
+        val preferredAudioLanguage = stringPreferencesKey("preferred_audio_language")
+        val preferredSubtitleLanguage = stringPreferencesKey("preferred_subtitle_language")
+        val automaticSubtitles = booleanPreferencesKey("automatic_subtitles")
     }
 
     val preferences: Flow<DevicePreferences> = context.lanflixDataStore.data.map { values ->
@@ -40,7 +48,11 @@ class DevicePreferencesRepository(private val context: Context) {
             wifiOnlyDownloads = values[Keys.wifiOnlyDownloads] ?: true,
             reducedMotion = values[Keys.reducedMotion] ?: false,
             dynamicArtworkColors = values[Keys.dynamicArtworkColors] ?: true,
-            notificationsEnabled = values[Keys.notificationsEnabled] ?: true
+            notificationsEnabled = values[Keys.notificationsEnabled] ?: true,
+            playbackQuality = values[Keys.playbackQuality] ?: "High",
+            preferredAudioLanguage = values[Keys.preferredAudioLanguage] ?: "en",
+            preferredSubtitleLanguage = values[Keys.preferredSubtitleLanguage] ?: "en",
+            automaticSubtitles = values[Keys.automaticSubtitles] ?: true
         )
     }
 
@@ -65,4 +77,8 @@ class DevicePreferencesRepository(private val context: Context) {
     suspend fun setReducedMotion(enabled: Boolean) = context.lanflixDataStore.edit { it[Keys.reducedMotion] = enabled }
     suspend fun setDynamicArtworkColors(enabled: Boolean) = context.lanflixDataStore.edit { it[Keys.dynamicArtworkColors] = enabled }
     suspend fun setNotificationsEnabled(enabled: Boolean) = context.lanflixDataStore.edit { it[Keys.notificationsEnabled] = enabled }
+    suspend fun setPlaybackQuality(value: String) = context.lanflixDataStore.edit { it[Keys.playbackQuality] = value }
+    suspend fun setPreferredAudioLanguage(value: String) = context.lanflixDataStore.edit { it[Keys.preferredAudioLanguage] = value.trim().lowercase().take(8) }
+    suspend fun setPreferredSubtitleLanguage(value: String) = context.lanflixDataStore.edit { it[Keys.preferredSubtitleLanguage] = value.trim().lowercase().take(8) }
+    suspend fun setAutomaticSubtitles(enabled: Boolean) = context.lanflixDataStore.edit { it[Keys.automaticSubtitles] = enabled }
 }

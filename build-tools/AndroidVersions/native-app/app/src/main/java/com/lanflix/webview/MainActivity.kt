@@ -9,7 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.view.WindowCompat
 import com.lanflix.ui.compose.LanflixApp
 
-/** Phone-first Compose host. Legacy XML fragments remain available during migration. */
+/** Phone-first Compose host. */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -32,6 +32,4 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
     }
 
-    /** Kept temporarily so the legacy fragment source still compiles during migration. */
-    fun setTopHeaderGlassAlpha(alpha: Float) = Unit
 }

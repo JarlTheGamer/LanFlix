@@ -18,6 +18,7 @@ public interface IDiscoveryProvider
 {
     Task<DiscoveryPageDto> GetPageAsync(int page, CancellationToken cancellationToken);
     Task<DiscoverySearchDto> SearchAsync(string query, string type, CancellationToken cancellationToken);
+    Task<string?> GetLogoUrlAsync(int tmdbId, string type, CancellationToken cancellationToken);
     Task<AcquisitionResult> AcquireAsync(int tmdbId, AcquireMediaRequest request, CancellationToken cancellationToken);
     Task<ServiceConnectionDto> TestConnectionAsync(string service, CancellationToken cancellationToken);
 }

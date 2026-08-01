@@ -59,6 +59,12 @@ public static class PlaybackModule
     {
         var source = await sources.FindAsync(kind, id, ct);
         if (source is null) return Results.Problem(statusCode: 404, title: "Playable media unavailable");
+        if (string.Equals(client, "direct", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.Headers["X-Playback-Mode"] = "DirectPlay";
+            context.Response.Headers["Access-Control-Expose-Headers"] = "X-Playback-Mode";
+            return Results.File(source.FilePath, source.MimeType, enableRangeProcessing: true);
+        }
         var delivery = await playback.OpenAsync(source, client ?? "mobile", startTime,
             context.Request.Headers.Range.FirstOrDefault(), ct);
         context.Response.Headers["X-Playback-Mode"] = delivery.Mode;

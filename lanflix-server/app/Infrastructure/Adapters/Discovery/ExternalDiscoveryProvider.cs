@@ -1,6 +1,7 @@
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
 using Lanflix.Modules.Discovery;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Lanflix.Infrastructure.Adapters.Discovery;
 
@@ -9,9 +10,18 @@ internal sealed class ExternalDiscoveryProvider(
     IRadarrClient radarr,
     ISonarrClient sonarr,
     IProwlarrClient prowlarr,
-    ISettingsService settings) : IDiscoveryProvider
+    ISettingsService settings,
+    IMemoryCache cache) : IDiscoveryProvider
 {
     public async Task<DiscoveryPageDto> GetPageAsync(int page, CancellationToken cancellationToken)
+        => (await cache.GetOrCreateAsync($"discovery:page:{page}", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24);
+            entry.Size = 1;
+            return await LoadPageAsync(page, cancellationToken);
+        }))!;
+
+    private async Task<DiscoveryPageDto> LoadPageAsync(int page, CancellationToken cancellationToken)
     {
         var trendingMovies = tmdb.GetTrendingAsync("movie", "week", cancellationToken);
         var trendingSeries = tmdb.GetTrendingAsync("tv", "week", cancellationToken);
@@ -72,6 +82,18 @@ internal sealed class ExternalDiscoveryProvider(
             QualityProfileId = seriesQualities[0].Id, Monitored = true, SearchForMissingEpisodes = true
         }, cancellationToken);
         return new(true, "queued", "Series queued in Sonarr", series.Id);
+    }
+
+    public async Task<string?> GetLogoUrlAsync(int tmdbId, string type, CancellationToken cancellationToken)
+    {
+        var cacheKey = $"discovery:logo:{type}:{tmdbId}";
+        return await cache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24);
+            entry.Size = 1;
+            var path = await tmdb.GetLogoPathAsync(tmdbId, type.Equals("series", StringComparison.OrdinalIgnoreCase), cancellationToken: cancellationToken);
+            return string.IsNullOrWhiteSpace(path) ? null : $"https://image.tmdb.org/t/p/w500{path}";
+        });
     }
 
     public async Task<ServiceConnectionDto> TestConnectionAsync(string service, CancellationToken cancellationToken)

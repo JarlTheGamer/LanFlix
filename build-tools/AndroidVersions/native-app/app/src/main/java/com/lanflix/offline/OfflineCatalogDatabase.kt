@@ -24,6 +24,12 @@ interface OfflineCatalogDao {
     @Query("SELECT * FROM offline_catalog ORDER BY updatedAtUtc DESC")
     suspend fun getAll(): List<OfflineCatalogEntity>
 
+    @Query("SELECT * FROM offline_catalog WHERE mediaKey = :key LIMIT 1")
+    suspend fun get(key: String): OfflineCatalogEntity?
+
+    @Query("DELETE FROM offline_catalog WHERE localFilePath IS NULL")
+    suspend fun clearMetadataOnly()
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(items: List<OfflineCatalogEntity>)
 }

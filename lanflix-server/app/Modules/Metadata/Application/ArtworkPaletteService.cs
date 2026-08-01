@@ -11,7 +11,7 @@ namespace Lanflix.Modules.Metadata;
 
 public sealed class ArtworkPaletteService(IArtworkPaletteDbContext db, IHttpClientFactory httpClientFactory)
 {
-    public const int CurrentAlgorithmVersion = 2;
+    public const int CurrentAlgorithmVersion = 3;
 
     public async Task<ArtworkPaletteDto> GetOrCreateAsync(int contentId, string? mediaPath, CancellationToken cancellationToken)
         => await GetOrCreateAsync(contentId, mediaPath, null, cancellationToken);
@@ -87,10 +87,13 @@ public sealed class ArtworkPaletteService(IArtworkPaletteDbContext db, IHttpClie
         var accent = candidates.OrderByDescending(x => x.Saturation + Distance(x, dominant) + Distance(x, glow) * 0.5).First();
         if (Distance(accent, glow) < 0.18) accent = glow.RotateHue(155).WithSaturation(Math.Max(0.55, glow.Saturation));
 
-        var baseColor = dominant.WithLightness(Math.Clamp(dominant.Lightness * 0.52, 0.09, 0.24)).WithSaturation(Math.Max(0.28, dominant.Saturation));
-        var depth = dominant.WithLightness(Math.Clamp(dominant.Lightness * 0.18, 0.025, 0.075)).WithSaturation(Math.Max(0.22, dominant.Saturation * 0.75));
-        var glowColor = glow.WithLightness(Math.Clamp(glow.Lightness, 0.28, 0.52)).WithSaturation(Math.Max(0.46, glow.Saturation));
-        var accentColor = accent.WithLightness(Math.Clamp(accent.Lightness, 0.48, 0.68)).WithSaturation(Math.Max(0.58, accent.Saturation));
+        // Preserve the atmosphere of the artwork. Earlier versions compressed the
+        // base into such a narrow dark range that unrelated titles all became the
+        // same near-black wash.
+        var baseColor = dominant.WithLightness(Math.Clamp(dominant.Lightness * 0.72, 0.15, 0.38)).WithSaturation(Math.Max(0.38, dominant.Saturation));
+        var depth = dominant.WithLightness(Math.Clamp(dominant.Lightness * 0.28, 0.045, 0.12)).WithSaturation(Math.Max(0.30, dominant.Saturation * 0.82));
+        var glowColor = glow.WithLightness(Math.Clamp(glow.Lightness * 1.08, 0.38, 0.64)).WithSaturation(Math.Max(0.58, glow.Saturation));
+        var accentColor = accent.WithLightness(Math.Clamp(accent.Lightness, 0.56, 0.76)).WithSaturation(Math.Max(0.66, accent.Saturation));
 
         return new ArtworkPaletteDto(
             baseColor.Hex,

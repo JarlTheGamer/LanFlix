@@ -25,7 +25,7 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
     private val client = OkHttpClient.Builder().connectTimeout(6, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
     private val gson = Gson()
     private val offlineStore = OfflineMediaStore(appContext)
-    val sessions = LanflixSessionStore(appContext)
+    val sessions = LanflixSessionStore(appContext, baseUrl)
     private val jsonType = "application/json; charset=utf-8".toMediaType()
     private val refreshLock = Any()
 
@@ -62,8 +62,6 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
     suspend fun getMovies(): List<ContentItem> = getLibraryPage("movie")
     suspend fun getSeries(): List<ContentItem> = getLibraryPage("series")
     suspend fun getOfflineCatalog(): List<ContentItem> = withContext(Dispatchers.IO) { offlineStore.readCatalog() }
-    suspend fun getCollections(): List<ContentItem> = emptyList()
-
     suspend fun getContentDetail(id: Int): V2MediaDetail? = get("/api/v2/content/$id", true, V2MediaDetail::class.java)
 
     suspend fun getSeriesSeasons(seriesId: Int): List<SeasonSummary> = getContentDetail(seriesId)?.seasons.orEmpty().map { season ->
@@ -80,6 +78,11 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
         return get("/api/v2/playback/$kind/${item.id}/download-manifest", true, PlaybackDownloadManifest::class.java)
     }
 
+    suspend fun getPlaybackInfo(item: ContentItem): PlaybackInfo? {
+        val kind = if (item.type.equals("episode", true)) "episode" else "movie"
+        return get("/api/v2/playback/$kind/${item.id}", true, PlaybackInfo::class.java)
+    }
+
     suspend fun getSocialFeed(): List<SocialActivity> = getList("/api/v2/social/feed?limit=50")
     suspend fun createPost(body: String, visibility: String = "Friends"): Boolean = mutate("POST", "/api/v2/social/posts", mapOf("body" to body, "visibility" to visibility))
     suspend fun getNotifications(): List<SocialNotification> = getList("/api/v2/social/notifications?limit=100")
@@ -90,8 +93,28 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
 
     suspend fun getMusicHome(): MusicHome? = get("/api/v2/music/home", true, MusicHome::class.java)
     suspend fun getLiveTvChannels(): List<LiveTvChannel> = getList("/api/v2/live-tv/channels")
+    suspend fun getLiveTvSources(): List<LiveTvSource> = getList("/api/v2/live-tv/sources/")
+    suspend fun createLiveTvSource(name: String, kind: String, sourceUri: String, guideUri: String?): Boolean =
+        mutate("POST", "/api/v2/live-tv/sources/", mapOf("name" to name, "kind" to kind, "sourceUri" to sourceUri, "guideUri" to guideUri, "maxTuners" to 1, "enabled" to true))
+    suspend fun deleteLiveTvSource(id: Long): Boolean = mutate("DELETE", "/api/v2/live-tv/sources/$id")
+    suspend fun refreshLiveTvSource(id: Long): Boolean = mutate("POST", "/api/v2/live-tv/sources/$id/refresh")
+    suspend fun getDiscoveryPage(): DiscoveryPage? = get("/api/v2/discovery/?page=1", true, DiscoveryPage::class.java)
+    suspend fun acquire(item: DiscoveryItem): Boolean = mutate("POST", "/api/v2/discovery/${item.tmdbId}/acquire",
+        mapOf("type" to item.type, "title" to item.title, "year" to item.year))
     suspend fun getAdministrationOverview(): AdministrationOverview? = get("/api/v2/admin/overview", true, AdministrationOverview::class.java)
+    suspend fun getAdministrationSettings(): AdministrationSettings? = get("/api/v2/admin/settings", true, AdministrationSettings::class.java)
+    suspend fun updateMusicFolder(path: String): Boolean {
+        val current = getAdministrationSettings() ?: return false
+        return mutate("PUT", "/api/v2/admin/settings", current.copy(libraries = current.libraries.copy(music = path.trim())))
+    }
     suspend fun getAccounts(): List<AccountSummary> = getList("/api/v2/admin/identity/accounts")
+    suspend fun getAdminJobs(): List<AdminJob> = getList("/api/v2/admin/jobs")
+    suspend fun triggerAdminJob(name: String): Boolean = mutate("POST", "/api/v2/admin/jobs", mapOf("name" to name))
+    suspend fun createInvitation(role: String): InvitationResult? = withContext(Dispatchers.IO) {
+        execute(Request.Builder().url(url("/api/v2/admin/identity/invitations")).post(gson.toJson(mapOf("role" to role)).toRequestBody(jsonType)), true)?.use { response ->
+            if (!response.isSuccessful) null else gson.fromJson(response.body?.string(), InvitationResult::class.java)
+        }
+    }
 
     private suspend fun getLibraryPage(kind: String): List<ContentItem> = withContext(Dispatchers.IO) {
         if (!ServerManager.isOnline || !sessions.isSignedIn) return@withContext offlineStore.readCatalog().filter { it.type == kind }
