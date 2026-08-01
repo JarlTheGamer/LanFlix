@@ -5,4 +5,15 @@
     <dimen name="splash_text_size">28sp</dimen>
     <dimen name="splash_loading_text_size">16sp</dimen>
     <dimen name="splash_margin">24dp</dimen>
+
+    <!-- Keep Media3's controller behavior and visuals, but remove its oversized footer. -->
+    <dimen name="exo_styled_bottom_bar_height">44dp</dimen>
+    <dimen name="exo_styled_bottom_bar_margin_top">6dp</dimen>
+    <dimen name="exo_styled_progress_layout_height">32dp</dimen>
+    <dimen name="exo_styled_progress_margin_bottom">36dp</dimen>
+    <dimen name="exo_styled_progress_touch_target_height">32dp</dimen>
+    <dimen name="exo_small_icon_height">40dp</dimen>
+    <dimen name="exo_small_icon_width">40dp</dimen>
+    <dimen name="exo_small_icon_padding_horizontal">9dp</dimen>
+    <dimen name="exo_small_icon_padding_vertical">9dp</dimen>
 </resources>

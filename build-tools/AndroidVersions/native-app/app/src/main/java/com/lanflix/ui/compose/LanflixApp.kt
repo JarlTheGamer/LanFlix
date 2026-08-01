@@ -44,7 +44,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Cast
-import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
@@ -55,7 +54,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -79,10 +77,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -1281,23 +1277,10 @@ private fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
     }
     androidx.compose.runtime.DisposableEffect(player) { onDispose { player.release() } }
     var positionMs by remember { mutableStateOf(0L) }
-    var durationMs by remember { mutableStateOf(0L) }
-    var isPlaying by remember { mutableStateOf(true) }
-    var controlsVisible by remember { mutableStateOf(true) }
-    var scrubPositionMs by remember { mutableStateOf<Long?>(null) }
-    var subtitlesEnabled by remember(playbackPreferences.automaticSubtitles) { mutableStateOf(playbackPreferences.automaticSubtitles) }
     LaunchedEffect(player) {
         while (true) {
             positionMs = player.currentPosition.coerceAtLeast(0L)
-            durationMs = player.duration.coerceAtLeast(0L)
-            isPlaying = player.isPlaying
             delay(300)
-        }
-    }
-    LaunchedEffect(controlsVisible, isPlaying) {
-        if (controlsVisible && isPlaying) {
-            delay(4_000)
-            controlsVisible = false
         }
     }
     val introEndMs = playbackInfo?.introEndSeconds?.times(1000)?.toLong()
@@ -1307,54 +1290,21 @@ private fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
         AndroidView(factory = {
             PlayerView(it).apply {
                 this.player = player
-                useController = false
+                useController = true
+                controllerShowTimeoutMs = 4_000
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                setShowRewindButton(true)
+                setShowFastForwardButton(true)
+                setShowPreviousButton(false)
+                setShowNextButton(false)
+                setShowSubtitleButton(true)
             }
-        }, modifier = Modifier.fillMaxSize().clickable { controlsVisible = !controlsVisible })
-        AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .18f))) {
-                IconButton(onClick = onBack, modifier = Modifier.padding(10.dp).clip(CircleShape).background(Color.Black.copy(alpha = .48f))) { Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
-                Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                    TextButton(onClick = { player.seekBack(); controlsVisible = true }) { Text("−10", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
-                    IconButton(onClick = { if (player.isPlaying) player.pause() else player.play(); controlsVisible = true }, modifier = Modifier.size(38.dp).clip(CircleShape).background(Color.Black.copy(alpha = .62f))) {
-                        Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (isPlaying) "Pause" else "Play", tint = Color.White, modifier = Modifier.size(22.dp))
-                    }
-                    TextButton(onClick = { player.seekForward(); controlsVisible = true }) { Text("+10", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
-                }
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .58f)).padding(horizontal = 10.dp, vertical = 5.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(formatPlaybackTime(scrubPositionMs ?: positionMs), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.weight(1f))
-                        Text(formatPlaybackTime(durationMs), color = Color.White.copy(alpha = .78f), fontSize = 11.sp)
-                        IconButton(
-                            onClick = {
-                                subtitlesEnabled = !subtitlesEnabled
-                                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled).build()
-                                controlsVisible = true
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) { Icon(Icons.Filled.ClosedCaption, if (subtitlesEnabled) "Turn subtitles off" else "Turn subtitles on", tint = if (subtitlesEnabled) LanflixGold else Color.White, modifier = Modifier.size(19.dp)) }
-                    }
-                    Slider(
-                        value = (scrubPositionMs ?: positionMs).coerceAtMost(durationMs.coerceAtLeast(1L)).toFloat(),
-                        onValueChange = { scrubPositionMs = it.toLong() },
-                        onValueChangeFinished = { scrubPositionMs?.let(player::seekTo); scrubPositionMs = null; controlsVisible = true },
-                        valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
-                        colors = androidx.compose.material3.SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = Color.White.copy(alpha = .92f),
-                            inactiveTrackColor = Color.White.copy(alpha = .28f)
-                        ),
-                        modifier = Modifier.fillMaxWidth().height(20.dp)
-                    )
-                }
-            }
-        }
+        }, modifier = Modifier.fillMaxSize())
+        IconButton(onClick = onBack, modifier = Modifier.padding(10.dp).clip(CircleShape).background(Color.Black.copy(alpha = .48f))) { Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
         if (showSkipIntro) {
             Button(
                 onClick = { player.seekTo(introEndMs!!) },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 62.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 58.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
                 shape = RoundedCornerShape(20.dp)
             ) { Text("Skip intro", fontWeight = FontWeight.Bold) }
@@ -1369,12 +1319,4 @@ private fun shiftArtworkHue(color: Color, degrees: Float): Color {
     hsv[1] = hsv[1].coerceAtLeast(.68f)
     hsv[2] = hsv[2].coerceAtLeast(.58f)
     return Color(android.graphics.Color.HSVToColor(hsv))
-}
-
-private fun formatPlaybackTime(milliseconds: Long): String {
-    val seconds = (milliseconds.coerceAtLeast(0L) / 1000L)
-    val hours = seconds / 3600L
-    val minutes = (seconds % 3600L) / 60L
-    val remaining = seconds % 60L
-    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, remaining) else "%d:%02d".format(minutes, remaining)
 }

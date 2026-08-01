@@ -108,6 +108,14 @@ internal sealed class SqliteLibraryCatalog(
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (content is null) return null;
 
+        if (content.Type == ContentType.Series && content.TmdbId > 0)
+        {
+            await EnsureSeriesEpisodesFetchedAsync(content.Id, content.TmdbId, cancellationToken);
+            content = await db.Contents.AsNoTracking()
+                .Include(item => item.Episodes)
+                .SingleOrDefaultAsync(item => item.Id == id, cancellationToken) ?? content;
+        }
+
         var media = await MapAsync(content, cancellationToken);
         var seasons = content.Episodes
             .OrderBy(episode => episode.SeasonNumber)
@@ -116,6 +124,89 @@ internal sealed class SqliteLibraryCatalog(
             .Select(group => new SeasonDto(group.Key, group.Select(MapEpisode).ToArray()))
             .ToArray();
         return new MediaDetailDto(media, seasons);
+    }
+
+    private async Task EnsureSeriesEpisodesFetchedAsync(int contentId, int tmdbId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tvDetails = await tmdb.GetTvSeriesDetailsAsync(tmdbId, cancellationToken);
+            if (tvDetails?.Seasons is null) return;
+
+            var existingEpisodes = await db.Episodes
+                .Where(e => e.ContentId == contentId)
+                .ToListAsync(cancellationToken);
+
+            var existingMap = existingEpisodes
+                .ToDictionary(e => (e.SeasonNumber, e.EpisodeNumber));
+
+            var newEpisodes = new List<Episode>();
+            var modified = false;
+
+            foreach (var seasonSummary in tvDetails.Seasons.Where(s => s.SeasonNumber > 0))
+            {
+                var seasonDetails = await tmdb.GetSeasonDetailsAsync(tmdbId, seasonSummary.SeasonNumber, cancellationToken);
+                if (seasonDetails?.Episodes is null) continue;
+
+                foreach (var tmdbEp in seasonDetails.Episodes)
+                {
+                    if (existingMap.TryGetValue((tmdbEp.SeasonNumber, tmdbEp.EpisodeNumber), out var dbEp))
+                    {
+                        if (string.IsNullOrWhiteSpace(dbEp.StillPath) && !string.IsNullOrWhiteSpace(tmdbEp.StillPath))
+                        {
+                            dbEp.StillPath = tmdbEp.StillPath;
+                            modified = true;
+                        }
+                        if (string.IsNullOrWhiteSpace(dbEp.Overview) && !string.IsNullOrWhiteSpace(tmdbEp.Overview))
+                        {
+                            dbEp.Overview = tmdbEp.Overview;
+                            modified = true;
+                        }
+                        if (string.IsNullOrWhiteSpace(dbEp.Title) && !string.IsNullOrWhiteSpace(tmdbEp.Name))
+                        {
+                            dbEp.Title = tmdbEp.Name;
+                            modified = true;
+                        }
+                        if (dbEp.AirDate is null && tmdbEp.AirDate is not null)
+                        {
+                            dbEp.AirDate = tmdbEp.AirDate;
+                            modified = true;
+                        }
+                    }
+                    else
+                    {
+                        var newEp = new Episode
+                        {
+                            ContentId = contentId,
+                            TmdbId = tmdbEp.Id,
+                            SeasonNumber = tmdbEp.SeasonNumber,
+                            EpisodeNumber = tmdbEp.EpisodeNumber,
+                            Title = tmdbEp.Name,
+                            Overview = tmdbEp.Overview,
+                            AirDate = tmdbEp.AirDate,
+                            StillPath = tmdbEp.StillPath,
+                            AddedAt = DateTime.UtcNow
+                        };
+                        newEpisodes.Add(newEp);
+                    }
+                }
+            }
+
+            if (newEpisodes.Count > 0)
+            {
+                await db.Episodes.AddRangeAsync(newEpisodes, cancellationToken);
+                modified = true;
+            }
+
+            if (modified)
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+        }
+        catch (Exception)
+        {
+            // Silently handle TMDB network issues or test doubles that don't support TMDB
+        }
     }
 
     public async Task<IReadOnlyList<MediaItemDto>> GetByIdsAsync(IReadOnlyCollection<int> ids, CancellationToken cancellationToken)
@@ -263,6 +354,8 @@ internal sealed class SqliteLibraryCatalog(
     {
         if (string.IsNullOrWhiteSpace(path)) return null;
         if (path.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return path;
+        if (path.StartsWith('/'))
+            return $"https://image.tmdb.org/t/p/w500{path}";
         return $"/api/v2/artwork/episode/{id}/still";
     }
 
