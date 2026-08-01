@@ -3,51 +3,38 @@ package com.lanflix.api
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.lanflix.models.ContentItem
+import com.lanflix.models.LibraryResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
-class LanflixApiClient(private val baseUrl: String = "http://192.168.0.218:5037") {
+import com.lanflix.webview.ServerManager
+
+class LanflixApiClient(private val baseUrl: String = ServerManager.activeServerUrl) {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
+        .connectTimeout(6, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
     private val gson = Gson()
 
     suspend fun getHomeContent(): List<ContentItem> = withContext(Dispatchers.IO) {
-        val endpoints = listOf("/api/collections", "/api/content/popular", "/api/movies")
-        for (endpoint in endpoints) {
-            try {
-                val request = Request.Builder()
-                    .url("$baseUrl$endpoint")
-                    .get()
-                    .build()
+        val movies = getMovies()
+        if (movies.isNotEmpty()) return@withContext movies
 
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val body = response.body?.string()
-                        if (!body.isNullOrBlank()) {
-                            val type = object : TypeToken<List<ContentItem>>() {}.type
-                            val items = gson.fromJson<List<ContentItem>>(body, type) ?: emptyList()
-                            if (items.isNotEmpty()) return@withContext items
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                // Try next endpoint
-            }
-        }
+        val collections = getCollections()
+        if (collections.isNotEmpty()) return@withContext collections
+
         emptyList()
     }
 
     suspend fun getMovies(): List<ContentItem> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
-                .url("$baseUrl/api/movies")
+                .url("$baseUrl/api/library/movies?limit=50")
                 .get()
                 .build()
 
@@ -55,8 +42,8 @@ class LanflixApiClient(private val baseUrl: String = "http://192.168.0.218:5037"
                 if (!response.isSuccessful) return@withContext emptyList()
                 val body = response.body?.string() ?: return@withContext emptyList()
                 
-                val type = object : TypeToken<List<ContentItem>>() {}.type
-                return@withContext gson.fromJson<List<ContentItem>>(body, type) ?: emptyList()
+                val libraryResponse = gson.fromJson(body, LibraryResponse::class.java)
+                return@withContext libraryResponse?.items ?: emptyList()
             }
         } catch (e: Exception) {
             emptyList()

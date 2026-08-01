@@ -2,6 +2,7 @@
 <androidx.core.widget.NestedScrollView 
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/home_scroll_view"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#070709">
@@ -11,7 +12,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Hero Spotlight Banner (Full Height Backdrop Layer) -->
+        <!-- Hero Spotlight Banner -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="460dp">
@@ -105,8 +106,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:layout_marginBottom="70dp"
             android:clipToPadding="false"
-            android:paddingHorizontal="12dp"
-            android:paddingBottom="100dp" />
+            android:paddingHorizontal="12dp" />
+
     </LinearLayout>
+
 </androidx.core.widget.NestedScrollView>

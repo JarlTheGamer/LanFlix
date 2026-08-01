@@ -52,6 +52,12 @@ class HomeFragment : Fragment() {
         recyclerRecent.layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
         recyclerRecent.adapter = recentAdapter
 
+        val scrollView: androidx.core.widget.NestedScrollView = view.findViewById(R.id.home_scroll_view)
+        scrollView.setOnScrollChangeListener(androidx.core.widget.NestedScrollView.OnScrollChangeListener { _, _, scrollY, _, _ ->
+            val alpha = (scrollY.toFloat() / 160f).coerceIn(0f, 1f)
+            (activity as? com.lanflix.webview.MainActivity)?.setTopHeaderGlassAlpha(alpha)
+        })
+
         btnHeroResume.setOnClickListener {
             heroItem?.let { showDetail(it) }
         }

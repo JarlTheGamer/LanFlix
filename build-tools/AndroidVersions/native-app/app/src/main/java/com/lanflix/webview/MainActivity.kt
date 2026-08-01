@@ -23,6 +23,11 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        val serverUrl = intent.getStringExtra("SERVER_URL") ?: ServerManager.getSavedServer(this)
+        if (!serverUrl.isNullOrBlank()) {
+            ServerManager.activeServerUrl = serverUrl
+        }
+
         setupImmersiveDisplay()
         setupNativeNavigation()
 
@@ -55,6 +60,16 @@ class MainActivity : AppCompatActivity() {
         val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
         controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+    }
+
+    fun setTopHeaderGlassAlpha(alpha: Float) {
+        val clamped = alpha.coerceIn(0f, 1f)
+        val alphaInt = (clamped * 220).toInt()
+        val color = androidx.core.graphics.ColorUtils.setAlphaComponent(
+            android.graphics.Color.parseColor("#0A0A0E"),
+            alphaInt
+        )
+        binding.topHeaderBar.setBackgroundColor(color)
     }
 
     private fun setupNativeNavigation() {

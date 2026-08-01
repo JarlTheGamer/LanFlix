@@ -1,6 +1,7 @@
 package com.lanflix.models
 
 import com.google.gson.annotations.SerializedName
+import com.lanflix.webview.ServerManager
 
 data class ContentItem(
     @SerializedName("id") val id: Int = 0,
@@ -26,6 +27,7 @@ data class ContentItem(
         get() {
             val raw = posterUrl ?: posterPath ?: return null
             if (raw.startsWith("http")) return raw
+            if (raw.startsWith("/api/")) return "${ServerManager.activeServerUrl}$raw"
             val clean = if (raw.startsWith("/")) raw else "/$raw"
             return if (clean.startsWith("/t/p/")) "https://image.tmdb.org$clean" else "https://image.tmdb.org/t/p/w500$clean"
         }
@@ -34,6 +36,7 @@ data class ContentItem(
         get() {
             val raw = backdropUrl ?: backdropPath ?: return null
             if (raw.startsWith("http")) return raw
+            if (raw.startsWith("/api/")) return "${ServerManager.activeServerUrl}$raw"
             val clean = if (raw.startsWith("/")) raw else "/$raw"
             return if (clean.startsWith("/t/p/")) "https://image.tmdb.org$clean" else "https://image.tmdb.org/t/p/w1280$clean"
         }

@@ -19,6 +19,9 @@ object ServerManager {
     const val DEFAULT_MDNS_HOST = "http://lanflix.local:5037"
 
     @Volatile
+    var activeServerUrl: String = DEFAULT_MDNS_HOST
+
+    @Volatile
     private var cachedResolvedIp: String? = null
 
     private fun getPrefs(context: Context): SharedPreferences {
