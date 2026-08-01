@@ -4,6 +4,8 @@ using Lanflix.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Lanflix.Modules.Metadata;
+using Lanflix.Domain.Entities;
 
 namespace Lanflix.WebApi.Controllers;
 
@@ -18,12 +20,14 @@ public sealed class V2MediaController : ControllerBase
     private readonly IApplicationDbContext _db;
     private readonly ITmdbClient _tmdb;
     private readonly IMemoryCache _cache;
+    private readonly ArtworkPaletteService _palettes;
 
-    public V2MediaController(IApplicationDbContext db, ITmdbClient tmdb, IMemoryCache cache)
+    public V2MediaController(IApplicationDbContext db, ITmdbClient tmdb, IMemoryCache cache, ArtworkPaletteService palettes)
     {
         _db = db;
         _tmdb = tmdb;
         _cache = cache;
+        _palettes = palettes;
     }
 
     [HttpGet("status")]
@@ -49,45 +53,25 @@ public sealed class V2MediaController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit, 1, 50);
-        var recent = await _db.Contents.AsNoTracking()
+        var recentEntities = await _db.Contents.AsNoTracking()
             .OrderByDescending(content => content.AddedAt)
             .Take(limit)
-            .Select(content => new V2MediaItem(
-                content.Id,
-                content.TmdbId,
-                content.Type == ContentType.Movie ? "movie" : "series",
-                content.Title,
-                content.Overview,
-                content.ReleaseDate.HasValue ? content.ReleaseDate.Value.Year : null,
-                content.Rating,
-                content.Genres ?? Array.Empty<string>(),
-                ArtworkUrl(content.Id, content.PosterPath, "poster"),
-                ArtworkUrl(content.Id, content.BackdropPath, "backdrop"),
-                !string.IsNullOrWhiteSpace(content.FilePath),
-                null))
             .ToListAsync(cancellationToken);
+        var recent = new List<V2MediaItem>(recentEntities.Count);
+        foreach (var content in recentEntities)
+            recent.Add(await ToV2Async(content, null, cancellationToken));
 
         var continueWatching = new List<V2MediaItem>();
         if (profileId.HasValue)
         {
-            continueWatching = await _db.WatchHistories.AsNoTracking()
+            var histories = await _db.WatchHistories.AsNoTracking()
+                .Include(history => history.Content)
                 .Where(history => history.ProfileId == profileId.Value && history.Content != null)
                 .OrderByDescending(history => history.LastWatchedAt)
                 .Take(limit)
-                .Select(history => new V2MediaItem(
-                    history.ContentId,
-                    history.Content!.TmdbId,
-                    history.Content.Type == ContentType.Movie ? "movie" : "series",
-                    history.Content.Title,
-                    history.Content.Overview,
-                    history.Content.ReleaseDate.HasValue ? history.Content.ReleaseDate.Value.Year : null,
-                history.Content.Rating,
-                    history.Content.Genres ?? Array.Empty<string>(),
-                    ArtworkUrl(history.ContentId, history.Content.PosterPath, "poster"),
-                    ArtworkUrl(history.ContentId, history.Content.BackdropPath, "backdrop"),
-                    !string.IsNullOrWhiteSpace(history.Content.FilePath),
-                    history.WatchedPercentage))
                 .ToListAsync(cancellationToken);
+            foreach (var history in histories)
+                continueWatching.Add(await ToV2Async(history.Content!, history.WatchedPercentage, cancellationToken));
         }
 
         return Ok(new V2HomeResponse(continueWatching, recent, recent.FirstOrDefault()));
@@ -109,22 +93,12 @@ public sealed class V2MediaController : ControllerBase
             query = query.Where(content => content.Type == ContentType.Series);
 
         var total = await query.CountAsync(cancellationToken);
-        var items = await query.OrderByDescending(content => content.AddedAt)
+        var entities = await query.OrderByDescending(content => content.AddedAt)
             .Skip(offset).Take(limit)
-            .Select(content => new V2MediaItem(
-                content.Id,
-                content.TmdbId,
-                content.Type == ContentType.Movie ? "movie" : "series",
-                content.Title,
-                content.Overview,
-                content.ReleaseDate.HasValue ? content.ReleaseDate.Value.Year : null,
-                content.Rating,
-                content.Genres ?? Array.Empty<string>(),
-                ArtworkUrl(content.Id, content.PosterPath, "poster"),
-                ArtworkUrl(content.Id, content.BackdropPath, "backdrop"),
-                !string.IsNullOrWhiteSpace(content.FilePath),
-                null))
             .ToListAsync(cancellationToken);
+        var items = new List<V2MediaItem>(entities.Count);
+        foreach (var content in entities)
+            items.Add(await ToV2Async(content, null, cancellationToken));
 
         return Ok(new V2Page<V2MediaItem>(items, total, offset, limit));
     }
@@ -190,6 +164,31 @@ public sealed class V2MediaController : ControllerBase
         return $"/api/image/{id}/{kind}";
     }
 
+    private async Task<V2MediaItem> ToV2Async(Content content, double? progress, CancellationToken cancellationToken)
+        => new(
+            content.Id,
+            content.TmdbId,
+            content.Type == ContentType.Movie ? "movie" : "series",
+            content.Title,
+            content.Overview,
+            content.ReleaseDate?.Year,
+            content.Rating,
+            content.Genres ?? Array.Empty<string>(),
+            ArtworkUrl(content.Id, content.PosterPath, "poster"),
+            ArtworkUrl(content.Id, content.BackdropPath, "backdrop"),
+            content.TmdbId > 0 ? $"/api/v2/artwork/{content.Id}/logo" : null,
+            !string.IsNullOrWhiteSpace(content.FilePath),
+            progress,
+            await _palettes.GetOrCreateAsync(content.Id, content.FilePath, PaletteArtworkReference(content), cancellationToken));
+
+    private static string? PaletteArtworkReference(Content content)
+    {
+        var path = content.BackdropPath ?? content.PosterPath;
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        if (path.StartsWith("http", StringComparison.OrdinalIgnoreCase) || System.IO.File.Exists(path)) return path;
+        return path.StartsWith('/') ? $"https://image.tmdb.org/t/p/w780{path}" : null;
+    }
+
     private static string MimeType(string extension) => extension.ToLowerInvariant() switch
     {
         ".mkv" => "video/x-matroska",
@@ -201,8 +200,8 @@ public sealed class V2MediaController : ControllerBase
 
 public sealed record V2MediaItem(
     int Id, int TmdbId, string Type, string Title, string? Overview, int? Year,
-    double? Rating, string[] Genres, string? PosterUrl, string? BackdropUrl,
-    bool ServerAvailable, double? ProgressPercentage);
+    double? Rating, string[] Genres, string? PosterUrl, string? BackdropUrl, string? LogoUrl,
+    bool ServerAvailable, double? ProgressPercentage, ArtworkPaletteDto Palette);
 
 public sealed record V2HomeResponse(
     IReadOnlyList<V2MediaItem> ContinueWatching,

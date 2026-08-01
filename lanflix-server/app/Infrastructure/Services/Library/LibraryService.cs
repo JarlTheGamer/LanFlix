@@ -219,11 +219,6 @@ public class LibraryService : ILibraryService
             // Remove identified content using ExecuteDeleteAsync to bypass change tracker issues with owned JSON collections
             if (contentIdsToRemove.Any())
             {
-                // Remove related watch histories
-                await _context.WatchHistories
-                    .Where(w => contentIdsToRemove.Contains(w.ContentId))
-                    .ExecuteDeleteAsync(cancellationToken);
-                
                 // Remove related episodes
                 await _context.Episodes
                      .Where(e => contentIdsToRemove.Contains(e.ContentId))
@@ -570,7 +565,8 @@ public class LibraryService : ILibraryService
             }
 
             // Fetch metadata from TMDB
-            var movieDetails = await _tmdbClient.GetMovieDetailsAsync(tmdbId, cancellationToken);
+            var movieDetails = await _tmdbClient.GetMovieDetailsAsync(tmdbId, cancellationToken)
+                ?? throw new InvalidOperationException($"TMDB returned no metadata for movie {tmdbId}.");
 
             // Analyze media file to get technical information
             _logger.LogInformation("Analyzing media file: {FilePath}", filePath);
@@ -647,7 +643,8 @@ public class LibraryService : ILibraryService
             _logger.LogInformation("No existing series found with TMDB ID {TmdbId}. Adding new series to library: Folder: {Folder}", tmdbId, seriesFolder);
 
             // Fetch metadata from TMDB
-            var seriesDetails = await _tmdbClient.GetTvSeriesDetailsAsync(tmdbId, cancellationToken);
+            var seriesDetails = await _tmdbClient.GetTvSeriesDetailsAsync(tmdbId, cancellationToken)
+                ?? throw new InvalidOperationException($"TMDB returned no metadata for series {tmdbId}.");
             _logger.LogInformation("TMDB TV series details retrieved: {TmdbId}, Name: {Name}", tmdbId, seriesDetails.Name);
 
             // Create content entry (like old backend)

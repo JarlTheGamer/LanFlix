@@ -41,7 +41,7 @@ public class ServerUpdateService : IServerUpdateService
         {
             var exeLocation = Environment.ProcessPath
                 ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName
-                ?? Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "Lanflix.WebApi.exe" : "Lanflix.WebApi");
+                ?? Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "Lanflix.Host.exe" : "Lanflix.Host");
             var currentDir = Path.GetDirectoryName(exeLocation)
                 ?? AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
@@ -205,7 +205,7 @@ public class ServerUpdateService : IServerUpdateService
             // (AppContext.BaseDirectory points to .NET's single-file temp extraction folder)
             var exeLocation = Environment.ProcessPath
                 ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName
-                ?? Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "Lanflix.WebApi.exe" : "Lanflix.WebApi");
+                ?? Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "Lanflix.Host.exe" : "Lanflix.Host");
             var currentDir = Path.GetDirectoryName(exeLocation)
                 ?? AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             
@@ -216,7 +216,7 @@ public class ServerUpdateService : IServerUpdateService
 
             UpdateProgress("Complete", 100, "Update complete! Restarting server...");
 
-            var exePath = Path.Combine(currentDir, OperatingSystem.IsWindows() ? "Lanflix.WebApi.exe" : "Lanflix.WebApi");
+            var exePath = Path.Combine(currentDir, OperatingSystem.IsWindows() ? "Lanflix.Host.exe" : "Lanflix.Host");
 
             if (File.Exists(exePath))
             {

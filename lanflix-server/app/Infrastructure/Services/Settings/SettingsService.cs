@@ -89,12 +89,6 @@ public class SettingsService : ISettingsService
             },
             Cache = new CacheSettings
             {
-                Redis = new RedisCacheSettings
-                {
-                    Enabled = GetBoolSetting("Lanflix:Cache:Redis:Enabled", false),
-                    ConnectionString = GetSetting("Lanflix:Cache:Redis:ConnectionString"),
-                    InstanceName = GetSetting("Lanflix:Cache:Redis:InstanceName", "lanflix:")
-                },
                 Memory = new MemoryCacheSettings
                 {
                     SizeLimit = GetIntSetting("Lanflix:Cache:Memory:SizeLimit", 512)
@@ -175,9 +169,6 @@ public class SettingsService : ISettingsService
             await UpsertSetting("Lanflix:Streaming:EnableDirectStream", settings.Streaming.EnableDirectStream.ToString());
             await UpsertSetting("Lanflix:Streaming:ChunkSize", settings.Streaming.ChunkSize.ToString());
 
-            await UpsertSetting("Lanflix:Cache:Redis:Enabled", settings.Cache.Redis.Enabled.ToString());
-            await UpsertSetting("Lanflix:Cache:Redis:ConnectionString", settings.Cache.Redis.ConnectionString);
-            await UpsertSetting("Lanflix:Cache:Redis:InstanceName", settings.Cache.Redis.InstanceName);
             await UpsertSetting("Lanflix:Cache:Memory:SizeLimit", settings.Cache.Memory.SizeLimit.ToString());
 
             // Only update API keys if they're not placeholders or empty

@@ -1,8 +1,9 @@
 using Lanflix.WebApi.Extensions;
 using Lanflix.WebApi.Helpers;
+using Lanflix.Modules.Identity;
 using Serilog;
 
-// Extract embedded config files on first run (Minecraft-style)
+// Extract embedded config files on first run. Frontend extraction is removed after React parity.
 EmbeddedResourceExtractor.ExtractConfigFiles();
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,7 @@ var baseDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseD
 var configDir = Path.Combine(baseDir, "config");
 Directory.CreateDirectory(configDir);
 builder.Configuration.AddJsonFile(Path.Combine(configDir, "lanflix.json"), optional: true, reloadOnChange: true);
+builder.Configuration.AddJsonFile(PersistentSecretConfiguration.EnsureSecretFile(configDir), optional: false, reloadOnChange: false);
 
 // Configure Kestrel for HTTP/2 and HTTP/3 support
 builder.WebHost.ConfigureKestrel(serverOptions =>
@@ -72,6 +74,7 @@ app.UseLanflixPipeline();
 app.UseLanflixStaticFiles(builder.Configuration);
 app.UseLanflixAuth();
 app.MapLanflixEndpoints();
+app.MapIdentityModule();
 
 try
 {

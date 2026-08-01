@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Lanflix.Infrastructure</RootNamespace>
@@ -9,34 +9,25 @@
 
   <ItemGroup>
     <!-- Entity Framework Core -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.0" />
     
-    <!-- Dapper for performance-critical queries -->
-    <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
-    
-    <!-- FFmpeg Integration -->
-    <PackageReference Include="Xabe.FFmpeg" Version="6.0.2" />
-    
-    <!-- Redis Caching -->
-    <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
-    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.0" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="TagLibSharp" Version="2.3.0" />
     
     <!-- SignalR -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.0" />
-    
-    <!-- Background Jobs -->
-    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.17" />
-    <PackageReference Include="Hangfire.MemoryStorage" Version="1.8.1.1" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.0" />
     
     <!-- HTTP Client -->
-    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
     
     <!-- Logging -->
     <PackageReference Include="Serilog" Version="4.2.0" />
@@ -45,6 +36,19 @@
   <ItemGroup>
     <ProjectReference Include="..\Domain\Lanflix.Domain.csproj" />
     <ProjectReference Include="..\Application\Lanflix.Application.csproj" />
+    <ProjectReference Include="..\Modules\Identity\Lanflix.Modules.Identity.csproj" />
+    <ProjectReference Include="..\Modules\Library\Lanflix.Modules.Library.csproj" />
+    <ProjectReference Include="..\Modules\Downloads\Lanflix.Modules.Downloads.csproj" />
+    <ProjectReference Include="..\Modules\Devices\Lanflix.Modules.Devices.csproj" />
+    <ProjectReference Include="..\Modules\Administration\Lanflix.Modules.Administration.csproj" />
+    <ProjectReference Include="..\Modules\Metadata\Lanflix.Modules.Metadata.csproj" />
+    <ProjectReference Include="..\Modules\Playback\Lanflix.Modules.Playback.csproj" />
+    <ProjectReference Include="..\Modules\Discovery\Lanflix.Modules.Discovery.csproj" />
+    <ProjectReference Include="..\Modules\Subtitles\Lanflix.Modules.Subtitles.csproj" />
+    <ProjectReference Include="..\Modules\Realtime\Lanflix.Modules.Realtime.csproj" />
+    <ProjectReference Include="..\Modules\Music\Lanflix.Modules.Music.csproj" />
+    <ProjectReference Include="..\Modules\LiveTV\Lanflix.Modules.LiveTV.csproj" />
+    <ProjectReference Include="..\Modules\Social\Lanflix.Modules.Social.csproj" />
   </ItemGroup>
 
 </Project>

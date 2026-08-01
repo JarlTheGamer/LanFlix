@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -71,6 +72,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
@@ -83,6 +85,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -103,6 +106,8 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.palette.graphics.Palette
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
@@ -113,6 +118,8 @@ import com.lanflix.models.EpisodeItem
 import com.lanflix.models.SeasonSummary
 import com.lanflix.webview.ServerBrowserActivity
 import com.lanflix.webview.ServerManager
+import com.lanflix.settings.DevicePreferences
+import com.lanflix.settings.DevicePreferencesRepository
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -129,19 +136,37 @@ private enum class Destination(val label: String, val selected: ImageVector, val
 @Composable
 fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val appContext = LocalContext.current
     var destination by remember { mutableStateOf(Destination.Home) }
     var detail by remember { mutableStateOf<ContentItem?>(null) }
     var profileVisible by remember { mutableStateOf(false) }
     var profileMenuVisible by remember { mutableStateOf(false) }
     var settingsVisible by remember { mutableStateOf(false) }
     var searchVisible by remember { mutableStateOf(false) }
+    var accountVisible by remember { mutableStateOf(false) }
+    var activityVisible by remember { mutableStateOf(false) }
+    var notificationsVisible by remember { mutableStateOf(false) }
     var playerItem by remember { mutableStateOf<ContentItem?>(null) }
 
-    BackHandler(enabled = playerItem != null || detail != null || profileVisible || profileMenuVisible || settingsVisible || searchVisible) {
+    if (state.authenticationRequired && state.online) {
+        LanflixTheme {
+            AuthenticationScreen(state, onAuthenticate = { username, displayName, password, invitation ->
+                viewModel.authenticate(username, displayName, password, invitation) { }
+            }, onServer = {
+                appContext.startActivity(Intent(appContext, ServerBrowserActivity::class.java))
+            })
+        }
+        return
+    }
+
+    BackHandler(enabled = playerItem != null || detail != null || profileVisible || profileMenuVisible || settingsVisible || searchVisible || accountVisible || activityVisible || notificationsVisible) {
         when {
             playerItem != null -> playerItem = null
             detail != null -> detail = null
             searchVisible -> searchVisible = false
+            accountVisible -> accountVisible = false
+            activityVisible -> activityVisible = false
+            notificationsVisible -> notificationsVisible = false
             settingsVisible -> settingsVisible = false
             profileVisible -> profileVisible = false
             profileMenuVisible -> profileMenuVisible = false
@@ -162,22 +187,32 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                     onDownload = { viewModel.download(detail!!) { saved -> if (saved != null) detail = saved } }
                 )
                 searchVisible -> SearchScreen(state.library, onBack = { searchVisible = false }, onSelect = { searchVisible = false; detail = it })
+                accountVisible && state.account != null -> AccountSecurityScreen(state.account!!, onBack = { accountVisible = false }, onSignedOut = { accountVisible = false; viewModel.signOut() })
+                activityVisible -> ActivityScreen(state.socialFeed, onBack = { activityVisible = false })
+                notificationsVisible -> NotificationsScreen(state.notifications, onBack = { notificationsVisible = false })
                 settingsVisible -> SettingsScreen(
-                    online = state.online,
+                    state = state,
                     onBack = { settingsVisible = false },
-                    onRetry = viewModel::refresh
+                    onRetry = viewModel::refresh,
+                    onAccount = { settingsVisible = false; accountVisible = true },
+                    onActivity = { settingsVisible = false; activityVisible = true },
+                    onNotifications = { settingsVisible = false; notificationsVisible = true }
                 )
                 profileVisible -> ProfileScreen(
                     library = state.library,
+                    account = state.account,
+                    activity = state.socialFeed,
                     onBack = { profileVisible = false },
-                    onSelect = { detail = it }
+                    onSelect = { detail = it },
+                    onAccount = { profileVisible = false; accountVisible = true },
+                    onActivity = { profileVisible = false; activityVisible = true }
                 )
                 else -> Box(Modifier.fillMaxSize()) {
                     AnimatedContent(targetState = destination, label = "main-destination") { target ->
                         when (target) {
                             Destination.Home -> HomeScreen(state, onSelect = { detail = it }, onRetry = viewModel::refresh)
-                            Destination.Libraries -> LibraryScreen(state.library, onSelect = { detail = it })
-                            Destination.Live -> LiveTvScreen(state.online)
+                            Destination.Libraries -> LibraryScreen(state.library, state.music, onSelect = { detail = it })
+                            Destination.Live -> LiveTvScreen(state.online, state.liveTvChannels)
                             Destination.Demand -> DownloadsScreen(state.library, onSelect = { detail = it })
                             Destination.Discover -> DiscoverScreen(state, onSelect = { detail = it })
                         }
@@ -186,6 +221,8 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                         title = if (destination == Destination.Home) "lanflix" else destination.label,
                         online = state.online,
                         onSearch = { searchVisible = true },
+                        unreadNotifications = state.notifications.count { !it.isRead },
+                        onNotifications = { notificationsVisible = true },
                         onProfile = { profileMenuVisible = !profileMenuVisible }
                     )
                     AnimatedVisibility(
@@ -211,7 +248,7 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
 }
 
 @Composable
-private fun TopChrome(title: String, online: Boolean, onSearch: () -> Unit, onProfile: () -> Unit) {
+private fun TopChrome(title: String, online: Boolean, onSearch: () -> Unit, unreadNotifications: Int, onNotifications: () -> Unit, onProfile: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -233,6 +270,10 @@ private fun TopChrome(title: String, online: Boolean, onSearch: () -> Unit, onPr
         Row(modifier = Modifier.padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             CompactHeaderAction(Icons.Filled.Cast, "Cast")
             CompactHeaderAction(Icons.Outlined.BookmarkBorder, "Watchlist")
+            Box(Modifier.size(38.dp).clickable(onClick = onNotifications), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Notifications, "Notifications", tint = Color.White, modifier = Modifier.size(18.dp))
+                if (unreadNotifications > 0) Box(Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 4.dp).size(8.dp).clip(CircleShape).background(LanflixGold))
+            }
             Box(
                 modifier = Modifier.size(38.dp).clickable(onClick = onProfile),
                 contentAlignment = Alignment.Center
@@ -316,23 +357,41 @@ private fun BottomChrome(selected: Destination, onSelect: (Destination) -> Unit)
 @Composable
 private fun HomeScreen(state: LanflixUiState, onSelect: (ContentItem) -> Unit, onRetry: () -> Unit) {
     val hero = state.library.firstOrNull()
-    var artworkColor by remember(hero?.id) { mutableStateOf(Color(0xFF15334D)) }
+    var artworkPalette by remember(hero?.id, hero?.palette) { mutableStateOf(hero?.palette?.toComposePalette() ?: DefaultArtworkPalette) }
     Box(
         Modifier.fillMaxSize().background(
             Brush.verticalGradient(
-                0f to artworkColor,
-                .52f to artworkColor,
-                .84f to darkenArtworkColor(artworkColor, .22f),
+                0f to artworkPalette.base,
+                .42f to artworkPalette.base,
+                .78f to artworkPalette.depth,
                 1f to LanflixBackground,
-                endY = 2700f
+                endY = 3300f
             )
         )
     ) {
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.radialGradient(
+                colors = listOf(artworkPalette.glow.copy(alpha = .48f), Color.Transparent),
+                center = Offset(900f, 780f),
+                radius = 1650f
+            )
+        )
+    )
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.radialGradient(
+                colors = listOf(artworkPalette.accent.copy(alpha = .24f), Color.Transparent),
+                center = Offset(90f, 1650f),
+                radius = 1280f
+            )
+        )
+    )
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 92.dp)
     ) {
-        item { Hero(item = hero, loading = state.loading, onSelect = onSelect, onRetry = onRetry, artworkColor = artworkColor, onArtworkColor = { artworkColor = it }) }
+        item { Hero(item = hero, loading = state.loading, onSelect = onSelect, onRetry = onRetry, palette = artworkPalette, onArtworkPalette = { artworkPalette = it }) }
         if (!state.online) item { OfflineNotice() }
         if (state.library.isNotEmpty()) {
             item { MediaShelf("Continue Watching", state.library.take(8), onSelect) }
@@ -345,7 +404,7 @@ private fun HomeScreen(state: LanflixUiState, onSelect: (ContentItem) -> Unit, o
 }
 
 @Composable
-private fun Hero(item: ContentItem?, loading: Boolean, onSelect: (ContentItem) -> Unit, onRetry: () -> Unit, artworkColor: Color, onArtworkColor: (Color) -> Unit) {
+private fun Hero(item: ContentItem?, loading: Boolean, onSelect: (ContentItem) -> Unit, onRetry: () -> Unit, palette: ArtworkPalette, onArtworkPalette: (ArtworkPalette) -> Unit) {
     val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxWidth().height(520.dp)) {
         if (item != null) {
@@ -354,7 +413,7 @@ private fun Hero(item: ContentItem?, loading: Boolean, onSelect: (ContentItem) -
                 contentDescription = item.displayTitle,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                onSuccess = { state -> scope.launch { onArtworkColor(extractArtworkColor(state.result.drawable)) } }
+                onSuccess = { state -> if (item.palette == null) scope.launch { onArtworkPalette(extractArtworkPalette(state.result.drawable)) } }
             )
         } else {
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF14304B), LanflixBackground))))
@@ -365,7 +424,16 @@ private fun Hero(item: ContentItem?, loading: Boolean, onSelect: (ContentItem) -
                     0f to Color.Black.copy(alpha = .28f),
                     .38f to Color.Black.copy(alpha = .08f),
                     .7f to Color.Black.copy(alpha = .2f),
-                    1f to artworkColor
+                    1f to palette.base.copy(alpha = .96f)
+                )
+            )
+        )
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.radialGradient(
+                    colors = listOf(palette.glow.copy(alpha = .38f), Color.Transparent),
+                    center = Offset(840f, 930f),
+                    radius = 1180f
                 )
             )
         )
@@ -385,7 +453,7 @@ private fun Hero(item: ContentItem?, loading: Boolean, onSelect: (ContentItem) -
                 else -> {
                     TitleArtwork(item, Modifier.fillMaxWidth(.82f).height(108.dp))
                     Text(
-                        listOfNotNull(item.releaseDate?.take(4), item.rating, item.type?.replaceFirstChar { it.uppercase() }).joinToString("  •  "),
+                        listOfNotNull(item.displayYear, item.rating, item.type?.replaceFirstChar { it.uppercase() }).joinToString("  •  "),
                         color = Color.White.copy(alpha = .74f), fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)
                     )
                     Text(item.overview.orEmpty(), color = Color.White.copy(alpha = .82f), maxLines = 3, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
@@ -438,12 +506,12 @@ private fun PosterCard(item: ContentItem, onSelect: (ContentItem) -> Unit, modif
             }
         }
         Text(item.displayTitle, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-        Text(item.releaseDate?.take(4).orEmpty(), color = LanflixMuted, fontSize = 9.sp)
+        Text(item.displayYear.orEmpty(), color = LanflixMuted, fontSize = 9.sp)
     }
 }
 
 @Composable
-private fun LibraryScreen(media: List<ContentItem>, onSelect: (ContentItem) -> Unit) {
+private fun LibraryScreen(media: List<ContentItem>, music: com.lanflix.api.MusicHome?, onSelect: (ContentItem) -> Unit) {
     var selectedFilter by remember { mutableStateOf("Movies") }
     Column(Modifier.fillMaxSize().padding(top = 68.dp, bottom = 58.dp)) {
         LazyRow(contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -456,7 +524,7 @@ private fun LibraryScreen(media: List<ContentItem>, onSelect: (ContentItem) -> U
             "Series" -> media.filter { it.type.equals("series", true) }
             else -> emptyList()
         }
-        if (selectedFilter == "Music") MusicLibrary() else if (filtered.isEmpty()) EmptyState("No $selectedFilter yet", "When this library is scanned, it will appear here.") else {
+        if (selectedFilter == "Music") MusicLibrary(music) else if (filtered.isEmpty()) EmptyState("No $selectedFilter yet", "When this library is scanned, it will appear here.") else {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 contentPadding = PaddingValues(10.dp),
@@ -468,7 +536,7 @@ private fun LibraryScreen(media: List<ContentItem>, onSelect: (ContentItem) -> U
 }
 
 @Composable
-private fun LiveTvScreen(online: Boolean) {
+private fun LiveTvScreen(online: Boolean, channels: List<com.lanflix.api.LiveTvChannel>) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 82.dp, bottom = 90.dp, start = 14.dp, end = 14.dp)) {
         item {
             Text("Live TV", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
@@ -480,11 +548,12 @@ private fun LiveTvScreen(online: Boolean) {
                 }
             }
         }
-        item { Text("Featured", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 24.dp, bottom = 10.dp)) }
-        items(listOf("Recently watched", "News & documentary", "Movies", "Family")) { label ->
+        item { Text("${channels.size} channels", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 24.dp, bottom = 10.dp)) }
+        if (online && channels.isEmpty()) item { EmptyState("No Live TV sources", "Add M3U/XMLTV or HDHomeRun in server administration.") }
+        items(channels, key = { it.id }) { channel ->
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = .06f)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(42.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = .09f)), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Tv, null, tint = LanflixGold) }
-                Column(Modifier.padding(start = 12.dp).weight(1f)) { Text(label, color = Color.White); Text("No guide data", color = LanflixMuted, fontSize = 11.sp) }
+                Column(Modifier.padding(start = 12.dp).weight(1f)) { Text("${channel.number}  ${channel.name}", color = Color.White); Text(channel.now?.title ?: "No guide data", color = LanflixMuted, fontSize = 11.sp) }
                 Icon(Icons.Filled.PlayArrow, null, tint = Color.White)
             }
         }
@@ -515,7 +584,8 @@ private fun DiscoverScreen(state: LanflixUiState, onSelect: (ContentItem) -> Uni
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 82.dp, bottom = 90.dp)) {
         item { Text("Discover", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp)); Text("Find something worth watching", color = LanflixMuted, modifier = Modifier.padding(horizontal = 16.dp)) }
         item { MediaShelf("Available on your server", state.library.take(10), onSelect) }
-        item { EmptyState("Discovery service ready", "Trending, people, and requests will appear when the v2 server module is enabled.") }
+        if (state.socialFeed.isNotEmpty()) item { Text("People and activity", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp)); Text(state.socialFeed.take(3).joinToString("\n\n") { "${it.author.displayName}: ${it.body ?: it.kind}" }, color = LanflixMuted, modifier = Modifier.padding(horizontal = 16.dp)) }
+        else item { EmptyState("No activity yet", "Reviews and activity from accounts on this server will appear here.") }
     }
 }
 
@@ -530,19 +600,38 @@ private fun DetailScreen(
     onDownload: () -> Unit
 ) {
     val isPlayableType = item.type.equals("movie", true) || item.type.equals("episode", true)
-    val canPlay = isPlayableType && (item.isOfflinePlayable || online)
-    var artworkColor by remember(item.id) { mutableStateOf(Color(0xFF17354A)) }
+    val canPlay = isPlayableType && (item.isOfflinePlayable || (online && item.serverAvailable))
+    var artworkPalette by remember(item.id, item.palette) { mutableStateOf(item.palette?.toComposePalette() ?: DefaultArtworkPalette) }
     val scope = rememberCoroutineScope()
     Box(
         Modifier.fillMaxSize().background(
             Brush.verticalGradient(
-                0f to artworkColor,
-                .68f to darkenArtworkColor(artworkColor, .18f),
+                0f to artworkPalette.base,
+                .56f to artworkPalette.base,
+                .84f to artworkPalette.depth,
                 1f to LanflixBackground,
                 endY = 3400f
             )
         )
     ) {
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.radialGradient(
+                colors = listOf(artworkPalette.glow.copy(alpha = .5f), Color.Transparent),
+                center = Offset(820f, 1040f),
+                radius = 1650f
+            )
+        )
+    )
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.radialGradient(
+                colors = listOf(artworkPalette.accent.copy(alpha = .28f), Color.Transparent),
+                center = Offset(80f, 1540f),
+                radius = 1260f
+            )
+        )
+    )
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 36.dp)) {
         item {
             Box(Modifier.fillMaxWidth().height(470.dp)) {
@@ -551,14 +640,23 @@ private fun DetailScreen(
                     contentDescription = item.displayTitle,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    onSuccess = { state -> scope.launch { artworkColor = extractArtworkColor(state.result.drawable) } }
+                    onSuccess = { state -> if (item.palette == null) scope.launch { artworkPalette = extractArtworkPalette(state.result.drawable) } }
                 )
                 Box(
                     Modifier.fillMaxSize().background(
                         Brush.verticalGradient(
                             0f to Color.Black.copy(alpha = .3f),
                             .5f to Color.Black.copy(alpha = .08f),
-                            1f to artworkColor
+                            1f to artworkPalette.base.copy(alpha = .95f)
+                        )
+                    )
+                )
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.radialGradient(
+                            colors = listOf(artworkPalette.glow.copy(alpha = .32f), Color.Transparent),
+                            center = Offset(820f, 940f),
+                            radius = 1120f
                         )
                     )
                 )
@@ -572,7 +670,7 @@ private fun DetailScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     TitleArtwork(item, Modifier.fillMaxWidth(.78f).height(94.dp))
-                    Text(listOfNotNull(item.releaseDate?.take(4), item.rating, item.type).joinToString("  •  "), color = Color.White.copy(alpha = .72f), fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    Text(listOfNotNull(item.displayYear, item.rating, item.type).joinToString("  •  "), color = Color.White.copy(alpha = .72f), fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                 }
             }
         }
@@ -615,32 +713,16 @@ private fun DetailScreen(
 }
 
 @Composable
-private fun TitleArtwork(item: ContentItem, modifier: Modifier, fallbackAlignment: TextAlign = TextAlign.Center) {
+private fun TitleArtwork(item: ContentItem, modifier: Modifier) {
     SubcomposeAsyncImage(
         model = item.resolvedLogoUrl,
         contentDescription = item.displayTitle,
         modifier = modifier,
         contentScale = ContentScale.Fit,
-        loading = { TitleFallback(item.displayTitle, fallbackAlignment) },
-        error = { TitleFallback(item.displayTitle, fallbackAlignment) },
+        loading = { Spacer(Modifier.fillMaxSize()) },
+        error = { Spacer(Modifier.fillMaxSize()) },
         success = { SubcomposeAsyncImageContent() }
     )
-}
-
-@Composable
-private fun TitleFallback(title: String, alignment: TextAlign) {
-    Box(Modifier.fillMaxSize(), contentAlignment = if (alignment == TextAlign.Start) Alignment.CenterStart else Alignment.Center) {
-        Text(
-            title,
-            color = Color.White,
-            fontSize = 34.sp,
-            lineHeight = 35.sp,
-            fontWeight = FontWeight.ExtraBold,
-            textAlign = alignment,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
 }
 
 @Composable
@@ -725,24 +807,45 @@ private fun EpisodeRow(episode: EpisodeItem, onClick: () -> Unit) {
     }
 }
 
-private suspend fun extractArtworkColor(drawable: android.graphics.drawable.Drawable): Color = withContext(Dispatchers.Default) {
+private data class ArtworkPalette(val base: Color, val depth: Color, val glow: Color, val accent: Color)
+
+private val DefaultArtworkPalette = ArtworkPalette(
+    base = Color(0xFF143D5A),
+    depth = Color(0xFF081A2B),
+    glow = Color(0xFF186D92),
+    accent = LanflixGold
+)
+
+private fun com.lanflix.models.ServerArtworkPalette.toComposePalette() = ArtworkPalette(
+    base = runCatching { Color(android.graphics.Color.parseColor(base)) }.getOrDefault(DefaultArtworkPalette.base),
+    depth = runCatching { Color(android.graphics.Color.parseColor(depth)) }.getOrDefault(DefaultArtworkPalette.depth),
+    glow = runCatching { Color(android.graphics.Color.parseColor(glow)) }.getOrDefault(DefaultArtworkPalette.glow),
+    accent = runCatching { Color(android.graphics.Color.parseColor(accent)) }.getOrDefault(DefaultArtworkPalette.accent)
+)
+
+private suspend fun extractArtworkPalette(drawable: android.graphics.drawable.Drawable): ArtworkPalette = withContext(Dispatchers.Default) {
     runCatching {
         val sourceBitmap = drawable.toBitmap(width = 192, height = 192)
         val readableBitmap = if (sourceBitmap.config == android.graphics.Bitmap.Config.HARDWARE) {
             sourceBitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
         } else sourceBitmap
         val palette = Palette.from(readableBitmap).maximumColorCount(12).generate()
-        val source = palette.darkVibrantSwatch?.rgb
-            ?: palette.vibrantSwatch?.rgb
-            ?: palette.darkMutedSwatch?.rgb
-            ?: palette.dominantSwatch?.rgb
-            ?: 0xFF17354A.toInt()
-        val hsv = FloatArray(3)
-        android.graphics.Color.colorToHSV(source, hsv)
-        hsv[1] = hsv[1].coerceIn(.42f, .78f)
-        hsv[2] = hsv[2].coerceIn(.16f, .27f)
-        Color(android.graphics.Color.HSVToColor(hsv))
-    }.getOrDefault(Color(0xFF17354A))
+        val fallback = palette.dominantSwatch?.rgb ?: 0xFF17354A.toInt()
+        ArtworkPalette(
+            base = artworkTone(palette.darkVibrantSwatch?.rgb ?: palette.darkMutedSwatch?.rgb ?: fallback, .20f, .32f),
+            depth = artworkTone(palette.darkMutedSwatch?.rgb ?: palette.mutedSwatch?.rgb ?: fallback, .09f, .18f),
+            glow = artworkTone(palette.vibrantSwatch?.rgb ?: palette.lightVibrantSwatch?.rgb ?: fallback, .30f, .50f),
+            accent = artworkTone(palette.lightVibrantSwatch?.rgb ?: palette.vibrantSwatch?.rgb ?: fallback, .50f, .72f)
+        )
+    }.getOrDefault(DefaultArtworkPalette)
+}
+
+private fun artworkTone(rgb: Int, minValue: Float, maxValue: Float): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(rgb, hsv)
+    hsv[1] = hsv[1].coerceIn(.38f, .86f)
+    hsv[2] = hsv[2].coerceIn(minValue, maxValue)
+    return Color(android.graphics.Color.HSVToColor(hsv))
 }
 
 private fun darkenArtworkColor(color: Color, blackAmount: Float): Color = Color(
@@ -774,7 +877,7 @@ private fun ProfileMenu(
     ) {
         Column(Modifier.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             ProfilePillAction(Icons.Filled.Person, "Open profile", selected = true, onClick = onProfile)
-            ProfilePillAction(Icons.Filled.SwapHoriz, "Switch profiles") { }
+            ProfilePillAction(Icons.Filled.AccountCircle, "Account and security", onClick = onProfile)
             ProfilePillAction(Icons.Filled.Download, "Downloads", onClick = onDownloads)
             Box {
                 ProfilePillAction(Icons.Filled.Storage, "Connect to server") {
@@ -814,8 +917,18 @@ private fun ProfileMenuRow(icon: ImageVector, title: String, subtitle: String, o
 }
 
 @Composable
-private fun SettingsScreen(online: Boolean, onBack: () -> Unit, onRetry: () -> Unit) {
+private fun SettingsScreen(
+    state: LanflixUiState,
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+    onAccount: () -> Unit,
+    onActivity: () -> Unit,
+    onNotifications: () -> Unit
+) {
     val context = LocalContext.current
+    val repository = remember(context) { DevicePreferencesRepository(context.applicationContext) }
+    val preferences by repository.preferences.collectAsStateWithLifecycle(initialValue = DevicePreferences())
+    val scope = rememberCoroutineScope()
     LazyColumn(
         Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF14374A), LanflixBackground), endY = 1000f)),
         contentPadding = PaddingValues(bottom = 42.dp)
@@ -828,20 +941,20 @@ private fun SettingsScreen(online: Boolean, onBack: () -> Unit, onRetry: () -> U
         }
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
-                SettingsHeading("Profile")
+                SettingsHeading("Account and security")
                 SettingsCard {
-                    ProfileMenuRow(Icons.Filled.AccountCircle, "Lanflix profile", "Profile, household and privacy") { }
-                    ProfileMenuRow(Icons.Filled.SwapHoriz, "Switch profile", "Choose another household profile") { }
+                    ProfileMenuRow(Icons.Filled.AccountCircle, state.account?.displayName ?: "Lanflix account", "${state.account?.role ?: "Offline"} account and security", onAccount)
+                    ProfileMenuRow(Icons.Filled.Storage, "Device sessions", "Review, revoke and sign out connected devices", onAccount)
                 }
                 SettingsHeading("Server connection")
                 SettingsCard {
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Storage, null, tint = LanflixGold, modifier = Modifier.size(24.dp))
                         Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                            Text(if (online) "Connected" else "Server unavailable", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text(if (state.online) "Connected" else "Server unavailable", color = Color.White, fontWeight = FontWeight.Bold)
                             Text(ServerManager.activeServerUrl, color = LanflixMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        Box(Modifier.size(9.dp).clip(CircleShape).background(if (online) Color(0xFF58C878) else Color(0xFFE59A44)))
+                        Box(Modifier.size(9.dp).clip(CircleShape).background(if (state.online) Color(0xFF58C878) else Color(0xFFE59A44)))
                     }
                     ProfileMenuRow(Icons.Filled.Storage, "Change server", "Discover or enter a server address") {
                         context.startActivity(Intent(context, ServerBrowserActivity::class.java))
@@ -851,15 +964,55 @@ private fun SettingsScreen(online: Boolean, onBack: () -> Unit, onRetry: () -> U
                 SettingsHeading("Playback and downloads")
                 SettingsCard {
                     ProfileMenuRow(Icons.Filled.PlayArrow, "Playback", "Quality, subtitles and audio") { }
-                    ProfileMenuRow(Icons.Filled.Download, "Offline downloads", "Quality, Wi-Fi and storage") { }
+                    SettingsToggleRow(Icons.Filled.Download, "Wi-Fi only downloads", "Prevent mobile-data downloads", preferences.wifiOnlyDownloads) {
+                        scope.launch { repository.setWifiOnlyDownloads(it) }
+                    }
+                    ProfileMenuRow(Icons.Filled.Download, "Download storage", "Manage completed offline movies and episodes") { }
                 }
-                SettingsHeading("Application")
+                SettingsHeading("Appearance and accessibility")
                 SettingsCard {
-                    ProfileMenuRow(Icons.Filled.Settings, "Appearance", "Artwork colors and reduced motion") { }
-                    ProfileMenuRow(Icons.Filled.Notifications, "Notifications", "Downloads, activity and requests") { }
+                    SettingsToggleRow(Icons.Filled.Settings, "Dynamic artwork colors", "Use the server palette across each title", preferences.dynamicArtworkColors) {
+                        scope.launch { repository.setDynamicArtworkColors(it) }
+                    }
+                    SettingsToggleRow(Icons.Filled.Settings, "Reduced motion", "Limit artwork transitions and animation", preferences.reducedMotion) {
+                        scope.launch { repository.setReducedMotion(it) }
+                    }
+                }
+                SettingsHeading("Notifications and privacy")
+                SettingsCard {
+                    ProfileMenuRow(Icons.Filled.Notifications, "Notifications", "${state.notifications.count { !it.isRead }} unread server notifications", onNotifications)
+                    ProfileMenuRow(Icons.Filled.Person, "Activity and social", "Friends, reviews, reactions and privacy", onActivity)
+                    SettingsToggleRow(Icons.Filled.Notifications, "Notifications", "Downloads, activity, invites and requests", preferences.notificationsEnabled) {
+                        scope.launch { repository.setNotificationsEnabled(it) }
+                    }
+                }
+                SettingsHeading("Devices and diagnostics")
+                SettingsCard {
+                    ProfileMenuRow(Icons.Filled.Cast, "Cast and playback devices", "Connected TVs and playback sessions") { }
+                    ProfileMenuRow(Icons.Filled.Settings, "Diagnostics", "App version, server health and local cache") { }
+                }
+                state.administration?.let { admin ->
+                    SettingsHeading("Server administration")
+                    SettingsCard {
+                        ProfileMenuRow(Icons.Filled.Storage, "Server overview", "${admin.movies} movies • ${admin.series} series • ${admin.musicTracks} tracks") { }
+                        ProfileMenuRow(Icons.Filled.Person, "Accounts and invitations", "${admin.accounts} accounts • ${admin.openReports} open reports") { }
+                        ProfileMenuRow(Icons.Filled.Settings, "Jobs and Live TV", "${admin.pendingJobs} jobs • ${admin.liveTvChannels} channels") { }
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(icon: ImageVector, title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = Color.White.copy(alpha = .86f), modifier = Modifier.size(21.dp))
+        Column(Modifier.padding(start = 12.dp).weight(1f)) {
+            Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = LanflixMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -874,26 +1027,53 @@ private fun SettingsCard(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun ProfileScreen(library: List<ContentItem>, onBack: () -> Unit, onSelect: (ContentItem) -> Unit) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+private fun ProfileScreen(
+    library: List<ContentItem>,
+    account: com.lanflix.auth.LanflixAccount?,
+    activity: List<com.lanflix.api.SocialActivity>,
+    onBack: () -> Unit,
+    onSelect: (ContentItem) -> Unit,
+    onAccount: () -> Unit,
+    onActivity: () -> Unit
+) {
+    val backdrop = library.firstOrNull { !it.resolvedBackdropUrl.isNullOrBlank() }
+    val palette = backdrop?.palette?.toComposePalette() ?: DefaultArtworkPalette
+    LazyColumn(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(palette.base, palette.depth, LanflixBackground))), contentPadding = PaddingValues(bottom = 40.dp)) {
         item {
-            Box(Modifier.fillMaxWidth().height(330.dp).background(Brush.verticalGradient(listOf(Color(0xFF45321C), LanflixBackground)))) {
-                IconButton(onClick = onBack, modifier = Modifier.statusBarsPadding().padding(8.dp)) { Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
-                Column(Modifier.align(Alignment.BottomCenter).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.size(92.dp).clip(CircleShape).background(LanflixGold), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Person, null, tint = Color.Black, modifier = Modifier.size(56.dp)) }
-                    Text("Lanflix profile", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
-                    Text("Your household media identity", color = LanflixMuted)
+            Box(Modifier.fillMaxWidth().height(410.dp)) {
+                AsyncImage(backdrop?.resolvedBackdropUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .12f), palette.base.copy(alpha = .66f), palette.depth), startY = 40f, endY = 1100f)))
+                IconButton(onClick = onBack, modifier = Modifier.statusBarsPadding().padding(8.dp).clip(CircleShape).background(Color.Black.copy(alpha = .28f))) { Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
+                Column(Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(90.dp).clip(CircleShape).background(Brush.radialGradient(listOf(palette.accent, palette.glow))), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Person, null, tint = Color.White, modifier = Modifier.size(54.dp)) }
+                    Text(account?.displayName ?: "Offline account", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 12.dp))
+                    Text(account?.let { "@${it.username}  •  ${it.role}" } ?: "Cached downloads", color = Color.White.copy(alpha = .7f), fontSize = 11.sp)
+                    Text("Your movies, music, reviews and people—all on this server.", color = Color.White.copy(alpha = .78f), fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 10.dp))
+                    Row(Modifier.padding(top = 13.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AssistChip(onClick = onAccount, label = { Text("Account") }, leadingIcon = { Icon(Icons.Filled.Person, null, Modifier.size(16.dp)) })
+                        AssistChip(onClick = onActivity, label = { Text("Activity") }, leadingIcon = { Icon(Icons.Filled.Star, null, Modifier.size(16.dp)) })
+                    }
                 }
             }
         }
         item {
-            Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp).offset(y = (-8).dp), shape = RoundedCornerShape(18.dp), color = Color.Black.copy(alpha = .28f)) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 17.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Stat(library.count { it.type == "movie" }.toString(), "Movies")
                 Stat(library.count { it.type == "series" }.toString(), "Shows")
                 Stat(library.count { it.isOfflinePlayable }.toString(), "Offline")
             }
-            Text("Watch History", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-            MediaShelf("Recently watched", library.take(8), onSelect)
+            }
+            Text("Watch History", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+            MediaShelf("Continue and recently watched", library.sortedByDescending { it.progressPercentage ?: 0.0 }.take(8), onSelect)
+            if (activity.isNotEmpty()) {
+                Text("Recent Activity", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+                activity.take(3).forEach { entry ->
+                    Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), shape = RoundedCornerShape(14.dp), color = Color.White.copy(alpha = .07f)) {
+                        Column(Modifier.padding(13.dp)) { Text(entry.kind.replaceFirstChar { it.uppercase() }, color = palette.accent, fontWeight = FontWeight.Bold, fontSize = 11.sp); Text(entry.body ?: "Media activity", color = Color.White.copy(alpha = .84f), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                    }
+                }
+            }
         }
     }
 }
@@ -911,7 +1091,23 @@ private fun MusicPreview() {
     }
 }
 
-@Composable private fun MusicLibrary() { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { EmptyState("Music library", "Add a music folder on the server to see albums, artists, mixes and radios.") } }
+@Composable
+private fun MusicLibrary(music: com.lanflix.api.MusicHome?) {
+    if (music == null || music.recentlyAdded.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { EmptyState("Music library", "Add a music folder on the server and run a music scan.") }
+        return
+    }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 90.dp)) {
+        item { Text("Recently added albums", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp)) }
+        items(music.recentlyAdded, key = { it.id }) { album ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .07f)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(album.artworkUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" }, album.title, Modifier.size(58.dp).clip(RoundedCornerShape(9.dp)), contentScale = ContentScale.Crop)
+                Column(Modifier.padding(start = 12.dp).weight(1f)) { Text(album.title, color = Color.White, fontWeight = FontWeight.Bold); Text("${album.artist.name} • ${album.trackCount} tracks", color = LanflixMuted, fontSize = 11.sp) }
+                Icon(Icons.Filled.PlayArrow, "Play album", tint = Color.White)
+            }
+        }
+    }
+}
 
 @Composable
 private fun EmptyState(title: String, message: String) {
@@ -924,13 +1120,20 @@ private fun EmptyState(title: String, message: String) {
 @Composable
 private fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
     val context = LocalContext.current
+    val sessionStore = remember { com.lanflix.auth.LanflixSessionStore(context) }
     val uri = remember(item) {
         item.localFilePath?.let { Uri.fromFile(File(it)) } ?: run {
             val kind = if (item.type.equals("episode", true)) "episode" else "movie"
-            Uri.parse("${ServerManager.activeServerUrl}/api/stream/$kind/${item.id}/file")
+            Uri.parse("${ServerManager.activeServerUrl}/api/v2/playback/$kind/${item.id}/file")
         }
     }
-    val player = remember(uri) { ExoPlayer.Builder(context).build().apply { setMediaItem(MediaItem.fromUri(uri)); prepare(); playWhenReady = true } }
+    val player = remember(uri) {
+        val headers = sessionStore.accessToken?.let { mapOf("Authorization" to "Bearer $it") }.orEmpty()
+        val dataSource = DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)
+        ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(dataSource)).build().apply {
+            setMediaItem(MediaItem.fromUri(uri)); prepare(); playWhenReady = true
+        }
+    }
     androidx.compose.runtime.DisposableEffect(player) { onDispose { player.release() } }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(factory = { PlayerView(it).apply { this.player = player; useController = true } }, modifier = Modifier.fillMaxSize())

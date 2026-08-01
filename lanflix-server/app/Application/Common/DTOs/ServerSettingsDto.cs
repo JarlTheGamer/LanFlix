@@ -36,15 +36,7 @@ public class StreamingSettings
 
 public class CacheSettings
 {
-    public RedisCacheSettings Redis { get; set; } = new();
     public MemoryCacheSettings Memory { get; set; } = new();
-}
-
-public class RedisCacheSettings
-{
-    public bool Enabled { get; set; }
-    public string ConnectionString { get; set; } = string.Empty;
-    public string InstanceName { get; set; } = string.Empty;
 }
 
 public class MemoryCacheSettings

@@ -102,8 +102,4 @@ public class Content : BaseEntity, IAuditableEntity, ISoftDelete
     /// </summary>
     public ICollection<Episode> Episodes { get; set; } = new List<Episode>();
 
-    /// <summary>
-    /// Collection of watch history records for this content
-    /// </summary>
-    public ICollection<WatchHistory> WatchHistories { get; set; } = new List<WatchHistory>();
 }

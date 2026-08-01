@@ -7,6 +7,12 @@ import com.lanflix.api.LanflixApiClient
 import com.lanflix.models.ContentItem
 import com.lanflix.offline.OfflineDownloadManager
 import com.lanflix.webview.ServerManager
+import com.lanflix.auth.LanflixAccount
+import com.lanflix.api.SocialActivity
+import com.lanflix.api.SocialNotification
+import com.lanflix.api.MusicHome
+import com.lanflix.api.LiveTvChannel
+import com.lanflix.api.AdministrationOverview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +23,14 @@ data class LanflixUiState(
     val loading: Boolean = true,
     val online: Boolean = ServerManager.isOnline,
     val library: List<ContentItem> = emptyList(),
+    val account: LanflixAccount? = null,
+    val requiresOwnerSetup: Boolean = false,
+    val authenticationRequired: Boolean = false,
+    val socialFeed: List<SocialActivity> = emptyList(),
+    val notifications: List<SocialNotification> = emptyList(),
+    val music: MusicHome? = null,
+    val liveTvChannels: List<LiveTvChannel> = emptyList(),
+    val administration: AdministrationOverview? = null,
     val downloading: Set<String> = emptySet(),
     val error: String? = null
 )
@@ -34,14 +48,56 @@ class LanflixViewModel(application: Application) : AndroidViewModel(application)
             val online = ServerManager.pingServer(getApplication(), ServerManager.activeServerUrl, timeoutMs = 1500)
             ServerManager.isOnline = online
             _state.update { it.copy(loading = true, error = null, online = online) }
-            val content = api.getHomeContent()
+            val setup = if (online) api.getSetupStatus() else null
+            val account = if (online && api.sessions.isSignedIn) api.getCurrentAccount() ?: api.sessions.account else api.sessions.account
+            val needsAuthentication = online && account == null
+            val content = if (needsAuthentication) api.getOfflineCatalog() else api.getHomeContent()
+            val social = if (online && account != null) api.getSocialFeed() else emptyList()
+            val notifications = if (online && account != null) api.getNotifications() else emptyList()
+            val music = if (online && account != null) api.getMusicHome() else null
+            val liveTv = if (online && account != null) api.getLiveTvChannels() else emptyList()
+            val admin = if (online && account?.isAdministrator == true) api.getAdministrationOverview() else null
             _state.update {
                 it.copy(
                     loading = false,
                     library = content,
-                    error = if (content.isEmpty()) "Your library is empty" else null
+                    account = account,
+                    requiresOwnerSetup = setup?.requiresOwnerSetup == true,
+                    authenticationRequired = needsAuthentication,
+                    socialFeed = social,
+                    notifications = notifications,
+                    music = music,
+                    liveTvChannels = liveTv,
+                    administration = admin,
+                    error = if (content.isEmpty() && !needsAuthentication) "Your library is empty" else null
                 )
             }
+        }
+    }
+
+    fun authenticate(username: String, displayName: String, password: String, invitation: String?, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _state.update { it.copy(loading = true, error = null) }
+            val tokens = when {
+                _state.value.requiresOwnerSetup -> api.setupOwner(username, displayName, password)
+                !invitation.isNullOrBlank() -> api.register(invitation, username, displayName, password)
+                else -> api.login(username, password)
+            }
+            if (tokens == null) {
+                _state.update { it.copy(loading = false, error = "Sign-in failed. Check your details or invitation code.") }
+                onResult(false)
+            } else {
+                _state.update { it.copy(account = tokens.account, authenticationRequired = false, requiresOwnerSetup = false) }
+                refresh()
+                onResult(true)
+            }
+        }
+    }
+
+    fun signOut() {
+        viewModelScope.launch {
+            api.logout()
+            _state.update { it.copy(account = null, authenticationRequired = it.online, socialFeed = emptyList(), notifications = emptyList(), administration = null) }
         }
     }
 

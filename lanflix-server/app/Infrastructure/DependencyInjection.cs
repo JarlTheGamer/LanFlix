@@ -14,6 +14,8 @@ using Lanflix.Infrastructure.Services.Streaming;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Lanflix.Modules.Identity;
+using Lanflix.Modules.Metadata;
 
 namespace Lanflix.Infrastructure;
 
@@ -22,10 +24,15 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         // Register Database Context
+        var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "Data Source=lanflix.db";
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlite(configuration.GetConnectionString("DefaultConnection") ?? "Data Source=lanflix.db"));
+            options.UseSqlite(connectionString, sqlite => sqlite.CommandTimeout(30)));
         
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+        services.AddScoped<IIdentityDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+        services.AddScoped<IArtworkPaletteDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+        services.AddIdentityModule();
+        services.AddMetadataModule();
 
         // Register HttpClient for external API services
         services.AddHttpClient();
@@ -73,7 +80,6 @@ public static class DependencyInjection
         services.AddHostedService<Lanflix.Infrastructure.Services.Discovery.MDnsDiscoveryService>();
 
         // FFmpeg Services
-        services.AddScoped<IMediaAnalyzer, MediaAnalyzer>();
         services.AddScoped<IHardwareAccelerationDetector, EnhancedHardwareAccelerationDetector>();
         services.AddScoped<ITranscodingPipeline, EnhancedTranscodingPipeline>();
         services.AddScoped<IProgressBroadcaster, SimpleProgressBroadcaster>();

@@ -127,9 +127,9 @@ object ServerManager {
         return withContext(Dispatchers.IO) {
             val targetUrl = resolveUrlForConnection(context, serverUrl)
 
-            // 1. Test /api/app/version
+            // Use the versioned Host health endpoint; it does not require an account token.
             try {
-                val testUrl = "$targetUrl/api/app/version"
+                val testUrl = "$targetUrl/health"
                 val connection = (URL(testUrl).openConnection() as HttpURLConnection).apply {
                     connectTimeout = timeoutMs
                     readTimeout = timeoutMs
@@ -140,7 +140,7 @@ object ServerManager {
 
                 val responseCode = connection.responseCode
                 connection.disconnect()
-                if (responseCode in 200..499) {
+                if (responseCode in 200..299) {
                     return@withContext true
                 }
             } catch (e: Exception) { }

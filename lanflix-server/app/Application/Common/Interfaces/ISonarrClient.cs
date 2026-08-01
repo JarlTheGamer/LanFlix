@@ -37,6 +37,8 @@ public interface ISonarrClient
     /// </summary>
     Task<SonarrQueueResponse> GetQueueAsync(int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
 
+    Task RemoveQueueItemAsync(int id, bool removeFromClient = true, bool blocklist = false, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Delete series from Sonarr
     /// </summary>

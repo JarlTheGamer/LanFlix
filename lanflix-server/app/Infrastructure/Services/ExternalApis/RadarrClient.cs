@@ -214,6 +214,14 @@ public class RadarrClient : IRadarrClient
         }
     }
 
+    public async Task RemoveQueueItemAsync(int id, bool removeFromClient = true, bool blocklist = false, CancellationToken cancellationToken = default)
+    {
+        var request = await CreateRequestAsync(HttpMethod.Delete,
+            $"/api/v3/queue/{id}?removeFromClient={removeFromClient.ToString().ToLowerInvariant()}&blocklist={blocklist.ToString().ToLowerInvariant()}", cancellationToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<List<RadarrRootFolder>> GetRootFoldersAsync(CancellationToken cancellationToken = default)
     {
         try

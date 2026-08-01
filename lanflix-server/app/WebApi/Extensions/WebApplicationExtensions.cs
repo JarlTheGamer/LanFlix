@@ -50,7 +50,10 @@ public static class WebApplicationExtensions
         var seriesPath = configuration["Lanflix:MediaPaths:Series"];
 
         // Create a combined media root if either path is configured
-        if (!string.IsNullOrEmpty(moviesPath) || !string.IsNullOrEmpty(seriesPath))
+        // Disabled by default: media must flow through authorized range/stream endpoints.
+        // This switch exists only for short-lived v1 rollback during the staged migration.
+        if (configuration.GetValue<bool>("Lanflix:Compatibility:EnableRawMediaStaticFiles")
+            && (!string.IsNullOrEmpty(moviesPath) || !string.IsNullOrEmpty(seriesPath)))
         {
             // Find common parent directory or use the first available path
             var mediaRoot = !string.IsNullOrEmpty(moviesPath) && Directory.Exists(moviesPath)
@@ -210,82 +213,19 @@ public static class WebApplicationExtensions
 
     public static async Task InitializeLanflixDatabaseAsync(this WebApplication app)
     {
-        // Automatically apply database migrations and seed initial data
-        using (var scope = app.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<Lanflix.Infrastructure.Persistence.ApplicationDbContext>();
-            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Lanflix.Infrastructure.Persistence.DatabaseSeeder>>();
-            
-            // Ensure database is created (creates tables if they don't exist)
-            Log.Information("Ensuring database exists...");
-            await context.Database.EnsureCreatedAsync();
-            Log.Information("Database is ready");
-            
-            // Schema migrations: safely add new columns (no-op if already exist)
-            try
-            {
-                await context.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE Episodes ADD COLUMN IntroStartTime REAL NULL");
-            }
-            catch { /* Column already exists */ }
-            try
-            {
-                await context.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE Episodes ADD COLUMN IntroEndTime REAL NULL");
-            }
-            catch { /* Column already exists */ }
-            try
-            {
-                await context.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE Episodes ADD COLUMN CreditsStartTime REAL NULL");
-            }
-            catch { /* Column already exists */ }
-            try
-            {
-                await context.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE Contents ADD COLUMN CollectionId INTEGER NULL");
-            }
-            catch { /* Column already exists */ }
-            try
-            {
-                await context.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE Contents ADD COLUMN CollectionName TEXT NULL");
-            }
-            catch { /* Column already exists */ }
-            try
-            {
-                await context.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE Profiles ADD COLUMN IsGuest INTEGER NOT NULL DEFAULT 0");
-            }
-            catch { /* Column already exists */ }
-            try
-            {
-                await context.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE Profiles ADD COLUMN CanDownload INTEGER NOT NULL DEFAULT 1");
-            }
-            catch { /* Column already exists */ }
-            try
-            {
-                await context.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE Profiles ADD COLUMN CanManageSettings INTEGER NOT NULL DEFAULT 1");
-            }
-            catch { /* Column already exists */ }
-            
-            // Seed initial data
-            var seeder = new Lanflix.Infrastructure.Persistence.DatabaseSeeder(context, logger);
-            await seeder.SeedAsync();
-            
-            // Initialize default media folders on first run
-            var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
-            var folderLogger = scope.ServiceProvider.GetRequiredService<ILogger<Lanflix.Infrastructure.Services.Settings.MediaFolderInitializer>>();
-            var folderInitializer = new Lanflix.Infrastructure.Services.Settings.MediaFolderInitializer(
-                app.Configuration,
-                settingsService,
-                folderLogger);
-            await folderInitializer.InitializeAsync();
-            
-            // Ensure persistent config file exists
-            await settingsService.EnsureConfigFileExistsAsync();
-        }
+        await using var scope = app.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<Lanflix.Infrastructure.Persistence.ApplicationDbContext>();
+        var migrationLogger = scope.ServiceProvider.GetRequiredService<ILogger<Lanflix.Infrastructure.Persistence.StartupDatabaseMigrator>>();
+        var migrator = new Lanflix.Infrastructure.Persistence.StartupDatabaseMigrator(context, migrationLogger);
+        await migrator.MigrateAsync(app.Lifetime.ApplicationStopping);
+
+        var settingsService = scope.ServiceProvider.GetRequiredService<ISettingsService>();
+        var folderLogger = scope.ServiceProvider.GetRequiredService<ILogger<Lanflix.Infrastructure.Services.Settings.MediaFolderInitializer>>();
+        var folderInitializer = new Lanflix.Infrastructure.Services.Settings.MediaFolderInitializer(
+            app.Configuration,
+            settingsService,
+            folderLogger);
+        await folderInitializer.InitializeAsync();
+        await settingsService.EnsureConfigFileExistsAsync();
     }
 }

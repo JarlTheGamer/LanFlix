@@ -45,9 +45,5 @@ public class EpisodeConfiguration : IEntityTypeConfiguration<Episode>
         });
 
         // Relationships
-        builder.HasMany(e => e.WatchHistories)
-            .WithOne(w => w.Episode)
-            .HasForeignKey(w => w.EpisodeId)
-            .OnDelete(DeleteBehavior.Cascade);
     }
 }

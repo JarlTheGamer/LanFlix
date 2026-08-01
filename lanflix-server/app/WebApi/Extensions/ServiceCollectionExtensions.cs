@@ -4,7 +4,6 @@ using System.Threading.RateLimiting;
 using Lanflix.Application;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Infrastructure;
-using Lanflix.Infrastructure.Telemetry;
 using Lanflix.Infrastructure.Services.SyncPlay;
 using Lanflix.WebApi.Authorization;
 using Lanflix.WebApi.Helpers;
@@ -14,82 +13,18 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.IdentityModel.Tokens;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 using Serilog;
 
 namespace Lanflix.WebApi.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddLanflixTelemetry(this IServiceCollection services, IWebHostEnvironment environment)
-    {
-        var serviceName = "Lanflix.Server";
-        var serviceVersion = "1.0.0";
-
-        services.AddOpenTelemetry()
-            .ConfigureResource(resource => resource
-                .AddService(serviceName: serviceName, serviceVersion: serviceVersion)
-                .AddAttributes(new Dictionary<string, object>
-                {
-                    ["deployment.environment"] = environment.EnvironmentName,
-                    ["host.name"] = Environment.MachineName
-                }))
-            .WithTracing(tracing => tracing
-                .AddAspNetCoreInstrumentation(options =>
-                {
-                    options.RecordException = true;
-                    options.Filter = (httpContext) =>
-                    {
-                        // Don't trace health check endpoints
-                        return !httpContext.Request.Path.StartsWithSegments("/health");
-                    };
-                })
-                .AddHttpClientInstrumentation(options =>
-                {
-                    options.RecordException = true;
-                })
-                .AddEntityFrameworkCoreInstrumentation(options =>
-                {
-                    options.SetDbStatementForText = true;
-                    options.SetDbStatementForStoredProcedure = true;
-                })
-                .AddSource(LanflixActivitySource.Streaming.Name)
-                .AddSource(LanflixActivitySource.Transcoding.Name)
-                .AddSource(LanflixActivitySource.Library.Name)
-            )
-            .WithMetrics(metrics => metrics
-                .AddAspNetCoreInstrumentation()
-                .AddHttpClientInstrumentation()
-                .AddRuntimeInstrumentation()
-                .AddMeter("Lanflix.Streaming")
-                .AddMeter("Lanflix.Caching")
-            );
-
-        // Register custom metrics
-        services.AddSingleton<StreamingMetrics>();
-        services.AddSingleton<CachingMetrics>();
-
-        return services;
-    }
-
-    public static IServiceCollection AddLanflixHealthChecks(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddLanflixHealthChecks(this IServiceCollection services)
     {
         var healthChecks = services.AddHealthChecks()
             .AddDbContextCheck<Lanflix.Infrastructure.Persistence.ApplicationDbContext>("database")
             .AddCheck<Lanflix.Infrastructure.HealthChecks.FFmpegHealthCheck>("ffmpeg")
             .AddCheck<Lanflix.Infrastructure.HealthChecks.DiskSpaceHealthCheck>("disk-space");
-
-        // Add Redis health check if enabled
-        if (configuration.GetValue<bool>("Lanflix:Cache:Redis:Enabled"))
-        {
-            var redisConnectionString = configuration["Lanflix:Cache:Redis:ConnectionString"];
-            if (!string.IsNullOrEmpty(redisConnectionString))
-            {
-                healthChecks.AddRedis(redisConnectionString, name: "redis", tags: new[] { "cache" });
-            }
-        }
 
         return services;
     }
@@ -188,8 +123,11 @@ public static class ServiceCollectionExtensions
     {
         services.AddAuthorization(options =>
         {
-            options.AddPolicy("AdminOnly", policy => 
-                policy.RequireRole("Admin"));
+            options.AddPolicy("AdminOnly", policy =>
+                policy.RequireRole("Owner", "Administrator"));
+
+            options.AddPolicy("ServerManage", policy =>
+                policy.RequireClaim("permission", "server.manage"));
             
             options.AddPolicy("ProfileOwner", policy =>
                 policy.Requirements.Add(new ProfileOwnerRequirement()));
@@ -244,7 +182,7 @@ public static class ServiceCollectionExtensions
             options.AddPolicy("streaming", context =>
             {
                 var partitionKey = context.User.Identity?.IsAuthenticated == true
-                    ? context.User.FindFirst("ProfileId")?.Value ?? "anonymous"
+                    ? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "anonymous"
                     : context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
                     
                 return RateLimitPartition.GetConcurrencyLimiter(
@@ -260,7 +198,7 @@ public static class ServiceCollectionExtensions
             options.AddPolicy("per-user", context =>
             {
                 var partitionKey = context.User.Identity?.IsAuthenticated == true
-                    ? context.User.FindFirst("ProfileId")?.Value ?? "anonymous"
+                    ? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "anonymous"
                     : context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
                     
                 return RateLimitPartition.GetFixedWindowLimiter(
@@ -308,7 +246,7 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddLanflixSignalR(this IServiceCollection services, IConfiguration configuration, IWebHostEnvironment environment)
+    public static IServiceCollection AddLanflixSignalR(this IServiceCollection services, IWebHostEnvironment environment)
     {
         var signalRBuilder = services.AddSignalR(options =>
         {
@@ -320,37 +258,7 @@ public static class ServiceCollectionExtensions
             options.MaximumParallelInvocationsPerClient = 1;
         });
 
-        // Configure Redis backplane if enabled
-        var redisEnabled = configuration.GetValue<bool>("Lanflix:Cache:Redis:Enabled");
-        if (redisEnabled)
-        {
-            var redisConnectionString = configuration["Lanflix:Cache:Redis:ConnectionString"];
-            if (!string.IsNullOrEmpty(redisConnectionString))
-            {
-                try
-                {
-                    signalRBuilder.AddStackExchangeRedis(redisConnectionString, options =>
-                    {
-                        options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("lanflix:signalr:");
-                        options.Configuration.AbortOnConnectFail = false;
-                        options.Configuration.ConnectTimeout = 5000;
-                        options.Configuration.SyncTimeout = 5000;
-                        options.Configuration.KeepAlive = 60;
-                        options.Configuration.ConnectRetry = 3;
-                    });
-                    
-                    Log.Information("SignalR configured with Redis backplane: {ConnectionString}", redisConnectionString);
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "Failed to configure Redis backplane for SignalR. Falling back to single-server mode.");
-                }
-            }
-        }
-        else
-        {
-            Log.Information("SignalR configured without Redis backplane (single-server mode)");
-        }
+        Log.Information("SignalR configured for the single-process server");
 
         services.AddSingleton<IProgressBroadcaster, SignalRProgressBroadcaster>();
         services.AddSingleton<ISyncPlayRoomService, SyncPlayRoomService>();
@@ -468,8 +376,7 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddLanflixServices(this IServiceCollection services, IConfiguration configuration, IWebHostEnvironment environment)
     {
-        services.AddLanflixTelemetry(environment);
-        services.AddLanflixHealthChecks(configuration);
+        services.AddLanflixHealthChecks();
         services.AddLanflixCoreServices();
         services.AddLanflixCompression();
         services.AddLanflixAuthentication(configuration);
@@ -481,7 +388,7 @@ public static class ServiceCollectionExtensions
         services.AddApplication();
         services.AddInfrastructure(configuration);
         
-        services.AddLanflixSignalR(configuration, environment);
+        services.AddLanflixSignalR(environment);
         services.AddLanflixCors(configuration, environment);
 
         return services;

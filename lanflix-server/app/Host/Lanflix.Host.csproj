@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Lanflix.Host</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishTrimmed>false</PublishTrimmed>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.11.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Application\Lanflix.Application.csproj" />
+    <ProjectReference Include="..\Infrastructure\Lanflix.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Identity\Lanflix.Modules.Identity.csproj" />
+    <ProjectReference Include="..\Modules\Downloads\Lanflix.Modules.Downloads.csproj" />
+    <ProjectReference Include="..\Modules\Devices\Lanflix.Modules.Devices.csproj" />
+    <ProjectReference Include="..\Modules\Administration\Lanflix.Modules.Administration.csproj" />
+    <ProjectReference Include="..\Modules\Library\Lanflix.Modules.Library.csproj" />
+    <ProjectReference Include="..\Modules\Metadata\Lanflix.Modules.Metadata.csproj" />
+    <ProjectReference Include="..\Modules\Playback\Lanflix.Modules.Playback.csproj" />
+    <ProjectReference Include="..\Modules\Discovery\Lanflix.Modules.Discovery.csproj" />
+    <ProjectReference Include="..\Modules\Subtitles\Lanflix.Modules.Subtitles.csproj" />
+    <ProjectReference Include="..\Modules\Realtime\Lanflix.Modules.Realtime.csproj" />
+    <ProjectReference Include="..\Modules\Music\Lanflix.Modules.Music.csproj" />
+    <ProjectReference Include="..\Modules\LiveTV\Lanflix.Modules.LiveTV.csproj" />
+  </ItemGroup>
+</Project>

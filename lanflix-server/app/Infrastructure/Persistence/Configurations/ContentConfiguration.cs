@@ -70,9 +70,5 @@ public class ContentConfiguration : IEntityTypeConfiguration<Content>
             .HasForeignKey(e => e.ContentId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasMany(c => c.WatchHistories)
-            .WithOne(w => w.Content)
-            .HasForeignKey(w => w.ContentId)
-            .OnDelete(DeleteBehavior.Cascade);
     }
 }

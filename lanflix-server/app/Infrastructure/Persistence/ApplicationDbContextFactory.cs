@@ -12,19 +12,7 @@ public class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Applicati
     {
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
         
-        // Check if PostgreSQL connection string is provided via environment variable
-        var postgresConnection = Environment.GetEnvironmentVariable("LANFLIX_POSTGRES_CONNECTION");
-        
-        if (!string.IsNullOrEmpty(postgresConnection))
-        {
-            // Use PostgreSQL for design-time (migrations)
-            optionsBuilder.UseNpgsql(postgresConnection);
-        }
-        else
-        {
-            // Default to SQLite for design-time (migrations)
-            optionsBuilder.UseSqlite("Data Source=lanflix.db");
-        }
+        optionsBuilder.UseSqlite("Data Source=lanflix.db;Foreign Keys=True;Pooling=True;Default Timeout=30");
 
         return new ApplicationDbContext(optionsBuilder.Options);
     }

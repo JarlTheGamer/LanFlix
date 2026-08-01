@@ -18,15 +18,22 @@ data class ContentItem(
     @SerializedName("logoUrl") val logoUrl: String? = null,
     @SerializedName("rating") val rating: String? = "PG-13",
     @SerializedName("releaseDate") val releaseDate: String? = null,
+    @SerializedName("year") val year: Int? = null,
     @SerializedName("type") val type: String? = "movie",
     @SerializedName("itemCount") val itemCount: Int? = null,
-    @SerializedName("localFilePath") val localFilePath: String? = null
+    @SerializedName("localFilePath") val localFilePath: String? = null,
+    @SerializedName("serverAvailable") val serverAvailable: Boolean = true,
+    @SerializedName("progressPercentage") val progressPercentage: Double? = null,
+    @SerializedName("palette") val palette: ServerArtworkPalette? = null
 ) {
     val displayTitle: String
         get() = title ?: collectionName ?: name ?: "Untitled"
 
     val isOfflinePlayable: Boolean
         get() = !localFilePath.isNullOrBlank()
+
+    val displayYear: String?
+        get() = year?.toString() ?: releaseDate?.take(4)
 
     val resolvedPosterUrl: String?
         get() {
@@ -56,6 +63,15 @@ data class ContentItem(
             return if (id > 0 && tmdbId > 0) "${ServerManager.activeServerUrl}/api/v2/artwork/$id/logo" else null
         }
 }
+
+data class ServerArtworkPalette(
+    @SerializedName("base") val base: String = "#111827",
+    @SerializedName("depth") val depth: String = "#030712",
+    @SerializedName("glow") val glow: String = "#1F3A5F",
+    @SerializedName("accent") val accent: String = "#F59E0B",
+    @SerializedName("onBackground") val onBackground: String = "#FFFFFF",
+    @SerializedName("algorithmVersion") val algorithmVersion: Int = 1
+)
 
 data class CastMember(
     val name: String,
@@ -101,7 +117,8 @@ data class EpisodeItem(
     val airDate: String? = null,
     val stillUrl: String? = null,
     val filePath: String? = null,
-    val hasFile: Boolean = false
+    @SerializedName("serverAvailable") val hasFile: Boolean = false,
+    @SerializedName("progressPercentage") val progressPercentage: Double? = null
 ) {
     val resolvedStillUrl: String?
         get() = stillUrl?.let { raw ->

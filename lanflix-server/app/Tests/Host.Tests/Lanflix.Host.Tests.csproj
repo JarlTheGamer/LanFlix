@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Host\Lanflix.Host.csproj" />
+    <ProjectReference Include="..\..\Modules\Metadata\Lanflix.Modules.Metadata.csproj" />
+    <ProjectReference Include="..\..\Modules\Library\Lanflix.Modules.Library.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\Lanflix.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Identity\Lanflix.Modules.Identity.csproj" />
+    <ProjectReference Include="..\..\Modules\Discovery\Lanflix.Modules.Discovery.csproj" />
+    <ProjectReference Include="..\..\Modules\Subtitles\Lanflix.Modules.Subtitles.csproj" />
+    <ProjectReference Include="..\..\Modules\Realtime\Lanflix.Modules.Realtime.csproj" />
+    <ProjectReference Include="..\..\Modules\Music\Lanflix.Modules.Music.csproj" />
+    <ProjectReference Include="..\..\Modules\LiveTV\Lanflix.Modules.LiveTV.csproj" />
+    <ProjectReference Include="..\..\Modules\Social\Lanflix.Modules.Social.csproj" />
+  </ItemGroup>
+</Project>

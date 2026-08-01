@@ -96,8 +96,4 @@ public class Episode : BaseEntity, IAuditableEntity, ISoftDelete
     /// </summary>
     public Content Content { get; set; } = null!;
 
-    /// <summary>
-    /// Collection of watch history records for this episode
-    /// </summary>
-    public ICollection<WatchHistory> WatchHistories { get; set; } = new List<WatchHistory>();
 }
