@@ -11,7 +11,7 @@ namespace Lanflix.Modules.Metadata;
 
 public sealed class ArtworkPaletteService(IArtworkPaletteDbContext db, IHttpClientFactory httpClientFactory)
 {
-    public const int CurrentAlgorithmVersion = 3;
+    public const int CurrentAlgorithmVersion = 4;
 
     public async Task<ArtworkPaletteDto> GetOrCreateAsync(int contentId, string? mediaPath, CancellationToken cancellationToken)
         => await GetOrCreateAsync(contentId, mediaPath, null, cancellationToken);
@@ -76,40 +76,36 @@ public sealed class ArtworkPaletteService(IArtworkPaletteDbContext db, IHttpClie
         var candidates = buckets.Values
             .Where(x => x.Count >= 2)
             .Select(x => x.Average)
-            .OrderByDescending(x => x.Score)
+            .OrderByDescending(x => (x.Saturation > 0.25 ? x.Saturation * 3.0 : x.Saturation) + Math.Log(x.Weight))
             .Take(24)
             .ToArray();
         if (candidates.Length == 0) return ArtworkPaletteDto.Fallback;
 
-        var dominant = candidates[0];
-        var glow = candidates.OrderByDescending(x => x.Saturation * 1.6 + Distance(x, dominant)).First();
-        if (Distance(glow, dominant) < 0.22) glow = dominant.RotateHue(42).WithSaturation(Math.Max(0.48, dominant.Saturation));
-        var accent = candidates.OrderByDescending(x => x.Saturation + Distance(x, dominant) + Distance(x, glow) * 0.5).First();
-        if (Distance(accent, glow) < 0.18) accent = glow.RotateHue(155).WithSaturation(Math.Max(0.55, glow.Saturation));
+        // Select signature color: pick the most vibrant swatch with good presence
+        var signature = candidates.MaxBy(x => x.Saturation * 2.5 + Math.Min(1.0, x.Weight / 100d)) ?? candidates[0];
 
-        // Preserve the atmosphere of the artwork. Earlier versions compressed the
-        // base into such a narrow dark range that unrelated titles all became the
-        // same near-black wash.
-        var baseColor = dominant.WithLightness(Math.Clamp(dominant.Lightness * 0.72, 0.15, 0.38)).WithSaturation(Math.Max(0.38, dominant.Saturation));
-        var depth = dominant.WithLightness(Math.Clamp(dominant.Lightness * 0.28, 0.045, 0.12)).WithSaturation(Math.Max(0.30, dominant.Saturation * 0.82));
-        var glowColor = glow.WithLightness(Math.Clamp(glow.Lightness * 1.08, 0.38, 0.64)).WithSaturation(Math.Max(0.58, glow.Saturation));
-        var accentColor = accent.WithLightness(Math.Clamp(accent.Lightness, 0.56, 0.76)).WithSaturation(Math.Max(0.66, accent.Saturation));
+        // Plex-style color tuning: preserve exact hue, force rich saturation (55-75%),
+        // calibrate base lightness to 18-24% and depth lightness to 10-14%.
+        var baseColor = signature.WithLightness(Math.Clamp(signature.Lightness * 0.55, 0.18, 0.24)).WithSaturation(Math.Clamp(signature.Saturation * 1.1, 0.55, 0.75));
+        var depth = signature.WithLightness(Math.Clamp(signature.Lightness * 0.30, 0.10, 0.14)).WithSaturation(Math.Clamp(signature.Saturation * 0.9, 0.45, 0.65));
+        var glowColor = signature.WithLightness(Math.Clamp(signature.Lightness * 1.2, 0.35, 0.55)).WithSaturation(Math.Max(0.70, signature.Saturation));
+        var accentColor = signature.RotateHue(25).WithLightness(Math.Clamp(signature.Lightness * 1.4, 0.48, 0.72)).WithSaturation(Math.Max(0.70, signature.Saturation));
 
         return new ArtworkPaletteDto(
             baseColor.Hex,
             depth.Hex,
             glowColor.Hex,
             accentColor.Hex,
-            baseColor.Contrast(ColorWhite) >= 4.5 ? "#FFFFFF" : "#050505",
+            "#FFFFFF",
             CurrentAlgorithmVersion);
     }
 
     private static ArtworkPaletteDto DeterministicFallback(int contentId)
     {
         var hue = Math.Abs(contentId * 47 % 360);
-        var seed = Rgb.FromHsl(hue, 0.48, 0.22);
-        return new(seed.Hex, seed.WithLightness(0.045).Hex, seed.RotateHue(34).WithLightness(0.38).Hex,
-            seed.RotateHue(155).WithLightness(0.62).WithSaturation(0.7).Hex, "#FFFFFF", CurrentAlgorithmVersion);
+        var seed = Rgb.FromHsl(hue, 0.28, 0.10);
+        return new(seed.Hex, seed.WithLightness(0.04).Hex, seed.RotateHue(34).WithLightness(0.35).Hex,
+            seed.RotateHue(155).WithLightness(0.55).WithSaturation(0.65).Hex, "#FFFFFF", CurrentAlgorithmVersion);
     }
 
     private static string? ResolveArtworkPath(string? mediaPath, string? artworkReference)

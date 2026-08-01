@@ -374,55 +374,46 @@ private fun HomeScreen(state: LanflixUiState, onSelect: (ContentItem) -> Unit, o
     val hero = state.library.firstOrNull()
     var targetPalette by remember(hero?.id) { mutableStateOf(DefaultArtworkPalette) }
     LaunchedEffect(hero?.id, hero?.palette) { targetPalette = hero?.palette?.toComposePalette() ?: DefaultArtworkPalette }
-    val artworkPalette = animatedArtworkPalette(targetPalette)
-    val secondaryGlow = shiftArtworkHue(artworkPalette.glow, 118f)
+    val artworkPalette = targetPalette
     Box(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(
-                0f to artworkPalette.base,
-                .22f to artworkPalette.base,
-                .68f to artworkPalette.depth,
-                1f to LanflixBackground,
-                endY = 3300f
-            )
-        )
+        Modifier.fillMaxSize().background(Color(0xFF090A0E))
     ) {
     if (hero != null) {
         AsyncImage(
             model = hero.resolvedBackdropUrl ?: hero.resolvedPosterUrl,
             contentDescription = null,
-            modifier = Modifier.fillMaxSize().blur(30.dp).alpha(.34f),
+            modifier = Modifier.fillMaxSize().blur(45.dp).alpha(.75f),
             contentScale = ContentScale.Crop
         )
         Box(
             Modifier.fillMaxSize().background(
+                Brush.radialGradient(
+                    colors = listOf(artworkPalette.glow.copy(alpha = .55f), Color.Transparent),
+                    center = Offset(900f, 650f),
+                    radius = 1700f
+                )
+            )
+        )
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.radialGradient(
+                    colors = listOf(artworkPalette.accent.copy(alpha = .42f), Color.Transparent),
+                    center = Offset(100f, 1500f),
+                    radius = 1500f
+                )
+            )
+        )
+        Box(
+            Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    0f to Color.Transparent,
-                    .38f to artworkPalette.base.copy(alpha = .28f),
-                    .74f to artworkPalette.glow.copy(alpha = .26f),
-                    1f to artworkPalette.depth.copy(alpha = .78f)
+                    0f to Color.Black.copy(alpha = .35f),
+                    .25f to Color.Transparent,
+                    .65f to artworkPalette.glow.copy(alpha = .20f),
+                    1f to Color.Black.copy(alpha = .55f)
                 )
             )
         )
     }
-    Box(
-        Modifier.fillMaxSize().background(
-            Brush.radialGradient(
-                colors = listOf(artworkPalette.glow.copy(alpha = .72f), Color.Transparent),
-                center = Offset(900f, 780f),
-                radius = 1650f
-            )
-        )
-    )
-    Box(
-        Modifier.fillMaxSize().background(
-            Brush.radialGradient(
-                colors = listOf(secondaryGlow.copy(alpha = .56f), artworkPalette.accent.copy(alpha = .20f), Color.Transparent),
-                center = Offset(90f, 1650f),
-                radius = 1280f
-            )
-        )
-    )
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 92.dp)
@@ -677,38 +668,45 @@ private fun DetailScreen(
     var acquisitionRequested by remember(item.id) { mutableStateOf(false) }
     var targetPalette by remember(item.id) { mutableStateOf(DefaultArtworkPalette) }
     LaunchedEffect(item.id, item.palette) { targetPalette = item.palette?.toComposePalette() ?: DefaultArtworkPalette }
-    val artworkPalette = animatedArtworkPalette(targetPalette)
-    val secondaryGlow = shiftArtworkHue(artworkPalette.glow, 118f)
+    val artworkPalette = targetPalette
     val scope = rememberCoroutineScope()
     Box(
-        Modifier.fillMaxSize()
-            .background(artworkPalette.depth)
-            .drawBehind {
-                drawRect(
-                    Brush.verticalGradient(
-                        0f to artworkPalette.base,
-                        .48f to artworkPalette.depth,
-                        1f to darkenArtworkColor(artworkPalette.depth, .28f),
-                        startY = 0f,
-                        endY = size.height
-                    )
-                )
-                drawRect(
-                    Brush.radialGradient(
-                        colors = listOf(artworkPalette.glow.copy(alpha = .88f), Color.Transparent),
-                        center = Offset(size.width * .88f, size.height * .28f),
-                        radius = size.maxDimension * .82f
-                    )
-                )
-                drawRect(
-                    Brush.radialGradient(
-                        colors = listOf(secondaryGlow.copy(alpha = .72f), artworkPalette.accent.copy(alpha = .18f), Color.Transparent),
-                        center = Offset(size.width * .06f, size.height * .78f),
-                        radius = size.maxDimension * .78f
-                    )
-                )
-            }
+        Modifier.fillMaxSize().background(Color(0xFF090A0E))
     ) {
+    AsyncImage(
+        model = item.resolvedBackdropUrl ?: item.resolvedPosterUrl,
+        contentDescription = null,
+        modifier = Modifier.fillMaxSize().blur(45.dp).alpha(.75f),
+        contentScale = ContentScale.Crop
+    )
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.radialGradient(
+                colors = listOf(artworkPalette.glow.copy(alpha = .55f), Color.Transparent),
+                center = Offset(850f, 700f),
+                radius = 1700f
+            )
+        )
+    )
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.radialGradient(
+                colors = listOf(artworkPalette.accent.copy(alpha = .42f), Color.Transparent),
+                center = Offset(120f, 1600f),
+                radius = 1500f
+            )
+        )
+    )
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(
+                0f to Color.Black.copy(alpha = .35f),
+                .25f to Color.Transparent,
+                .65f to artworkPalette.glow.copy(alpha = .20f),
+                1f to Color.Black.copy(alpha = .55f)
+            )
+        )
+    )
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 36.dp)) {
         item {
             Box(Modifier.fillMaxWidth().height(500.dp)) {
@@ -759,13 +757,33 @@ private fun DetailScreen(
                 Button(
                     onClick = {
                         if (isDiscovery) scope.launch { acquisitionRequested = discoveryApi.acquire(com.lanflix.api.DiscoveryItem(item.tmdbId, item.type ?: "movie", item.displayTitle, item.overview, item.year, item.rating?.toDoubleOrNull() ?: 0.0, item.posterUrl, item.backdropUrl)) }
-                        else onPlay()
+                        else if (canPlay) onPlay()
                     },
-                    enabled = canPlay || (isDiscovery && online),
+                    enabled = canPlay || (isDiscovery && online) || (!isPlayableType),
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(25.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, disabledContainerColor = Color.White.copy(alpha = .15f))
-                ) { Icon(if (isDiscovery) Icons.Filled.Download else Icons.Filled.PlayArrow, null, tint = Color.Black); Text(if (isDiscovery) { if (acquisitionRequested) "Requested" else "Request" } else if (!isPlayableType) "Choose an episode" else if (item.isOfflinePlayable) "Play offline" else if (online) "Play" else "Unavailable offline", color = if (canPlay || (isDiscovery && online)) Color.Black else LanflixMuted, fontWeight = FontWeight.Bold) }
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                        disabledContainerColor = Color.White.copy(alpha = .18f),
+                        disabledContentColor = Color.White.copy(alpha = .5f)
+                    )
+                ) {
+                    Icon(
+                        if (isDiscovery) Icons.Filled.Download else if (isPlayableType) Icons.Filled.PlayArrow else Icons.Filled.Tv,
+                        null,
+                        tint = Color.Black
+                    )
+                    Text(
+                        if (isDiscovery) { if (acquisitionRequested) "Requested" else "Request" }
+                        else if (!isPlayableType) "Choose an episode below"
+                        else if (item.isOfflinePlayable) "Play offline"
+                        else if (online) "Play"
+                        else "Unavailable offline",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     DetailAction(Icons.Outlined.BookmarkBorder, "Watchlist")
                     DetailAction(
@@ -898,21 +916,14 @@ private fun EpisodeRow(episode: EpisodeItem, onClick: () -> Unit) {
 private data class ArtworkPalette(val base: Color, val depth: Color, val glow: Color, val accent: Color)
 
 private val DefaultArtworkPalette = ArtworkPalette(
-    base = Color(0xFF143D5A),
-    depth = Color(0xFF081A2B),
-    glow = Color(0xFF186D92),
+    base = Color(0xFF0F1720),
+    depth = Color(0xFF070B10),
+    glow = Color(0xFF1B5375),
     accent = LanflixGold
 )
 
 @Composable
-private fun animatedArtworkPalette(target: ArtworkPalette): ArtworkPalette {
-    val animation = tween<Color>(durationMillis = 850)
-    val base by animateColorAsState(target.base, animation, label = "artwork-base")
-    val depth by animateColorAsState(target.depth, animation, label = "artwork-depth")
-    val glow by animateColorAsState(target.glow, animation, label = "artwork-glow")
-    val accent by animateColorAsState(target.accent, animation, label = "artwork-accent")
-    return ArtworkPalette(base, depth, glow, accent)
-}
+private fun animatedArtworkPalette(target: ArtworkPalette): ArtworkPalette = target
 
 private fun com.lanflix.models.ServerArtworkPalette.toComposePalette() = ArtworkPalette(
     base = runCatching { Color(android.graphics.Color.parseColor(base)) }.getOrDefault(DefaultArtworkPalette.base),
@@ -927,21 +938,40 @@ private suspend fun extractArtworkPalette(drawable: android.graphics.drawable.Dr
         val readableBitmap = if (sourceBitmap.config == android.graphics.Bitmap.Config.HARDWARE) {
             sourceBitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
         } else sourceBitmap
-        val palette = Palette.from(readableBitmap).maximumColorCount(12).generate()
-        val fallback = palette.dominantSwatch?.rgb ?: 0xFF17354A.toInt()
+        val palette = Palette.from(readableBitmap).maximumColorCount(24).generate()
+
+        val swatches = listOfNotNull(
+            palette.vibrantSwatch,
+            palette.lightVibrantSwatch,
+            palette.darkVibrantSwatch,
+            palette.dominantSwatch,
+            palette.mutedSwatch
+        )
+        val signatureSwatch = swatches.maxByOrNull { swatch ->
+            val hsv = FloatArray(3)
+            android.graphics.Color.colorToHSV(swatch.rgb, hsv)
+            val sat = hsv[1]
+            val lightness = hsv[2]
+            val vividness = if (sat > 0.30f && lightness in 0.18f..0.88f) 2.5f else 0.4f
+            swatch.population * sat * vividness
+        }
+
+        val signatureRgb = signatureSwatch?.rgb ?: 0xFF143D5A.toInt()
+        val accentRgb = swatches.firstOrNull { it.rgb != signatureRgb }?.rgb ?: signatureRgb
+
         ArtworkPalette(
-            base = artworkTone(palette.darkVibrantSwatch?.rgb ?: palette.vibrantSwatch?.rgb ?: fallback, .38f, .64f),
-            depth = artworkTone(palette.darkMutedSwatch?.rgb ?: palette.darkVibrantSwatch?.rgb ?: fallback, .16f, .34f),
-            glow = artworkTone(palette.vibrantSwatch?.rgb ?: palette.lightVibrantSwatch?.rgb ?: fallback, .62f, .90f),
-            accent = artworkTone(palette.lightVibrantSwatch?.rgb ?: palette.vibrantSwatch?.rgb ?: fallback, .72f, .98f)
+            base = artworkTone(signatureRgb, .22f, .28f, minSat = .65f, maxSat = .85f),
+            depth = artworkTone(signatureRgb, .12f, .16f, minSat = .55f, maxSat = .75f),
+            glow = artworkTone(signatureRgb, .42f, .65f, minSat = .78f, maxSat = 1.0f),
+            accent = artworkTone(accentRgb, .52f, .78f, minSat = .75f, maxSat = 1.0f)
         )
     }.getOrDefault(DefaultArtworkPalette)
 }
 
-private fun artworkTone(rgb: Int, minValue: Float, maxValue: Float): Color {
+private fun artworkTone(rgb: Int, minValue: Float, maxValue: Float, minSat: Float = .30f, maxSat: Float = .96f): Color {
     val hsv = FloatArray(3)
     android.graphics.Color.colorToHSV(rgb, hsv)
-    hsv[1] = hsv[1].coerceIn(.62f, .96f)
+    hsv[1] = hsv[1].coerceIn(minSat, maxSat)
     hsv[2] = hsv[2].coerceIn(minValue, maxValue)
     return Color(android.graphics.Color.HSVToColor(hsv))
 }

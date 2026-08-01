@@ -130,12 +130,14 @@ internal sealed class SqliteLibraryCatalog(
     {
         try
         {
-            var tvDetails = await tmdb.GetTvSeriesDetailsAsync(tmdbId, cancellationToken);
-            if (tvDetails?.Seasons is null) return;
-
             var existingEpisodes = await db.Episodes
                 .Where(e => e.ContentId == contentId)
                 .ToListAsync(cancellationToken);
+
+            if (existingEpisodes.Count > 0) return;
+
+            var tvDetails = await tmdb.GetTvSeriesDetailsAsync(tmdbId, cancellationToken);
+            if (tvDetails?.Seasons is null) return;
 
             var existingMap = existingEpisodes
                 .ToDictionary(e => (e.SeasonNumber, e.EpisodeNumber));
@@ -269,35 +271,56 @@ internal sealed class SqliteLibraryCatalog(
 
         if (!string.IsNullOrWhiteSpace(episode.StillPath) && File.Exists(episode.StillPath))
             return CreateArtworkFile(episode.StillPath);
-        if (string.IsNullOrWhiteSpace(episode.FilePath)) return null;
-        var folder = Path.GetDirectoryName(episode.FilePath);
-        if (string.IsNullOrWhiteSpace(folder)) return null;
 
-        var canonicalStill = Path.Combine(folder, $"S{episode.SeasonNumber:00}E{episode.EpisodeNumber:00}.jpg");
-        if (File.Exists(canonicalStill))
+        var folders = new List<string>();
+        if (!string.IsNullOrWhiteSpace(episode.FilePath))
         {
-            if (!string.Equals(episode.StillPath, canonicalStill, StringComparison.OrdinalIgnoreCase))
+            var epDir = Path.GetDirectoryName(episode.FilePath);
+            if (!string.IsNullOrWhiteSpace(epDir)) folders.Add(epDir);
+        }
+        if (episode.Content != null && !string.IsNullOrWhiteSpace(episode.Content.FilePath))
+        {
+            var contentDir = Directory.Exists(episode.Content.FilePath)
+                ? episode.Content.FilePath
+                : Path.GetDirectoryName(episode.Content.FilePath);
+
+            if (!string.IsNullOrWhiteSpace(contentDir))
             {
-                episode.StillPath = canonicalStill;
-                await db.SaveChangesAsync(cancellationToken);
+                folders.Add(contentDir);
+                folders.Add(Path.Combine(contentDir, $"Season {episode.SeasonNumber}"));
+                folders.Add(Path.Combine(contentDir, $"Season {episode.SeasonNumber:00}"));
             }
-            return CreateArtworkFile(canonicalStill);
         }
 
-        var remoteStill = episode.StillPath?.StartsWith('/') == true ? episode.StillPath : null;
-        if (remoteStill is null && episode.Content.TmdbId > 0)
+        var filenames = new[]
         {
-            var season = await tmdb.GetSeasonDetailsAsync(episode.Content.TmdbId, episode.SeasonNumber, cancellationToken);
-            remoteStill = season?.Episodes.FirstOrDefault(item => item.EpisodeNumber == episode.EpisodeNumber)?.StillPath;
-        }
-        if (string.IsNullOrWhiteSpace(remoteStill)) return null;
+            $"S{episode.SeasonNumber:00}E{episode.EpisodeNumber:00}.jpg",
+            $"S{episode.SeasonNumber:00}E{episode.EpisodeNumber:00}.png",
+            $"S{episode.SeasonNumber:01}E{episode.EpisodeNumber:02}.jpg",
+            $"S{episode.SeasonNumber:01}E{episode.EpisodeNumber:02}.png",
+            $"E{episode.EpisodeNumber:00}.jpg",
+            $"E{episode.EpisodeNumber:02}.jpg"
+        };
 
-        var downloaded = await metadata.DownloadEpisodeStillAsync(
-            remoteStill, folder, episode.SeasonNumber, episode.EpisodeNumber, cancellationToken);
-        if (string.IsNullOrWhiteSpace(downloaded) || !File.Exists(downloaded)) return null;
-        episode.StillPath = downloaded;
-        await db.SaveChangesAsync(cancellationToken);
-        return CreateArtworkFile(downloaded);
+        foreach (var folder in folders.Distinct())
+        {
+            if (!Directory.Exists(folder)) continue;
+            foreach (var filename in filenames)
+            {
+                var candidate = Path.Combine(folder, filename);
+                if (File.Exists(candidate))
+                {
+                    if (!string.Equals(episode.StillPath, candidate, StringComparison.OrdinalIgnoreCase))
+                    {
+                        episode.StillPath = candidate;
+                        await db.SaveChangesAsync(cancellationToken);
+                    }
+                    return CreateArtworkFile(candidate);
+                }
+            }
+        }
+
+        return null;
     }
 
     private async Task<IReadOnlyList<MediaItemDto>> MapAsync(IEnumerable<Content> entities, CancellationToken cancellationToken)
