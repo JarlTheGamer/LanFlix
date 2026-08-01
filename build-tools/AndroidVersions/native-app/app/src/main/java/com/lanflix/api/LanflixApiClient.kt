@@ -11,8 +11,10 @@ import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 import com.lanflix.webview.ServerManager
+import android.content.Context
+import com.lanflix.offline.OfflineMediaStore
 
-class LanflixApiClient(private val baseUrl: String = ServerManager.activeServerUrl) {
+class LanflixApiClient(context: Context, private val baseUrl: String = ServerManager.activeServerUrl) {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(6, TimeUnit.SECONDS)
@@ -20,6 +22,7 @@ class LanflixApiClient(private val baseUrl: String = ServerManager.activeServerU
         .build()
 
     private val gson = Gson()
+    private val offlineStore = OfflineMediaStore(context)
 
     suspend fun getHomeContent(): List<ContentItem> = withContext(Dispatchers.IO) {
         val movies = getMovies()
@@ -39,15 +42,21 @@ class LanflixApiClient(private val baseUrl: String = ServerManager.activeServerU
                 .build()
 
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
-                val body = response.body?.string() ?: return@withContext emptyList()
+                if (!response.isSuccessful) return@withContext offlineStore.readCatalog()
+                val body = response.body?.string() ?: return@withContext offlineStore.readCatalog()
                 
                 val libraryResponse = gson.fromJson(body, LibraryResponse::class.java)
-                return@withContext libraryResponse?.items ?: emptyList()
+                val items = libraryResponse?.items ?: emptyList()
+                offlineStore.cacheLibrary(items)
+                return@withContext items
             }
         } catch (e: Exception) {
-            emptyList()
+            offlineStore.readCatalog()
         }
+    }
+
+    suspend fun getOfflineCatalog(): List<ContentItem> = withContext(Dispatchers.IO) {
+        offlineStore.readCatalog()
     }
 
     suspend fun getCollections(): List<ContentItem> = withContext(Dispatchers.IO) {

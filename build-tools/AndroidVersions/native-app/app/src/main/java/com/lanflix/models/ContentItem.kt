@@ -18,10 +18,14 @@ data class ContentItem(
     @SerializedName("rating") val rating: String? = "PG-13",
     @SerializedName("releaseDate") val releaseDate: String? = null,
     @SerializedName("type") val type: String? = "movie",
-    @SerializedName("itemCount") val itemCount: Int? = null
+    @SerializedName("itemCount") val itemCount: Int? = null,
+    @SerializedName("localFilePath") val localFilePath: String? = null
 ) {
     val displayTitle: String
         get() = title ?: collectionName ?: name ?: "Untitled"
+
+    val isOfflinePlayable: Boolean
+        get() = !localFilePath.isNullOrBlank()
 
     val resolvedPosterUrl: String?
         get() {

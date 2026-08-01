@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 
 class HomeFragment : Fragment() {
 
-    private val apiClient = LanflixApiClient()
+    private lateinit var apiClient: LanflixApiClient
     private lateinit var continueAdapter: PosterAdapter
     private lateinit var recentAdapter: PosterAdapter
     private var heroItem: ContentItem? = null
@@ -35,6 +35,7 @@ class HomeFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        apiClient = LanflixApiClient(requireContext())
 
         val imgHeroBackdrop: ImageView = view.findViewById(R.id.hero_img_backdrop)
         val txtHeroTitle: TextView = view.findViewById(R.id.hero_txt_title)

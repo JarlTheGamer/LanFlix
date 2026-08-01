@@ -22,6 +22,9 @@ object ServerManager {
     var activeServerUrl: String = DEFAULT_MDNS_HOST
 
     @Volatile
+    var isOnline: Boolean = false
+
+    @Volatile
     private var cachedResolvedIp: String? = null
 
     private fun getPrefs(context: Context): SharedPreferences {

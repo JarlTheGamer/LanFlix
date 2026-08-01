@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 
 class LibrariesFragment : Fragment() {
 
-    private val apiClient = LanflixApiClient()
+    private lateinit var apiClient: LanflixApiClient
     private lateinit var posterAdapter: PosterAdapter
     private var moviesCache: List<ContentItem> = emptyList()
     private var collectionsCache: List<ContentItem> = emptyList()
@@ -34,6 +34,7 @@ class LibrariesFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        apiClient = LanflixApiClient(requireContext())
 
         val chipGroup: ChipGroup = view.findViewById(R.id.chip_group_filters)
         val recyclerGrid: RecyclerView = view.findViewById(R.id.recycler_grid)
@@ -50,25 +51,10 @@ class LibrariesFragment : Fragment() {
             }
         }
 
-        moviesCache = listOf(
-            ContentItem(10, title = "10 Cloverfield Lane", posterUrl = "https://image.tmdb.org/t/p/w500/10cloverfield.jpg", rating = "PG-13", releaseDate = "2016"),
-            ContentItem(11, title = "2001: A Space Odyssey", posterUrl = "https://image.tmdb.org/t/p/w500/2001.jpg", rating = "G", releaseDate = "1968"),
-            ContentItem(12, title = "About Time", posterUrl = "https://image.tmdb.org/t/p/w500/abouttime.jpg", rating = "R", releaseDate = "2013"),
-            ContentItem(13, title = "The Abyss", posterUrl = "https://image.tmdb.org/t/p/w500/abyss.jpg", rating = "PG-13", releaseDate = "1989"),
-            ContentItem(14, title = "The Adam Project", posterUrl = "https://image.tmdb.org/t/p/w500/adamproject.jpg", rating = "PG-13", releaseDate = "2022"),
-            ContentItem(15, title = "Alien Romulus", posterUrl = "https://image.tmdb.org/t/p/w500/alienromulus.jpg", rating = "R", releaseDate = "2024")
-        )
-
-        collectionsCache = listOf(
-            ContentItem(101, collectionName = "Marvel Cinematic Universe", itemCount = 34, posterUrl = "https://image.tmdb.org/t/p/w500/mcu.jpg"),
-            ContentItem(102, collectionName = "Harry Potter Collection", itemCount = 8, posterUrl = "https://image.tmdb.org/t/p/w500/hp.jpg"),
-            ContentItem(103, collectionName = "Star Wars Saga", itemCount = 11, posterUrl = "https://image.tmdb.org/t/p/w500/starwars.jpg")
-        )
-
-        posterAdapter.updateItems(moviesCache)
+        posterAdapter.updateItems(emptyList())
 
         lifecycleScope.launch {
-            val fetchedMovies = apiClient.getHomeContent()
+            val fetchedMovies = apiClient.getMovies()
             val fetchedCollections = apiClient.getCollections()
             if (fetchedMovies.isNotEmpty()) {
                 moviesCache = fetchedMovies

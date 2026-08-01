@@ -27,6 +27,7 @@ class MainActivity : AppCompatActivity() {
         if (!serverUrl.isNullOrBlank()) {
             ServerManager.activeServerUrl = serverUrl
         }
+        ServerManager.isOnline = intent.getBooleanExtra("SERVER_ONLINE", ServerManager.isOnline)
 
         setupImmersiveDisplay()
         setupNativeNavigation()

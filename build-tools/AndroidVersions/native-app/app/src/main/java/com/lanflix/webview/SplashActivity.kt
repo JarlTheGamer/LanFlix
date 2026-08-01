@@ -59,28 +59,19 @@ class SplashActivity : AppCompatActivity() {
             ServerManager.saveServer(this@SplashActivity, serverUrl)
 
             val isOnline = ServerManager.pingServer(this@SplashActivity, serverUrl, timeoutMs = 1500)
-            if (isOnline) {
-                launchMainActivity(serverUrl)
-            } else {
-                launchServerBrowser()
-            }
+            ServerManager.isOnline = isOnline
+            launchMainActivity(serverUrl, isOnline)
         }
     }
 
-    private fun launchMainActivity(serverUrl: String) {
+    private fun launchMainActivity(serverUrl: String, isOnline: Boolean) {
         val intent = Intent(this, MainActivity::class.java).apply {
             putExtra("SERVER_URL", serverUrl)
+            putExtra("SERVER_ONLINE", isOnline)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         startActivity(intent)
         finish()
     }
 
-    private fun launchServerBrowser() {
-        val intent = Intent(this, ServerBrowserActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        startActivity(intent)
-        finish()
-    }
 }
