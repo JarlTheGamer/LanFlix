@@ -23,10 +23,20 @@ data class ContentItem(
         get() = title ?: collectionName ?: name ?: "Untitled"
 
     val resolvedPosterUrl: String?
-        get() = posterUrl ?: posterPath?.let { if (it.startsWith("http")) it else "https://image.tmdb.org/t/p/w500$it" }
+        get() {
+            val raw = posterUrl ?: posterPath ?: return null
+            if (raw.startsWith("http")) return raw
+            val clean = if (raw.startsWith("/")) raw else "/$raw"
+            return if (clean.startsWith("/t/p/")) "https://image.tmdb.org$clean" else "https://image.tmdb.org/t/p/w500$clean"
+        }
 
     val resolvedBackdropUrl: String?
-        get() = backdropUrl ?: backdropPath?.let { if (it.startsWith("http")) it else "https://image.tmdb.org/t/p/w1280$it" }
+        get() {
+            val raw = backdropUrl ?: backdropPath ?: return null
+            if (raw.startsWith("http")) return raw
+            val clean = if (raw.startsWith("/")) raw else "/$raw"
+            return if (clean.startsWith("/t/p/")) "https://image.tmdb.org$clean" else "https://image.tmdb.org/t/p/w1280$clean"
+        }
 }
 
 data class CastMember(

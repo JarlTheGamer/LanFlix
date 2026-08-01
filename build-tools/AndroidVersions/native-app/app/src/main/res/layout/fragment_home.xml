@@ -11,15 +11,16 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Hero Spotlight Banner -->
+        <!-- Hero Spotlight Banner (Full Height Backdrop Layer) -->
         <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="360dp">
+            android:layout_height="460dp">
 
             <ImageView
                 android:id="@+id/hero_img_backdrop"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:background="#121624"
                 android:scaleType="centerCrop" />
 
             <View

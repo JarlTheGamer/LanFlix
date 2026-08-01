@@ -20,7 +20,7 @@ object ImageFetcher {
         .followSslRedirects(true)
         .build()
 
-    private val memoryCache = LruCache<String, Bitmap>(50)
+    private val memoryCache = LruCache<String, Bitmap>(100)
 
     fun loadImage(imageView: ImageView, url: String?) {
         if (url.isNullOrBlank()) return
@@ -53,7 +53,7 @@ object ImageFetcher {
                     }
                 }
             } catch (e: Exception) {
-                // Ignore network errors silently
+                // Network fetch error ignored
             }
         }
     }
