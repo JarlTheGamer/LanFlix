@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit
 
 /** Downloads a server-available movie/episode to app-private storage for later playback. */
 class OfflineDownloadManager(context: Context) {
+    private val appContext = context.applicationContext
     private val store = OfflineMediaStore(context)
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -30,7 +31,7 @@ class OfflineDownloadManager(context: Context) {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext null
                 val body = response.body ?: return@withContext null
-                val temp = File.createTempFile("lanflix-download-", ".${extension(item)}")
+                val temp = File.createTempFile("lanflix-download-", ".${extension(item)}", appContext.cacheDir)
                 body.byteStream().use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
                 store.saveDownloaded(item, temp).also { temp.delete() }
             }

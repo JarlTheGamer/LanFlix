@@ -26,12 +26,31 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
 
     suspend fun getHomeContent(): List<ContentItem> = withContext(Dispatchers.IO) {
         val movies = getMovies()
-        if (movies.isNotEmpty()) return@withContext movies
+        val series = if (ServerManager.isOnline) getSeries() else emptyList()
+        val library = (movies + series).distinctBy { "${it.type}:${it.id}" }
+        if (library.isNotEmpty()) return@withContext library
 
         val collections = getCollections()
         if (collections.isNotEmpty()) return@withContext collections
 
         emptyList()
+    }
+
+    suspend fun getSeries(): List<ContentItem> = getLibraryPage("series")
+
+    private suspend fun getLibraryPage(kind: String): List<ContentItem> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder().url("$baseUrl/api/library/$kind?limit=50").get().build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                val body = response.body?.string() ?: return@withContext emptyList()
+                val items = gson.fromJson(body, LibraryResponse::class.java)?.items ?: emptyList()
+                offlineStore.cacheLibrary(items)
+                items
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     suspend fun getMovies(): List<ContentItem> = withContext(Dispatchers.IO) {
