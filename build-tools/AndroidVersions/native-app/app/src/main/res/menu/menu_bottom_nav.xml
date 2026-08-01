@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_home"
+        android:icon="@drawable/ic_tab_home"
+        android:title="Home" />
+    <item
+        android:id="@+id/nav_libraries"
+        android:icon="@drawable/ic_tab_libraries"
+        android:title="Libraries" />
+    <item
+        android:id="@+id/nav_livetv"
+        android:icon="@drawable/ic_tab_livetv"
+        android:title="Live TV" />
+    <item
+        android:id="@+id/nav_downloads"
+        android:icon="@drawable/ic_tab_ondemand"
+        android:title="On Demand" />
+    <item
+        android:id="@+id/nav_discover"
+        android:icon="@drawable/ic_tab_discover"
+        android:title="Discover" />
+</menu>

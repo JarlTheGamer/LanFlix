@@ -21,14 +21,20 @@
         <item name="android:selectableItemBackgroundBorderless">@android:color/transparent</item>
     </style>
 
-    <style name="Theme.Lanflix" parent="Base.Theme.Lanflix" />
+    <style name="Theme.Lanflix" parent="Base.Theme.Lanflix">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentNavigation">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
+    </style>
     
     <style name="Theme.Lanflix.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowFullscreen">false</item>
-        <item name="android:statusBarColor">@color/bg_dark</item>
-        <item name="android:navigationBarColor">@color/bg_dark</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
     
     <style name="Theme.Lanflix.Splash" parent="Theme.Lanflix.NoActionBar">

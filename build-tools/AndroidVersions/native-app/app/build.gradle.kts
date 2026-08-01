@@ -67,11 +67,15 @@ dependencies {
     // TV support
     implementation("androidx.leanback:leanback:1.0.0")
     
-    // OTA Update dependencies
+    // OTA Update & Background Work
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Networking & Serialization
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
-    
+    // Image Loading
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")

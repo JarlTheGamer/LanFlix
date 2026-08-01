@@ -1,99 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_dark"
+    android:background="#070709"
     tools:context=".MainActivity">
 
-    <ProgressBar
-        android:id="@+id/progressBar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="4dp"
-        android:layout_alignParentTop="true"
-        android:progressTint="@color/primary_color"
-        android:visibility="gone" />
-
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        android:id="@+id/swipeRefresh"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@id/progressBar">
-
-        <WebView
-            android:id="@+id/webView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-
-    <!-- Fullscreen Video Overlay Container -->
+    <!-- Fragment Container (Full Screen Layer) -->
     <FrameLayout
-        android:id="@+id/fullScreenContainer"
+        android:id="@+id/fragment_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#000000"
-        android:visibility="gone" />
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Native Server Unreachable Failover Overlay -->
-    <LinearLayout
-        android:id="@+id/serverUnreachableLayout"
+    <!-- Top Floating Glass Header Bar -->
+    <RelativeLayout
+        android:id="@+id/top_header_bar"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/bg_dark"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="28dp"
-        android:visibility="gone">
-
-        <ImageView
-            android:layout_width="72dp"
-            android:layout_height="72dp"
-            android:layout_marginBottom="20dp"
-            android:contentDescription="@string/app_name"
-            android:src="@mipmap/ic_launcher" />
+        android:layout_height="wrap_content"
+        android:background="#D9070709"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="8dp"
+        android:elevation="10dp"
+        app:layout_constraintTop_toTopOf="parent">
 
         <TextView
+            android:id="@+id/txt_logo"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:fontFamily="sans-serif-black"
-            android:text="Server Unreachable"
-            android:textColor="@color/white"
+            android:layout_centerVertical="true"
+            android:text="lanflix"
+            android:textColor="#E50914"
             android:textSize="22sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:letterSpacing="-0.02" />
 
-        <TextView
-            android:id="@+id/txtUnreachableDetail"
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="28dp"
-            android:gravity="center"
-            android:text="Unable to connect to Lanflix server.\nPlease check your network connection."
-            android:textColor="@color/text_secondary"
-            android:textSize="14sp" />
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/btnRetryConnection"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginBottom="12dp"
-            android:background="@drawable/bg_button_primary"
-            android:text="Retry Connection"
-            android:textColor="@color/white"
-            android:textSize="15sp"
-            android:textStyle="bold" />
+            <ImageView
+                android:id="@+id/btn_top_search"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:padding="6dp"
+                android:src="@drawable/ic_top_search"
+                app:tint="#FFFFFF"
+                android:clickable="true"
+                android:focusable="true" />
 
-        <Button
-            android:id="@+id/btnOpenServerBrowser"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:background="@drawable/bg_card_selector"
-            android:text="Select Another Server"
-            android:textColor="@color/white"
-            android:textSize="15sp" />
+            <ImageView
+                android:id="@+id/btn_top_cast"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="8dp"
+                android:padding="6dp"
+                android:src="@drawable/ic_top_cast"
+                app:tint="#FFFFFF"
+                android:clickable="true"
+                android:focusable="true" />
 
-    </LinearLayout>
+            <ImageView
+                android:id="@+id/btn_top_bookmark"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="8dp"
+                android:padding="6dp"
+                android:src="@drawable/ic_top_bookmark"
+                app:tint="#FFFFFF"
+                android:clickable="true"
+                android:focusable="true" />
 
-</RelativeLayout>
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/top_profile_avatar"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="10dp"
+                android:src="@android:drawable/ic_menu_myplaces"
+                android:background="#E50914"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Full" />
+        </LinearLayout>
+    </RelativeLayout>
+
+    <!-- Material Bottom Navigation Bar (Glass effect) -->
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottom_navigation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#D90A0A0E"
+        app:itemIconSize="22dp"
+        app:itemIconTint="@color/nav_item_color"
+        app:itemTextColor="@color/nav_item_color"
+        app:labelVisibilityMode="labeled"
+        app:itemActiveIndicatorStyle="@null"
+        app:itemRippleColor="@null"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:menu="@menu/menu_bottom_nav" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

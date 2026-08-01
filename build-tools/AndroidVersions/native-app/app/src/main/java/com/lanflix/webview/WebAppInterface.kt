@@ -56,9 +56,7 @@ class WebAppInterface(private val context: Context, private val updateManager: U
     
     @JavascriptInterface
     fun triggerUpdate() {
-        if (context is MainActivity) {
-            context.evaluateJavascriptInWebView("window.appUpdater && window.appUpdater.checkForUpdates(true);")
-        }
+        // Native update trigger
     }
 
     @JavascriptInterface
