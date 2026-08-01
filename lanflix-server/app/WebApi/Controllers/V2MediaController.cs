@@ -3,6 +3,7 @@ using Lanflix.Application.Common.Interfaces;
 using Lanflix.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Lanflix.WebApi.Controllers;
 
@@ -15,8 +16,15 @@ namespace Lanflix.WebApi.Controllers;
 public sealed class V2MediaController : ControllerBase
 {
     private readonly IApplicationDbContext _db;
+    private readonly ITmdbClient _tmdb;
+    private readonly IMemoryCache _cache;
 
-    public V2MediaController(IApplicationDbContext db) => _db = db;
+    public V2MediaController(IApplicationDbContext db, ITmdbClient tmdb, IMemoryCache cache)
+    {
+        _db = db;
+        _tmdb = tmdb;
+        _cache = cache;
+    }
 
     [HttpGet("status")]
     public IActionResult GetStatus() => Ok(new
@@ -146,6 +154,31 @@ public sealed class V2MediaController : ControllerBase
             checksum,
             $"/api/stream/movie/{content.Id}/file",
             file.LastWriteTimeUtc));
+    }
+
+    [HttpGet("artwork/{id:int}/logo")]
+    [ResponseCache(Duration = 86400, Location = ResponseCacheLocation.Client)]
+    public async Task<IActionResult> GetLogoArtwork(int id, CancellationToken cancellationToken = default)
+    {
+        var content = await _db.Contents.AsNoTracking()
+            .Where(item => item.Id == id)
+            .Select(item => new { item.TmdbId, item.Type })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (content is null || content.TmdbId <= 0) return NotFound();
+
+        var cacheKey = $"tmdb-logo:{content.Type}:{content.TmdbId}";
+        if (!_cache.TryGetValue(cacheKey, out string? path))
+        {
+            path = await _tmdb.GetLogoPathAsync(
+                content.TmdbId,
+                content.Type == ContentType.Series,
+                cancellationToken: cancellationToken) ?? string.Empty;
+            _cache.Set(cacheKey, path, TimeSpan.FromHours(path.Length == 0 ? 1 : 24));
+        }
+
+        return string.IsNullOrWhiteSpace(path)
+            ? NotFound()
+            : Redirect($"https://image.tmdb.org/t/p/w500{path}");
     }
 
     private static string? ArtworkUrl(int id, string? path, string kind)

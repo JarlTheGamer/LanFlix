@@ -15,6 +15,7 @@ data class ContentItem(
     @SerializedName("backdropPath") val backdropPath: String? = null,
     @SerializedName("posterUrl") val posterUrl: String? = null,
     @SerializedName("backdropUrl") val backdropUrl: String? = null,
+    @SerializedName("logoUrl") val logoUrl: String? = null,
     @SerializedName("rating") val rating: String? = "PG-13",
     @SerializedName("releaseDate") val releaseDate: String? = null,
     @SerializedName("type") val type: String? = "movie",
@@ -44,6 +45,16 @@ data class ContentItem(
             val clean = if (raw.startsWith("/")) raw else "/$raw"
             return if (clean.startsWith("/t/p/")) "https://image.tmdb.org$clean" else "https://image.tmdb.org/t/p/w1280$clean"
         }
+
+    val resolvedLogoUrl: String?
+        get() {
+            val raw = logoUrl
+            if (!raw.isNullOrBlank()) {
+                if (raw.startsWith("http")) return raw
+                return "${ServerManager.activeServerUrl}${if (raw.startsWith('/')) raw else "/$raw"}"
+            }
+            return if (id > 0 && tmdbId > 0) "${ServerManager.activeServerUrl}/api/v2/artwork/$id/logo" else null
+        }
 }
 
 data class CastMember(
@@ -51,3 +62,64 @@ data class CastMember(
     val role: String,
     val profileUrl: String?
 )
+
+data class SeriesSeasonsResponse(
+    val seriesId: Int = 0,
+    val seriesTitle: String? = null,
+    val seasons: List<SeasonSummary> = emptyList(),
+    val totalSeasons: Int = 0
+)
+
+data class SeasonSummary(
+    val seasonNumber: Int = 0,
+    val episodeCount: Int = 0,
+    val availableEpisodes: Int = 0,
+    val firstEpisode: SeasonFirstEpisode? = null
+)
+
+data class SeasonFirstEpisode(
+    val title: String? = null,
+    val airDate: String? = null,
+    val stillUrl: String? = null
+)
+
+data class SeasonEpisodesResponse(
+    val seriesId: Int = 0,
+    val seasonNumber: Int = 0,
+    val episodes: List<EpisodeItem> = emptyList(),
+    val totalEpisodes: Int = 0,
+    val availableEpisodes: Int = 0
+)
+
+data class EpisodeItem(
+    val id: Int = 0,
+    val tmdbId: Int = 0,
+    val seasonNumber: Int = 0,
+    val episodeNumber: Int = 0,
+    val title: String? = null,
+    val overview: String? = null,
+    val airDate: String? = null,
+    val stillUrl: String? = null,
+    val filePath: String? = null,
+    val hasFile: Boolean = false
+) {
+    val resolvedStillUrl: String?
+        get() = stillUrl?.let { raw ->
+            when {
+                raw.startsWith("http") -> raw
+                raw.startsWith("/") -> "${ServerManager.activeServerUrl}$raw"
+                else -> "${ServerManager.activeServerUrl}/$raw"
+            }
+        }
+
+    fun asContentItem(series: ContentItem) = ContentItem(
+        id = id,
+        tmdbId = tmdbId,
+        title = title ?: "Episode $episodeNumber",
+        overview = overview,
+        posterUrl = resolvedStillUrl,
+        backdropUrl = series.resolvedBackdropUrl,
+        releaseDate = airDate,
+        type = "episode"
+    )
+}

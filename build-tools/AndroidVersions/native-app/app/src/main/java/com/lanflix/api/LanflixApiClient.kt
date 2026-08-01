@@ -4,6 +4,9 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.lanflix.models.ContentItem
 import com.lanflix.models.LibraryResponse
+import com.lanflix.models.SeasonEpisodesResponse
+import com.lanflix.models.SeasonSummary
+import com.lanflix.models.SeriesSeasonsResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -37,6 +40,26 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
     }
 
     suspend fun getSeries(): List<ContentItem> = getLibraryPage("series")
+
+    suspend fun getSeriesSeasons(seriesId: Int): List<SeasonSummary> = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder().url("$baseUrl/api/series/$seriesId/seasons").get().build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use emptyList()
+                gson.fromJson(response.body?.string(), SeriesSeasonsResponse::class.java)?.seasons.orEmpty()
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    suspend fun getSeasonEpisodes(seriesId: Int, seasonNumber: Int) = withContext(Dispatchers.IO) {
+        runCatching {
+            val request = Request.Builder().url("$baseUrl/api/series/$seriesId/seasons/$seasonNumber/episodes").get().build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use SeasonEpisodesResponse()
+                gson.fromJson(response.body?.string(), SeasonEpisodesResponse::class.java) ?: SeasonEpisodesResponse()
+            }
+        }.getOrDefault(SeasonEpisodesResponse())
+    }
 
     private suspend fun getLibraryPage(kind: String): List<ContentItem> = withContext(Dispatchers.IO) {
         try {

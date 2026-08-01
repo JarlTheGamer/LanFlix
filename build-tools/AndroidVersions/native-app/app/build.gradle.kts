@@ -95,6 +95,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("io.coil-kt:coil-compose:2.6.0")
+    implementation("androidx.palette:palette-ktx:1.0.0")
 
     // Native playback
     implementation("androidx.media3:media3-exoplayer:1.3.1")

@@ -46,4 +46,11 @@ public interface ITmdbClient
     /// Get popular TV series
     /// </summary>
     Task<TmdbSearchResult> GetPopularTvSeriesAsync(int page = 1, CancellationToken cancellationToken = default);
+
+    /// <summary>Get the best transparent title/logo artwork path for a movie or series.</summary>
+    Task<string?> GetLogoPathAsync(
+        int tmdbId,
+        bool isSeries,
+        string language = "en",
+        CancellationToken cancellationToken = default);
 }

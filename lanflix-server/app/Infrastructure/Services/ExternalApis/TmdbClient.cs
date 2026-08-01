@@ -43,6 +43,34 @@ public class TmdbClient : ITmdbClient
         return settings.ExternalApis.Tmdb.ApiKey;
     }
 
+    public async Task<string?> GetLogoPathAsync(
+        int tmdbId,
+        bool isSeries,
+        string language = "en",
+        CancellationToken cancellationToken = default)
+    {
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(apiKey)) return null;
+
+        var mediaType = isSeries ? "tv" : "movie";
+        var url = $"{mediaType}/{tmdbId}/images?api_key={apiKey}&include_image_language={Uri.EscapeDataString(language)},null";
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<TmdbImagesResponse>(url, _jsonOptions, cancellationToken);
+            return result?.Logos
+                .OrderByDescending(logo => string.Equals(logo.Language, language, StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(logo => logo.VoteAverage)
+                .ThenByDescending(logo => logo.Width)
+                .Select(logo => logo.FilePath)
+                .FirstOrDefault(path => !string.IsNullOrWhiteSpace(path));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            _logger.LogWarning(ex, "Unable to retrieve TMDB logo artwork for {MediaType} {TmdbId}", mediaType, tmdbId);
+            return null;
+        }
+    }
+
     public async Task<TmdbSearchResult> SearchMoviesAsync(
         string query,
         CancellationToken cancellationToken = default)
@@ -392,6 +420,27 @@ public class TmdbClient : ITmdbClient
             throw;
         }
     }
+}
+
+internal sealed class TmdbImagesResponse
+{
+    [JsonPropertyName("logos")]
+    public List<TmdbLogoImage> Logos { get; init; } = [];
+}
+
+internal sealed class TmdbLogoImage
+{
+    [JsonPropertyName("file_path")]
+    public string FilePath { get; init; } = string.Empty;
+
+    [JsonPropertyName("iso_639_1")]
+    public string? Language { get; init; }
+
+    [JsonPropertyName("vote_average")]
+    public double VoteAverage { get; init; }
+
+    [JsonPropertyName("width")]
+    public int Width { get; init; }
 }
 
 /// <summary>
