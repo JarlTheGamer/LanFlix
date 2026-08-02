@@ -260,7 +260,21 @@ internal sealed class SqliteLibraryCatalog(
 
         var folder = Directory.Exists(filePath) ? filePath : Path.GetDirectoryName(filePath);
         if (string.IsNullOrWhiteSpace(folder)) return null;
-        return CreateArtworkFile(Path.Combine(folder, $"{kind}.jpg"));
+
+        var targetFile = Path.Combine(folder, $"{kind}.jpg");
+        if (!File.Exists(targetFile))
+        {
+            try
+            {
+                await metadata.SaveMetadataToMediaFolderAsync(contentId, folder, cancellationToken);
+            }
+            catch
+            {
+                // Continue if auto-download fails
+            }
+        }
+
+        return CreateArtworkFile(targetFile);
     }
 
     public async Task<ArtworkFileDto?> GetEpisodeArtworkAsync(int episodeId, CancellationToken cancellationToken)
@@ -339,8 +353,8 @@ internal sealed class SqliteLibraryCatalog(
         content.ReleaseDate?.Year,
         content.Rating,
         content.Genres ?? Array.Empty<string>(),
-        ArtworkUrl(content.Id, content.PosterPath, "poster"),
-        ArtworkUrl(content.Id, content.BackdropPath, "backdrop"),
+        ArtworkUrl(content, "poster"),
+        ArtworkUrl(content, "backdrop"),
         content.TmdbId > 0 ? $"/api/v2/artwork/{content.Id}/logo" : null,
         Type(content) == "series" || (!string.IsNullOrWhiteSpace(content.FilePath) && File.Exists(content.FilePath)),
         null,
@@ -364,13 +378,9 @@ internal sealed class SqliteLibraryCatalog(
     private static double Percentage(long positionMilliseconds, long durationMilliseconds) =>
         durationMilliseconds <= 0 ? 0 : Math.Clamp(positionMilliseconds * 100d / durationMilliseconds, 0, 100);
 
-    private static string? ArtworkUrl(int id, string? path, string kind)
+    private static string? ArtworkUrl(Content content, string kind)
     {
-        if (string.IsNullOrWhiteSpace(path)) return null;
-        if (path.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return path;
-        if (path.StartsWith('/'))
-            return $"https://image.tmdb.org/t/p/{(kind == "poster" ? "w500" : "w1280")}{path}";
-        return $"/api/v2/artwork/{id}/{kind}";
+        return $"/api/v2/artwork/content/{content.Id}/{kind}";
     }
 
     private static string? EpisodeArtworkUrl(int id, string? path)

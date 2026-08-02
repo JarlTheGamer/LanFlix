@@ -1,3 +1,4 @@
+using Lanflix.Application.Common.Interfaces;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -17,11 +18,17 @@ public static class DiscoveryEndpoints
                 return Results.Problem(statusCode: 400, title: "Search text must contain at least two characters");
             return Results.Ok(await provider.SearchAsync(q.Trim(), type ?? "all", ct));
         });
-        discovery.MapGet("/{type}/{tmdbId:int}/logo", async (string type, int tmdbId, IDiscoveryProvider provider, CancellationToken ct) =>
+        discovery.MapGet("/{type}/{tmdbId:int}/logo", async (string type, int tmdbId, IDiscoveryProvider provider, IImageCacheService imageCache, HttpContext httpContext, CancellationToken ct) =>
         {
             if (type is not ("movie" or "series")) return Results.BadRequest();
             var url = await provider.GetLogoUrlAsync(tmdbId, type, ct);
-            return url is null ? Results.NotFound() : Results.Redirect(url, permanent: false);
+            if (url is null) return Results.NotFound();
+
+            var cached = await imageCache.GetOrFetchImageAsync(url, ct);
+            if (cached is null) return Results.Redirect(url, permanent: false);
+
+            httpContext.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            return Results.Bytes(cached.Value.Bytes, contentType: cached.Value.ContentType);
         }).AllowAnonymous();
         discovery.MapPost("/{tmdbId:int}/acquire", async (int tmdbId, AcquireMediaRequest request, IDiscoveryProvider provider, CancellationToken ct) =>
         {

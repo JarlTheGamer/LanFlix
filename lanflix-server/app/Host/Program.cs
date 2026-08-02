@@ -134,6 +134,7 @@ builder.Services.AddHealthChecks().AddDbContextCheck<ApplicationDbContext>("data
 var app = builder.Build();
 app.UseExceptionHandler();
 app.UseResponseCompression();
+app.UseMiddleware<Lanflix.Host.Middleware.ETagMiddleware>();
 app.UseCors();
 app.UseRateLimiter();
 app.UseAuthentication();

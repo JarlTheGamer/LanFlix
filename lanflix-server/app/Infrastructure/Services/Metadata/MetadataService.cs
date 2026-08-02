@@ -129,29 +129,37 @@ public class MetadataService : IMetadataService
             await File.WriteAllTextAsync(metadataPath, json, cancellationToken);
             _logger.LogInformation("Saved metadata to {Path}", metadataPath);
 
-            // Download and save poster if available
+            // Save poster, backdrop, and update DB content entries if modified
             if (!string.IsNullOrEmpty(posterPath))
             {
+                content.PosterPath = posterPath;
                 var posterUrl = $"{ImageBaseUrl}/{PosterSize}{posterPath}";
                 var posterFilePath = Path.Combine(mediaFolderPath, "poster.jpg");
                 var response = await _httpClient.GetAsync(posterUrl, cancellationToken);
-                response.EnsureSuccessStatusCode();
-                var imageBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-                await File.WriteAllBytesAsync(posterFilePath, imageBytes, cancellationToken);
-                _logger.LogInformation("Saved poster to {Path}", posterFilePath);
+                if (response.IsSuccessStatusCode)
+                {
+                    var imageBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                    await File.WriteAllBytesAsync(posterFilePath, imageBytes, cancellationToken);
+                    _logger.LogInformation("Saved poster to {Path}", posterFilePath);
+                }
             }
 
-            // Download and save backdrop if available
             if (!string.IsNullOrEmpty(backdropPath))
             {
+                content.BackdropPath = backdropPath;
                 var backdropUrl = $"{ImageBaseUrl}/{BackdropSize}{backdropPath}";
                 var backdropFilePath = Path.Combine(mediaFolderPath, "backdrop.jpg");
                 var response = await _httpClient.GetAsync(backdropUrl, cancellationToken);
-                response.EnsureSuccessStatusCode();
-                var imageBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-                await File.WriteAllBytesAsync(backdropFilePath, imageBytes, cancellationToken);
-                _logger.LogInformation("Saved backdrop to {Path}", backdropFilePath);
+                if (response.IsSuccessStatusCode)
+                {
+                    var imageBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                    await File.WriteAllBytesAsync(backdropFilePath, imageBytes, cancellationToken);
+                    _logger.LogInformation("Saved backdrop to {Path}", backdropFilePath);
+                }
             }
+
+            content.UpdatedAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
             // Download subtitles if auto-download is enabled
             var settings = await _settingsService.GetSettingsAsync(cancellationToken);

@@ -22,7 +22,11 @@ import java.util.concurrent.TimeUnit
 
 class LanflixApiClient(context: Context, private val baseUrl: String = ServerManager.activeServerUrl) {
     private val appContext = context.applicationContext
-    private val client = OkHttpClient.Builder().connectTimeout(6, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
+    private val client = OkHttpClient.Builder()
+        .cache(okhttp3.Cache(java.io.File(appContext.cacheDir, "http_cache"), 50L * 1024L * 1024L))
+        .connectTimeout(6, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
     private val gson = Gson()
     private val offlineStore = OfflineMediaStore(appContext)
     val sessions = LanflixSessionStore(appContext, baseUrl)

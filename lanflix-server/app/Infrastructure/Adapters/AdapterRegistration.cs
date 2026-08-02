@@ -57,6 +57,7 @@ public static class AdapterRegistration
         services.AddSingleton<IReleaseMetadataService, ReleaseMetadataService>();
         services.AddScoped<IServerUpdateService, ServerUpdateService>();
         services.AddSingleton<ITranscodingSessionManager, TranscodingSessionManager>();
+        services.AddSingleton<Lanflix.Application.Common.Interfaces.IImageCacheService, Lanflix.Infrastructure.Services.Image.ImageCacheService>();
 
         // Background Jobs & Hosted Services
         services.AddHostedService<Lanflix.Infrastructure.Services.BackgroundJobs.LibraryScanJob>();

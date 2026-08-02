@@ -11,13 +11,13 @@ class LanflixApplication : Application(), ImageLoaderFactory {
         return ImageLoader.Builder(this)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.25)
+                    .maxSizePercent(0.15)
                     .build()
             }
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(250 * 1024 * 1024) // 250 MB disk cache for artwork & posters
+                    .maxSizeBytes(50 * 1024 * 1024) // 50 MB lightweight disk cache
                     .build()
             }
             .respectCacheHeaders(false) // Cache TMDB & server images aggressively
