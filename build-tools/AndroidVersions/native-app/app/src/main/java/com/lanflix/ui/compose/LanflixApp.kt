@@ -123,6 +123,8 @@ import androidx.palette.graphics.Palette
 import androidx.media3.common.MediaItem
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
@@ -373,7 +375,7 @@ private fun BottomChrome(selected: Destination, onSelect: (Destination) -> Unit)
 private fun HomeScreen(state: LanflixUiState, onSelect: (ContentItem) -> Unit, onRetry: () -> Unit) {
     val hero = state.library.firstOrNull()
     var targetPalette by remember(hero?.id) { mutableStateOf(DefaultArtworkPalette) }
-    LaunchedEffect(hero?.id, hero?.palette) { targetPalette = hero?.palette?.toComposePalette() ?: DefaultArtworkPalette }
+    LaunchedEffect(hero?.id) { targetPalette = DefaultArtworkPalette }
     val artworkPalette = targetPalette
     Box(
         Modifier.fillMaxSize().background(Color(0xFF090A0E))
@@ -667,7 +669,7 @@ private fun DetailScreen(
     val discoveryApi = remember { LanflixApiClient(context) }
     var acquisitionRequested by remember(item.id) { mutableStateOf(false) }
     var targetPalette by remember(item.id) { mutableStateOf(DefaultArtworkPalette) }
-    LaunchedEffect(item.id, item.palette) { targetPalette = item.palette?.toComposePalette() ?: DefaultArtworkPalette }
+    LaunchedEffect(item.id) { targetPalette = DefaultArtworkPalette }
     val artworkPalette = targetPalette
     val scope = rememberCoroutineScope()
     Box(
@@ -1291,11 +1293,26 @@ private fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
     }
     val player = remember(uri) {
         val headers = sessionStore.accessToken?.let { mapOf("Authorization" to "Bearer $it") }.orEmpty()
-        val dataSource = DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers)
+        val dataSource = DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(8_000)
+            .setReadTimeoutMs(8_000)
+            .setAllowCrossProtocolRedirects(true)
+            .setDefaultRequestProperties(headers)
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 15_000,
+                /* maxBufferMs = */ 50_000,
+                /* bufferForPlaybackMs = */ 500,
+                /* bufferForPlaybackAfterRebufferMs = */ 1_000
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
         ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
             .setSeekBackIncrementMs(10_000)
             .setSeekForwardIncrementMs(10_000)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource)).build().apply {
+            setSeekParameters(SeekParameters.CLOSEST_SYNC)
             trackSelectionParameters = trackSelectionParameters.buildUpon()
                 .setPreferredAudioLanguage(playbackPreferences.preferredAudioLanguage.ifBlank { null })
                 .setPreferredTextLanguage(playbackPreferences.preferredSubtitleLanguage.ifBlank { null })

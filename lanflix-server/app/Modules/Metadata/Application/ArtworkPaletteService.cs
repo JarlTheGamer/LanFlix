@@ -11,7 +11,7 @@ namespace Lanflix.Modules.Metadata;
 
 public sealed class ArtworkPaletteService(IArtworkPaletteDbContext db, IHttpClientFactory httpClientFactory)
 {
-    public const int CurrentAlgorithmVersion = 4;
+    public const int CurrentAlgorithmVersion = 5;
 
     public async Task<ArtworkPaletteDto> GetOrCreateAsync(int contentId, string? mediaPath, CancellationToken cancellationToken)
         => await GetOrCreateAsync(contentId, mediaPath, null, cancellationToken);
@@ -82,14 +82,13 @@ public sealed class ArtworkPaletteService(IArtworkPaletteDbContext db, IHttpClie
         if (candidates.Length == 0) return ArtworkPaletteDto.Fallback;
 
         // Select signature color: pick the most vibrant swatch with good presence
-        var signature = candidates.MaxBy(x => x.Saturation * 2.5 + Math.Min(1.0, x.Weight / 100d)) ?? candidates[0];
+        var signature = candidates.MaxBy(x => (x.Saturation > 0.25 ? x.Saturation * 3.0 : x.Saturation) + Math.Min(1.0, x.Weight / 100d));
 
-        // Plex-style color tuning: preserve exact hue, force rich saturation (55-75%),
-        // calibrate base lightness to 18-24% and depth lightness to 10-14%.
-        var baseColor = signature.WithLightness(Math.Clamp(signature.Lightness * 0.55, 0.18, 0.24)).WithSaturation(Math.Clamp(signature.Saturation * 1.1, 0.55, 0.75));
-        var depth = signature.WithLightness(Math.Clamp(signature.Lightness * 0.30, 0.10, 0.14)).WithSaturation(Math.Clamp(signature.Saturation * 0.9, 0.45, 0.65));
-        var glowColor = signature.WithLightness(Math.Clamp(signature.Lightness * 1.2, 0.35, 0.55)).WithSaturation(Math.Max(0.70, signature.Saturation));
-        var accentColor = signature.RotateHue(25).WithLightness(Math.Clamp(signature.Lightness * 1.4, 0.48, 0.72)).WithSaturation(Math.Max(0.70, signature.Saturation));
+        // Ultra-vibrant Plex-style color tuning matching client-side extraction:
+        var baseColor = signature.WithLightness(Math.Clamp(signature.Lightness * 0.60, 0.22, 0.28)).WithSaturation(Math.Clamp(signature.Saturation * 1.2, 0.65, 0.85));
+        var depth = signature.WithLightness(Math.Clamp(signature.Lightness * 0.35, 0.12, 0.16)).WithSaturation(Math.Clamp(signature.Saturation * 1.0, 0.55, 0.75));
+        var glowColor = signature.WithLightness(Math.Clamp(signature.Lightness * 1.3, 0.42, 0.65)).WithSaturation(Math.Max(0.78, signature.Saturation));
+        var accentColor = signature.RotateHue(25).WithLightness(Math.Clamp(signature.Lightness * 1.5, 0.52, 0.78)).WithSaturation(Math.Max(0.75, signature.Saturation));
 
         return new ArtworkPaletteDto(
             baseColor.Hex,

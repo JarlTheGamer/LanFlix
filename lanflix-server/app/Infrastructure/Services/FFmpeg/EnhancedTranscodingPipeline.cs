@@ -269,20 +269,20 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
             args.Append("-y "); // Overwrite output files
         }
 
+        // Reduce stream probing delay on seek
+        args.Append("-analyzeduration 1000000 -probesize 1000000 ");
+
         // Hardware acceleration setup (must be before input)
         if (request.HwAccelMethod != HwAccelMethod.None)
         {
             AddHardwareAccelerationArgs(args, request.HwAccelMethod);
         }
 
-        // Input seeking
+        // Fast input seeking
         if (request.StartPosition.HasValue && request.StartPosition.Value > 0)
         {
             args.Append($"-ss {request.StartPosition.Value:F3} ");
-            // Add noaccurate_seek for faster seeking
             args.Append("-noaccurate_seek ");
-            // Add additional seeking optimizations
-            args.Append("-seek2any 1 ");
         }
         
         args.Append($"-i \"{request.InputPath}\" ");
