@@ -1336,40 +1336,66 @@ private fun ProfileScreen(
     }
 
     val defaultBackdrop = library.firstOrNull { !it.resolvedBackdropUrl.isNullOrBlank() }
-    val palette = defaultBackdrop?.palette?.toComposePalette() ?: DefaultArtworkPalette
     val customBackdropUrl = account?.id?.let { "${ServerManager.activeServerUrl}/api/v2/accounts/$it/backdrop?t=$backdropVersion" }
     val customAvatarUrl = account?.id?.let { "${ServerManager.activeServerUrl}/api/v2/accounts/$it/avatar?t=$avatarVersion" }
 
     val activeBackdropUrl = customBackdropUrl ?: defaultBackdrop?.resolvedBackdropUrl
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF070B10))) {
+    Box(Modifier.fillMaxSize().background(Color(0xFF090A0E))) {
         if (!activeBackdropUrl.isNullOrBlank()) {
             AsyncImage(
                 model = activeBackdropUrl,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize().blur(45.dp).alpha(.35f),
+                modifier = Modifier.fillMaxSize().blur(45.dp).alpha(.75f),
                 contentScale = ContentScale.Crop
             )
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = .40f),
-                        .4f to Color.Transparent,
-                        1f to Color(0xFF070B10)
-                    )
+        }
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = .35f),
+                    .25f to Color.Transparent,
+                    .65f to Color.Black.copy(alpha = .20f),
+                    1f to Color.Black.copy(alpha = .55f)
                 )
             )
-        }
+        )
 
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
             item {
                 Box(Modifier.fillMaxWidth().height(420.dp)) {
-                    AsyncImage(activeBackdropUrl, null, Modifier.fillMaxSize().clickable { backdropLauncher.launch("image/*") }, contentScale = ContentScale.Crop)
-                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .12f), palette.base.copy(alpha = .66f), palette.depth), startY = 40f, endY = 1100f)))
+                    AsyncImage(
+                        model = activeBackdropUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize()
+                            .clickable { backdropLauncher.launch("image/*") }
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        0f to Color.White,
+                                        .84f to Color.White,
+                                        1f to Color.Transparent
+                                    ),
+                                    blendMode = BlendMode.DstIn
+                                )
+                            },
+                        contentScale = ContentScale.Crop
+                    )
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.verticalGradient(
+                                0f to Color.Black.copy(alpha = .24f),
+                                .28f to Color.Transparent,
+                                1f to Color.Transparent
+                            )
+                        )
+                    )
                     IconButton(onClick = onBack, modifier = Modifier.statusBarsPadding().padding(8.dp).clip(CircleShape).background(Color.Black.copy(alpha = .28f))) { Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
                     Column(Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
-                            Modifier.size(94.dp).clip(CircleShape).background(Brush.radialGradient(listOf(palette.accent, palette.glow))).clickable { avatarLauncher.launch("image/*") },
+                            Modifier.size(94.dp).clip(CircleShape).background(Color.White.copy(alpha = .12f)).clickable { avatarLauncher.launch("image/*") },
                             contentAlignment = Alignment.Center
                         ) {
                             AsyncImage(
@@ -1382,7 +1408,7 @@ private fun ProfileScreen(
                         Text(account?.displayName ?: "Offline account", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 10.dp))
                         Text(account?.let { "@${it.username}  •  ${it.role}" } ?: "Cached downloads", color = Color.White.copy(alpha = .7f), fontSize = 11.sp)
                         Text("Tap avatar or backdrop banner to customize artwork.", color = Color.White.copy(alpha = .75f), fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
-                        
+
                         Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             AssistChip(onClick = onAccount, label = { Text("Account") }, leadingIcon = { Icon(Icons.Filled.Person, null, Modifier.size(16.dp)) })
                             AssistChip(onClick = onActivity, label = { Text("Activity") }, leadingIcon = { Icon(Icons.Filled.Star, null, Modifier.size(16.dp)) })
@@ -1432,7 +1458,7 @@ private fun ProfileScreen(
                 Text("Recent Activity", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
                 activity.take(3).forEach { entry ->
                     Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), shape = RoundedCornerShape(14.dp), color = Color.White.copy(alpha = .07f)) {
-                        Column(Modifier.padding(13.dp)) { Text(entry.kind.replaceFirstChar { it.uppercase() }, color = palette.accent, fontWeight = FontWeight.Bold, fontSize = 11.sp); Text(entry.body ?: "Media activity", color = Color.White.copy(alpha = .84f), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                        Column(Modifier.padding(13.dp)) { Text(entry.kind.replaceFirstChar { it.uppercase() }, color = LanflixGold, fontWeight = FontWeight.Bold, fontSize = 11.sp); Text(entry.body ?: "Media activity", color = Color.White.copy(alpha = .84f), maxLines = 2, overflow = TextOverflow.Ellipsis) }
                     }
                 }
             }
@@ -1440,6 +1466,7 @@ private fun ProfileScreen(
     }
 }
 }
+
 
 @Composable private fun Stat(value: String, label: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold); Text(label, color = LanflixMuted, fontSize = 11.sp) } }
 
