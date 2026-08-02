@@ -41,6 +41,10 @@ public static class IdentityEndpoints
         endpoints.MapPost("/api/v2/accounts/me/password", ChangePasswordAsync).WithTags("Accounts").RequireAuthorization();
         endpoints.MapGet("/api/v2/accounts/me/sessions", ListSessionsAsync).WithTags("Accounts").RequireAuthorization();
         endpoints.MapDelete("/api/v2/accounts/me/sessions/{id:guid}", RevokeSessionAsync).WithTags("Accounts").RequireAuthorization();
+        endpoints.MapPost("/api/v2/accounts/me/avatar", UploadAvatarAsync).WithTags("Accounts").RequireAuthorization().DisableAntiforgery();
+        endpoints.MapPost("/api/v2/accounts/me/backdrop", UploadBackdropAsync).WithTags("Accounts").RequireAuthorization().DisableAntiforgery();
+        endpoints.MapGet("/api/v2/accounts/{id:guid}/avatar", ServeAvatarAsync).WithTags("Accounts").AllowAnonymous();
+        endpoints.MapGet("/api/v2/accounts/{id:guid}/backdrop", ServeBackdropAsync).WithTags("Accounts").AllowAnonymous();
 
         var admin = endpoints.MapGroup("/api/v2/admin/identity").WithTags("Account administration").RequireAuthorization("AdminOnly");
         admin.MapGet("/accounts", ListAccountsAsync);
@@ -84,6 +88,66 @@ public static class IdentityEndpoints
     {
         var session = await db.RefreshSessions.SingleOrDefaultAsync(x => x.Id == id && x.AccountId == AccountId(user), ct);
         if (session is null) return Results.NotFound(); session.Revoke(DateTime.UtcNow); await db.SaveChangesAsync(ct); return Results.NoContent();
+    }
+
+    private static async Task<IResult> UploadAvatarAsync(HttpContext context, ClaimsPrincipal user, CancellationToken ct)
+    {
+        var id = AccountId(user);
+        var dir = Path.Combine(AppContext.BaseDirectory, "config", "avatars");
+        Directory.CreateDirectory(dir);
+        var filePath = Path.Combine(dir, $"{id:N}_pfp.jpg");
+
+        if (context.Request.HasFormContentType && context.Request.Form.Files.Count > 0)
+        {
+            var file = context.Request.Form.Files[0];
+            await using var stream = File.Create(filePath);
+            await file.CopyToAsync(stream, ct);
+        }
+        else
+        {
+            await using var stream = File.Create(filePath);
+            await context.Request.Body.CopyToAsync(stream, ct);
+        }
+        return Results.Ok(new { avatarUrl = $"/api/v2/accounts/{id}/avatar?t={DateTime.UtcNow.Ticks}" });
+    }
+
+    private static async Task<IResult> UploadBackdropAsync(HttpContext context, ClaimsPrincipal user, CancellationToken ct)
+    {
+        var id = AccountId(user);
+        var dir = Path.Combine(AppContext.BaseDirectory, "config", "avatars");
+        Directory.CreateDirectory(dir);
+        var filePath = Path.Combine(dir, $"{id:N}_backdrop.jpg");
+
+        if (context.Request.HasFormContentType && context.Request.Form.Files.Count > 0)
+        {
+            var file = context.Request.Form.Files[0];
+            await using var stream = File.Create(filePath);
+            await file.CopyToAsync(stream, ct);
+        }
+        else
+        {
+            await using var stream = File.Create(filePath);
+            await context.Request.Body.CopyToAsync(stream, ct);
+        }
+        return Results.Ok(new { backdropUrl = $"/api/v2/accounts/{id}/backdrop?t={DateTime.UtcNow.Ticks}" });
+    }
+
+    private static IResult ServeAvatarAsync(Guid id, HttpContext context)
+    {
+        var filePath = Path.Combine(AppContext.BaseDirectory, "config", "avatars", $"{id:N}_pfp.jpg");
+        if (!File.Exists(filePath)) return Results.NotFound();
+        var fileInfo = new FileInfo(filePath);
+        context.Response.Headers.ETag = $"\"{fileInfo.Length:x}-{fileInfo.LastWriteTimeUtc.Ticks:x}\"";
+        return Results.File(filePath, "image/jpeg");
+    }
+
+    private static IResult ServeBackdropAsync(Guid id, HttpContext context)
+    {
+        var filePath = Path.Combine(AppContext.BaseDirectory, "config", "avatars", $"{id:N}_backdrop.jpg");
+        if (!File.Exists(filePath)) return Results.NotFound();
+        var fileInfo = new FileInfo(filePath);
+        context.Response.Headers.ETag = $"\"{fileInfo.Length:x}-{fileInfo.LastWriteTimeUtc.Ticks:x}\"";
+        return Results.File(filePath, "image/jpeg");
     }
 
     private static async Task<IResult> ListAccountsAsync(IIdentityDbContext db, CancellationToken ct) => Results.Ok(

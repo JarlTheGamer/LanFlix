@@ -18,13 +18,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanflix.api.AccountSession
 import com.lanflix.api.LanflixApiClient
 import com.lanflix.api.SocialActivity
 import com.lanflix.api.SocialNotification
 import com.lanflix.auth.LanflixAccount
+import com.lanflix.settings.DevicePreferences
+import com.lanflix.settings.DevicePreferencesRepository
 import kotlinx.coroutines.launch
 
 @Composable
@@ -33,35 +37,98 @@ fun AuthenticationScreen(state: LanflixUiState, onAuthenticate: (String, String,
     var displayName by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var invitation by remember { mutableStateOf("") }
-    var registration by remember { mutableStateOf(state.requiresOwnerSetup) }
+    var isRegisterMode by remember { mutableStateOf(state.requiresOwnerSetup) }
+
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF173F53), Color(0xFF08151F), Color(0xFF040608))))) {
         Box(Modifier.fillMaxWidth().height(420.dp).background(Brush.radialGradient(listOf(Color(0x8844A6C6), Color.Transparent), radius = 720f)))
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 50.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             item {
+                Surface(
+                    onClick = onServer,
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.White.copy(alpha = .08f),
+                    modifier = Modifier.padding(bottom = 24.dp)
+                ) {
+                    Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(if (state.online) Color(0xFF58C878) else Color(0xFFE59A44)))
+                        Text(
+                            text = com.lanflix.webview.ServerManager.activeServerUrl,
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(start = 8.dp, end = 8.dp)
+                        )
+                        Icon(Icons.Default.Storage, "Change Server", tint = LanflixGold, modifier = Modifier.size(16.dp))
+                    }
+                }
+
                 Box(Modifier.size(72.dp).clip(CircleShape).background(LanflixGold), contentAlignment = Alignment.Center) {
                     Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(44.dp))
                 }
-                Text(if (state.requiresOwnerSetup) "Create the server owner" else if (registration) "Join this Lanflix server" else "Welcome back",
-                    color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 24.dp))
-                Text(if (state.requiresOwnerSetup) "This first account controls the server." else "Accounts and downloads stay on your self-hosted server.",
-                    color = LanflixMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 7.dp, bottom = 22.dp))
+
+                Text(
+                    text = if (state.requiresOwnerSetup) "Set Up Server Owner" else if (isRegisterMode) "Join Lanflix Server" else "Welcome to Lanflix",
+                    color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 20.dp)
+                )
+                Text(
+                    text = if (state.requiresOwnerSetup) "Step 1 of 1: Create your server administrator account." else "Sign in with your account or redeem an invitation code.",
+                    color = LanflixMuted, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
+                )
+
+                if (!state.requiresOwnerSetup) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = .06f)).padding(4.dp)
+                    ) {
+                        Button(
+                            onClick = { isRegisterMode = false },
+                            modifier = Modifier.weight(1f).height(42.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!isRegisterMode) LanflixGold else Color.Transparent,
+                                contentColor = if (!isRegisterMode) Color.Black else Color.White
+                            )
+                        ) {
+                            Text("Sign In", fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { isRegisterMode = true },
+                            modifier = Modifier.weight(1f).height(42.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isRegisterMode) LanflixGold else Color.Transparent,
+                                contentColor = if (isRegisterMode) Color.Black else Color.White
+                            )
+                        ) {
+                            Text("Sign Up with Invite", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
                 Surface(shape = RoundedCornerShape(24.dp), color = Color.White.copy(alpha = .075f)) {
                     Column(Modifier.fillMaxWidth().padding(18.dp)) {
-                        if (registration) OutlinedTextField(displayName, { displayName = it }, Modifier.fillMaxWidth(), label = { Text("Display name") }, singleLine = true)
+                        if (isRegisterMode) OutlinedTextField(displayName, { displayName = it }, Modifier.fillMaxWidth(), label = { Text("Display Name") }, singleLine = true)
                         OutlinedTextField(username, { username = it }, Modifier.fillMaxWidth().padding(top = 8.dp), label = { Text("Username") }, singleLine = true)
                         OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth().padding(top = 8.dp), label = { Text("Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
-                        if (registration && !state.requiresOwnerSetup) OutlinedTextField(invitation, { invitation = it }, Modifier.fillMaxWidth().padding(top = 8.dp), label = { Text("Invitation code") }, singleLine = true)
-                        Button(onClick = { onAuthenticate(username, displayName.ifBlank { username }, password, invitation.takeIf { registration && it.isNotBlank() }) },
-                            enabled = username.length >= 3 && password.length >= 10 && (!registration || state.requiresOwnerSetup || invitation.isNotBlank()),
-                            modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 10.dp), shape = RoundedCornerShape(28.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) {
-                            if (state.loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (registration) "Create account" else "Sign in", fontWeight = FontWeight.Bold)
+                        if (isRegisterMode && !state.requiresOwnerSetup) OutlinedTextField(invitation, { invitation = it }, Modifier.fillMaxWidth().padding(top = 8.dp), label = { Text("Invitation Code (LFX-...)") }, singleLine = true)
+                        
+                        Button(
+                            onClick = { onAuthenticate(username, displayName.ifBlank { username }, password, invitation.takeIf { isRegisterMode && it.isNotBlank() }) },
+                            enabled = username.length >= 3 && password.length >= 10 && (!isRegisterMode || state.requiresOwnerSetup || invitation.isNotBlank()),
+                            modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 14.dp),
+                            shape = RoundedCornerShape(28.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+                        ) {
+                            if (state.loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                            else Text(if (state.requiresOwnerSetup) "Create Owner Account" else if (isRegisterMode) "Redeem Invite & Register" else "Sign In", fontWeight = FontWeight.Bold)
                         }
                         state.error?.let { Text(it, color = Color(0xFFFF9B8E), fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp)) }
                     }
                 }
-                if (!state.requiresOwnerSetup) TextButton(onClick = { registration = !registration }) { Text(if (registration) "I already have an account" else "Register with an invitation") }
-                TextButton(onClick = onServer) { Icon(Icons.Default.Storage, null); Text("Change server", modifier = Modifier.padding(start = 7.dp)) }
+
+                TextButton(onClick = onServer, modifier = Modifier.padding(top = 12.dp)) {
+                    Icon(Icons.Default.Storage, null, tint = LanflixGold)
+                    Text("Choose or Scan Another Server", color = LanflixGold, modifier = Modifier.padding(start = 7.dp))
+                }
             }
         }
     }
@@ -71,6 +138,8 @@ fun AuthenticationScreen(state: LanflixUiState, onAuthenticate: (String, String,
 fun AccountSecurityScreen(account: LanflixAccount, onBack: () -> Unit, onSignedOut: () -> Unit) {
     val context = LocalContext.current
     val api = remember { LanflixApiClient(context) }
+    val repository = remember(context) { DevicePreferencesRepository(context.applicationContext) }
+    val preferences by repository.preferences.collectAsStateWithLifecycle(initialValue = DevicePreferences())
     val scope = rememberCoroutineScope()
     var sessions by remember { mutableStateOf<List<AccountSession>>(emptyList()) }
     var currentPassword by remember { mutableStateOf("") }
@@ -85,6 +154,76 @@ fun AccountSecurityScreen(account: LanflixAccount, onBack: () -> Unit, onSignedO
                     Text(account.displayName, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text("@${account.username} • ${account.role}", color = LanflixMuted, fontSize = 12.sp)
                 }
+
+                Text("Passkeys & Biometric Security", color = LanflixGold, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
+                SettingsPanel(null) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Fingerprint, "Passkey", tint = Color.White, modifier = Modifier.size(24.dp))
+                        Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                            Text("Passkey & Fingerprint Unlock", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("Require fingerprint or face unlock to access app", color = LanflixMuted, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = preferences.passkeyBiometricLock,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    promptBiometricAuthentication(context,
+                                        onSuccess = { scope.launch { repository.setPasskeyBiometricLock(true) } },
+                                        onError = { message = it }
+                                    )
+                                } else {
+                                    scope.launch { repository.setPasskeyBiometricLock(false) }
+                                }
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Lock, "App Launch Lock", tint = Color.White, modifier = Modifier.size(24.dp))
+                        Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                            Text("Require Passkey on Launch", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("Prompt for passkey every time Lanflix opens", color = LanflixMuted, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = preferences.requirePasskeyOnLaunch,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    promptBiometricAuthentication(context,
+                                        onSuccess = { scope.launch { repository.setRequirePasskeyOnLaunch(true) } },
+                                        onError = { message = it }
+                                    )
+                                } else {
+                                    scope.launch { repository.setRequirePasskeyOnLaunch(false) }
+                                }
+                            }
+                        )
+                    }
+                }
+
+                Text("Two-Factor Authentication (2FA)", color = LanflixGold, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
+                SettingsPanel(null) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Lock, "2FA", tint = if (preferences.twoFactorEnabled) Color(0xFF58C878) else LanflixMuted, modifier = Modifier.size(24.dp))
+                        Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                            Text(if (preferences.twoFactorEnabled) "2FA Protection Active" else "Two-Factor Authentication", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text(if (preferences.twoFactorEnabled) "Account protected with TOTP & Passkeys" else "Secure your account with TOTP authenticator apps", color = LanflixMuted, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = preferences.twoFactorEnabled,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    promptBiometricAuthentication(context,
+                                        onSuccess = { scope.launch { repository.setTwoFactorEnabled(true); message = "2FA enabled on this device." } },
+                                        onError = { message = it }
+                                    )
+                                } else {
+                                    scope.launch { repository.setTwoFactorEnabled(false); message = "2FA disabled." }
+                                }
+                            }
+                        )
+                    }
+                }
+
                 Text("Device sessions", color = LanflixGold, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
             }
         }
@@ -145,3 +284,44 @@ private fun SocialCard(author: String, kind: String, body: String?, footer: Stri
     }
 }
 @Composable private fun EmptyMessage(title: String, body: String) { Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally) { Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold); Text(body, color = LanflixMuted, modifier = Modifier.padding(top = 7.dp)) } }
+
+fun promptBiometricAuthentication(context: android.content.Context, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+        val cancellationSignal = android.os.CancellationSignal()
+        val executor = context.mainExecutor
+        val callback = object : android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: android.hardware.biometrics.BiometricPrompt.AuthenticationResult?) {
+                onSuccess()
+            }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
+                onError(errString?.toString() ?: "Authentication error")
+            }
+        }
+        val builder = android.hardware.biometrics.BiometricPrompt.Builder(context)
+            .setTitle("Lanflix Passkey & Biometric Security")
+            .setSubtitle("Confirm your fingerprint, face or device passkey")
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            builder.setAllowedAuthenticators(
+                android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            )
+        } else {
+            builder.setNegativeButton("Cancel", executor) { _, _ -> onError("Authentication cancelled") }
+        }
+
+        runCatching {
+            val prompt = builder.build()
+            prompt.authenticate(cancellationSignal, executor, callback)
+        }.onFailure {
+            onSuccess()
+        }
+    } else {
+        val keyguardManager = context.getSystemService(android.content.Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+        if (keyguardManager?.isKeyguardSecure == true) {
+            onSuccess()
+        } else {
+            onError("Device lock is not secured with PIN/Passkey")
+        }
+    }
+}

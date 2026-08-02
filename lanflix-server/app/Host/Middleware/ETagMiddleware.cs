@@ -5,9 +5,9 @@ using Microsoft.AspNetCore.Http;
 namespace Lanflix.Host.Middleware;
 
 /// <summary>
-/// Lightweight ETag middleware that computes response hashes for API endpoints 
+/// Lightweight ETag middleware that computes response hashes for catalog/discovery endpoints 
 /// and returns 304 Not Modified when clients provide a matching If-None-Match header.
-/// Follows Plex & Jellyfin HTTP caching standards.
+/// Excludes dynamic playback, streaming, and real-time endpoints.
 /// </summary>
 public class ETagMiddleware
 {
@@ -20,8 +20,14 @@ public class ETagMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Only apply ETags to GET requests on API endpoints
-        if (context.Request.Method != HttpMethods.Get || !context.Request.Path.StartsWithSegments("/api"))
+        var path = context.Request.Path.Value ?? string.Empty;
+
+        // Only apply ETags to GET catalog/discovery requests, excluding dynamic playback & stream APIs
+        if (context.Request.Method != HttpMethods.Get 
+            || !path.StartsWith("/api", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("/playback", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("/stream", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("/hubs", StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);
             return;

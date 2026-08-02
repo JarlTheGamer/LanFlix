@@ -51,6 +51,18 @@ public sealed record DownloadManifestDto(
 
 public sealed record ArtworkFileDto(string Path, string ContentType, string ETag);
 
+public sealed record WatchHistoryDto(
+    long Id,
+    int MediaId,
+    string Kind,
+    string Title,
+    string? EpisodeTitle,
+    string? PosterUrl,
+    string? BackdropUrl,
+    double ProgressPercentage,
+    bool Completed,
+    DateTime WatchedAtUtc);
+
 public interface ILibraryCatalog
 {
     Task<HomeDto> GetHomeAsync(Guid accountId, int limit, CancellationToken cancellationToken);
@@ -61,4 +73,6 @@ public interface ILibraryCatalog
     Task<string?> GetLogoRedirectAsync(int id, CancellationToken cancellationToken);
     Task<ArtworkFileDto?> GetContentArtworkAsync(int contentId, string kind, CancellationToken cancellationToken);
     Task<ArtworkFileDto?> GetEpisodeArtworkAsync(int episodeId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<WatchHistoryDto>> GetWatchHistoryAsync(Guid accountId, CancellationToken cancellationToken);
+    Task ClearWatchHistoryAsync(Guid accountId, CancellationToken cancellationToken);
 }

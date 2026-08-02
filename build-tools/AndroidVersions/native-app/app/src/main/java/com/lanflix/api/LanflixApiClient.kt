@@ -20,6 +20,19 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.util.concurrent.TimeUnit
 
+data class WatchHistoryItem(
+    val id: String,
+    val mediaId: Int,
+    val kind: String,
+    val title: String,
+    val episodeTitle: String? = null,
+    val posterUrl: String? = null,
+    val backdropUrl: String? = null,
+    val progressPercentage: Double = 0.0,
+    val completed: Boolean = false,
+    val watchedAtUtc: String? = null
+)
+
 class LanflixApiClient(context: Context, private val baseUrl: String = ServerManager.activeServerUrl) {
     private val appContext = context.applicationContext
     private val client = OkHttpClient.Builder()
@@ -54,6 +67,22 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
     suspend fun getSessions(): List<AccountSession> = getList("/api/v2/accounts/me/sessions")
     suspend fun revokeSession(id: String): Boolean = mutate("DELETE", "/api/v2/accounts/me/sessions/$id")
     suspend fun changePassword(current: String, replacement: String): Boolean = mutate("POST", "/api/v2/accounts/me/password", mapOf("currentPassword" to current, "newPassword" to replacement))
+
+    suspend fun getWatchHistory(): List<WatchHistoryItem> = getList("/api/v2/history")
+
+    suspend fun clearWatchHistory(): Boolean = mutate("DELETE", "/api/v2/history")
+
+    suspend fun uploadAvatar(bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
+        val builder = Request.Builder().url(url("/api/v2/accounts/me/avatar"))
+            .post(bytes.toRequestBody("image/jpeg".toMediaType()))
+        execute(builder, true)?.use { it.isSuccessful } ?: false
+    }
+
+    suspend fun uploadBackdrop(bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
+        val builder = Request.Builder().url(url("/api/v2/accounts/me/backdrop"))
+            .post(bytes.toRequestBody("image/jpeg".toMediaType()))
+        execute(builder, true)?.use { it.isSuccessful } ?: false
+    }
 
     suspend fun getHomeContent(): List<ContentItem> = withContext(Dispatchers.IO) {
         if (!ServerManager.isOnline || !sessions.isSignedIn) return@withContext offlineStore.readCatalog()

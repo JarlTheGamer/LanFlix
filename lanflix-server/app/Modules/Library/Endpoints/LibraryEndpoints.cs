@@ -64,7 +64,26 @@ public static class LibraryEndpoints
         watchlist.MapPut("/{contentId:int}", AddWatchlistAsync);
         watchlist.MapDelete("/{contentId:int}", RemoveWatchlistAsync);
 
+        var history = api.MapGroup("/history").WithTags("History").RequireAuthorization();
+        history.MapGet("/", GetHistoryAsync);
+        history.MapDelete("/", ClearHistoryAsync);
+
         return endpoints;
+    }
+
+    private static async Task<IResult> GetHistoryAsync(
+        ClaimsPrincipal user, ILibraryCatalog catalog, CancellationToken ct)
+    {
+        var accountId = AccountId(user);
+        return Results.Ok(await catalog.GetWatchHistoryAsync(accountId, ct));
+    }
+
+    private static async Task<IResult> ClearHistoryAsync(
+        ClaimsPrincipal user, ILibraryCatalog catalog, CancellationToken ct)
+    {
+        var accountId = AccountId(user);
+        await catalog.ClearWatchHistoryAsync(accountId, ct);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> GetWatchlistAsync(

@@ -233,6 +233,32 @@ fun AdministrationScreen(overview: AdministrationOverview, onBack: () -> Unit) {
     }
 }
 
-@Composable private fun SettingsPage(title: String, onBack: () -> Unit, content: LazyListScope.() -> Unit) { LazyColumn(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF17394B), LanflixBackground))), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 40.dp)) { item { Row(Modifier.fillMaxWidth().statusBarsPadding().height(60.dp), verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Color.White) }; Text(title, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold) } }; content() } }
+@Composable
+fun AppearanceSettingsScreen(preferences: DevicePreferences, repository: DevicePreferencesRepository, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    SettingsPage("Appearance & Accessibility", onBack) {
+        item {
+            SettingsDetailCard("Dynamic Theme & Motion") {
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Dynamic Artwork Colors", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Extract color palette from current backdrop image", color = LanflixMuted, fontSize = 11.sp)
+                    }
+                    Switch(checked = preferences.dynamicArtworkColors, onCheckedChange = { scope.launch { repository.setDynamicArtworkColors(it) } })
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Reduced Motion", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Limit layout animations and transitions", color = LanflixMuted, fontSize = 11.sp)
+                    }
+                    Switch(checked = preferences.reducedMotion, onCheckedChange = { scope.launch { repository.setReducedMotion(it) } })
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun SettingsPage(title: String, onBack: () -> Unit, content: LazyListScope.() -> Unit) { LazyColumn(Modifier.fillMaxSize().background(Color(0xFF080C10)), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 40.dp)) { item { Row(Modifier.fillMaxWidth().statusBarsPadding().height(60.dp), verticalAlignment = Alignment.CenterVertically) { if (title.isNotEmpty()) IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Color.White) }; Text(title, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold) } }; content() } }
 @Composable private fun SettingsDetailCard(title: String, content: @Composable ColumnScope.() -> Unit) { Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(17.dp), color = Color.White.copy(alpha = .07f)) { Column(Modifier.padding(15.dp)) { Text(title, color = LanflixGold, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp)); content() } } }
 private fun formatBytes(value: Long): String = when { value >= 1L shl 30 -> "%.2f GB".format(value.toDouble() / (1L shl 30)); value >= 1L shl 20 -> "%.1f MB".format(value.toDouble() / (1L shl 20)); else -> "%.1f KB".format(value.toDouble() / 1024) }

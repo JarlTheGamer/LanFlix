@@ -76,18 +76,22 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -1292,36 +1296,138 @@ private fun ProfileScreen(
     onAccount: () -> Unit,
     onActivity: () -> Unit
 ) {
-    val backdrop = library.firstOrNull { !it.resolvedBackdropUrl.isNullOrBlank() }
-    val palette = backdrop?.palette?.toComposePalette() ?: DefaultArtworkPalette
-    LazyColumn(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(palette.base, palette.depth, LanflixBackground))), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item {
-            Box(Modifier.fillMaxWidth().height(410.dp)) {
-                AsyncImage(backdrop?.resolvedBackdropUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .12f), palette.base.copy(alpha = .66f), palette.depth), startY = 40f, endY = 1100f)))
-                IconButton(onClick = onBack, modifier = Modifier.statusBarsPadding().padding(8.dp).clip(CircleShape).background(Color.Black.copy(alpha = .28f))) { Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
-                Column(Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.size(90.dp).clip(CircleShape).background(Brush.radialGradient(listOf(palette.accent, palette.glow))), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Person, null, tint = Color.White, modifier = Modifier.size(54.dp)) }
-                    Text(account?.displayName ?: "Offline account", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 12.dp))
-                    Text(account?.let { "@${it.username}  •  ${it.role}" } ?: "Cached downloads", color = Color.White.copy(alpha = .7f), fontSize = 11.sp)
-                    Text("Your movies, music, reviews and people—all on this server.", color = Color.White.copy(alpha = .78f), fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 10.dp))
-                    Row(Modifier.padding(top = 13.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AssistChip(onClick = onAccount, label = { Text("Account") }, leadingIcon = { Icon(Icons.Filled.Person, null, Modifier.size(16.dp)) })
-                        AssistChip(onClick = onActivity, label = { Text("Activity") }, leadingIcon = { Icon(Icons.Filled.Star, null, Modifier.size(16.dp)) })
-                    }
+    val context = LocalContext.current
+    val api = remember(context) { LanflixApiClient.getInstance(context) }
+    val scope = rememberCoroutineScope()
+    var avatarVersion by remember { mutableStateOf(System.currentTimeMillis()) }
+    var backdropVersion by remember { mutableStateOf(System.currentTimeMillis()) }
+    var watchHistory by remember { mutableStateOf<List<com.lanflix.api.WatchHistoryItem>>(emptyList()) }
+
+    LaunchedEffect(account?.id) {
+        if (account != null) {
+            watchHistory = api.getWatchHistory()
+        }
+    }
+
+    val avatarLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            scope.launch(Dispatchers.IO) {
+                val bytes = context.contentResolver.openInputStream(it)?.use { stream -> stream.readBytes() }
+                if (bytes != null && api.uploadAvatar(bytes)) {
+                    avatarVersion = System.currentTimeMillis()
                 }
             }
         }
+    }
+
+    val backdropLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            scope.launch(Dispatchers.IO) {
+                val bytes = context.contentResolver.openInputStream(it)?.use { stream -> stream.readBytes() }
+                if (bytes != null && api.uploadBackdrop(bytes)) {
+                    backdropVersion = System.currentTimeMillis()
+                }
+            }
+        }
+    }
+
+    val defaultBackdrop = library.firstOrNull { !it.resolvedBackdropUrl.isNullOrBlank() }
+    val palette = defaultBackdrop?.palette?.toComposePalette() ?: DefaultArtworkPalette
+    val customBackdropUrl = account?.id?.let { "${ServerManager.activeServerUrl}/api/v2/accounts/$it/backdrop?t=$backdropVersion" }
+    val customAvatarUrl = account?.id?.let { "${ServerManager.activeServerUrl}/api/v2/accounts/$it/avatar?t=$avatarVersion" }
+
+    val activeBackdropUrl = customBackdropUrl ?: defaultBackdrop?.resolvedBackdropUrl
+
+    Box(Modifier.fillMaxSize().background(Color(0xFF070B10))) {
+        if (!activeBackdropUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = activeBackdropUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().blur(45.dp).alpha(.35f),
+                contentScale = ContentScale.Crop
+            )
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = .40f),
+                        .4f to Color.Transparent,
+                        1f to Color(0xFF070B10)
+                    )
+                )
+            )
+        }
+
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+            item {
+                Box(Modifier.fillMaxWidth().height(420.dp)) {
+                    AsyncImage(activeBackdropUrl, null, Modifier.fillMaxSize().clickable { backdropLauncher.launch("image/*") }, contentScale = ContentScale.Crop)
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .12f), palette.base.copy(alpha = .66f), palette.depth), startY = 40f, endY = 1100f)))
+                    IconButton(onClick = onBack, modifier = Modifier.statusBarsPadding().padding(8.dp).clip(CircleShape).background(Color.Black.copy(alpha = .28f))) { Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
+                    Column(Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            Modifier.size(94.dp).clip(CircleShape).background(Brush.radialGradient(listOf(palette.accent, palette.glow))).clickable { avatarLauncher.launch("image/*") },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = customAvatarUrl,
+                                contentDescription = "Avatar",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        Text(account?.displayName ?: "Offline account", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 10.dp))
+                        Text(account?.let { "@${it.username}  •  ${it.role}" } ?: "Cached downloads", color = Color.White.copy(alpha = .7f), fontSize = 11.sp)
+                        Text("Tap avatar or backdrop banner to customize artwork.", color = Color.White.copy(alpha = .75f), fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                        
+                        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AssistChip(onClick = onAccount, label = { Text("Account") }, leadingIcon = { Icon(Icons.Filled.Person, null, Modifier.size(16.dp)) })
+                            AssistChip(onClick = onActivity, label = { Text("Activity") }, leadingIcon = { Icon(Icons.Filled.Star, null, Modifier.size(16.dp)) })
+                        }
+                    }
+                }
+            }
         item {
             Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp).offset(y = (-8).dp), shape = RoundedCornerShape(18.dp), color = Color.Black.copy(alpha = .28f)) {
-            Row(Modifier.fillMaxWidth().padding(vertical = 17.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Stat(library.count { it.type == "movie" }.toString(), "Movies")
-                Stat(library.count { it.type == "series" }.toString(), "Shows")
-                Stat(library.count { it.isOfflinePlayable }.toString(), "Offline")
+                Row(Modifier.fillMaxWidth().padding(vertical = 17.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Stat(watchHistory.size.toString(), "Watched")
+                    Stat(library.count { it.type == "movie" }.toString(), "Movies")
+                    Stat(library.count { it.type == "series" }.toString(), "Shows")
+                }
             }
+            if (watchHistory.isNotEmpty()) {
+                Text("Real Watch History", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(watchHistory, key = { it.id }) { history ->
+                        val matchingContent = library.firstOrNull { it.id == history.mediaId }
+                        Column(Modifier.width(130.dp).clickable { matchingContent?.let(onSelect) }) {
+                            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = .08f))) {
+                                AsyncImage(
+                                    model = history.backdropUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" } ?: matchingContent?.resolvedPosterUrl,
+                                    contentDescription = history.title,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                                if (history.completed) {
+                                    Box(Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF58C878)).padding(horizontal = 4.dp, vertical = 2.dp)) {
+                                        Text("DONE", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                            Text(history.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
+                            if (!history.episodeTitle.isNullOrBlank()) {
+                                Text(history.episodeTitle, color = LanflixMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text("Watch History", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                MediaShelf("Continue and recently watched", library.sortedByDescending { it.progressPercentage ?: 0.0 }.take(8), onSelect)
             }
-            Text("Watch History", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
-            MediaShelf("Continue and recently watched", library.sortedByDescending { it.progressPercentage ?: 0.0 }.take(8), onSelect)
             if (activity.isNotEmpty()) {
                 Text("Recent Activity", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
                 activity.take(3).forEach { entry ->
@@ -1332,6 +1438,7 @@ private fun ProfileScreen(
             }
         }
     }
+}
 }
 
 @Composable private fun Stat(value: String, label: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold); Text(label, color = LanflixMuted, fontSize = 11.sp) } }

@@ -378,6 +378,62 @@ internal sealed class SqliteLibraryCatalog(
     private static double Percentage(long positionMilliseconds, long durationMilliseconds) =>
         durationMilliseconds <= 0 ? 0 : Math.Clamp(positionMilliseconds * 100d / durationMilliseconds, 0, 100);
 
+    public async Task<IReadOnlyList<WatchHistoryDto>> GetWatchHistoryAsync(Guid accountId, CancellationToken cancellationToken)
+    {
+        var progressList = await db.PlaybackProgress.AsNoTracking()
+            .Where(item => item.AccountId == accountId)
+            .OrderByDescending(item => item.UpdatedAtUtc ?? item.CreatedAtUtc)
+            .Take(100)
+            .ToListAsync(cancellationToken);
+
+        var movieIds = progressList.Where(p => p.MediaKind == "movie").Select(p => p.MediaId).Distinct().ToArray();
+        var epIds = progressList.Where(p => p.MediaKind == "episode").Select(p => p.MediaId).Distinct().ToArray();
+
+        var movies = movieIds.Length == 0 ? new Dictionary<int, Content>() : await db.Contents.AsNoTracking().Where(c => movieIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, cancellationToken);
+        var episodes = epIds.Length == 0 ? new Dictionary<int, Episode>() : await db.Episodes.AsNoTracking().Include(e => e.Content).Where(e => epIds.Contains(e.Id)).ToDictionaryAsync(e => e.Id, cancellationToken);
+
+        var result = new List<WatchHistoryDto>();
+        foreach (var p in progressList)
+        {
+            if (p.MediaKind == "movie" && movies.TryGetValue(p.MediaId, out var movie))
+            {
+                result.Add(new WatchHistoryDto(
+                    p.Id,
+                    p.MediaId,
+                    "movie",
+                    movie.Title,
+                    null,
+                    $"/api/v2/artwork/content/{movie.Id}/poster",
+                    $"/api/v2/artwork/content/{movie.Id}/backdrop",
+                    p.DurationMilliseconds > 0 ? Math.Clamp(p.PositionMilliseconds * 100d / p.DurationMilliseconds, 0, 100) : 0,
+                    p.Completed,
+                    p.UpdatedAtUtc ?? p.CreatedAtUtc
+                ));
+            }
+            else if (p.MediaKind == "episode" && episodes.TryGetValue(p.MediaId, out var ep))
+            {
+                result.Add(new WatchHistoryDto(
+                    p.Id,
+                    p.MediaId,
+                    "episode",
+                    $"{ep.Content?.Title ?? "Series"} - S{ep.SeasonNumber:00}E{ep.EpisodeNumber:00}",
+                    ep.Title,
+                    ep.Content != null ? $"/api/v2/artwork/content/{ep.Content.Id}/poster" : null,
+                    $"/api/v2/artwork/episode/{ep.Id}/still",
+                    p.DurationMilliseconds > 0 ? Math.Clamp(p.PositionMilliseconds * 100d / p.DurationMilliseconds, 0, 100) : 0,
+                    p.Completed,
+                    p.UpdatedAtUtc ?? p.CreatedAtUtc
+                ));
+            }
+        }
+        return result;
+    }
+
+    public async Task ClearWatchHistoryAsync(Guid accountId, CancellationToken cancellationToken)
+    {
+        await db.PlaybackProgress.Where(item => item.AccountId == accountId).ExecuteDeleteAsync(cancellationToken);
+    }
+
     private static string? ArtworkUrl(Content content, string kind)
     {
         return $"/api/v2/artwork/content/{content.Id}/{kind}";

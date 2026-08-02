@@ -22,7 +22,10 @@ data class DevicePreferences(
     val playbackQuality: String = "High",
     val preferredAudioLanguage: String = "en",
     val preferredSubtitleLanguage: String = "en",
-    val automaticSubtitles: Boolean = true
+    val automaticSubtitles: Boolean = true,
+    val passkeyBiometricLock: Boolean = false,
+    val requirePasskeyOnLaunch: Boolean = false,
+    val twoFactorEnabled: Boolean = false
 )
 
 class DevicePreferencesRepository(private val context: Context) {
@@ -37,6 +40,9 @@ class DevicePreferencesRepository(private val context: Context) {
         val preferredAudioLanguage = stringPreferencesKey("preferred_audio_language")
         val preferredSubtitleLanguage = stringPreferencesKey("preferred_subtitle_language")
         val automaticSubtitles = booleanPreferencesKey("automatic_subtitles")
+        val passkeyBiometricLock = booleanPreferencesKey("passkey_biometric_lock")
+        val requirePasskeyOnLaunch = booleanPreferencesKey("require_passkey_on_launch")
+        val twoFactorEnabled = booleanPreferencesKey("two_factor_enabled")
     }
 
     val preferences: Flow<DevicePreferences> = context.lanflixDataStore.data.map { values ->
@@ -52,7 +58,10 @@ class DevicePreferencesRepository(private val context: Context) {
             playbackQuality = values[Keys.playbackQuality] ?: "High",
             preferredAudioLanguage = values[Keys.preferredAudioLanguage] ?: "en",
             preferredSubtitleLanguage = values[Keys.preferredSubtitleLanguage] ?: "en",
-            automaticSubtitles = values[Keys.automaticSubtitles] ?: true
+            automaticSubtitles = values[Keys.automaticSubtitles] ?: true,
+            passkeyBiometricLock = values[Keys.passkeyBiometricLock] ?: false,
+            requirePasskeyOnLaunch = values[Keys.requirePasskeyOnLaunch] ?: false,
+            twoFactorEnabled = values[Keys.twoFactorEnabled] ?: false
         )
     }
 
@@ -77,8 +86,11 @@ class DevicePreferencesRepository(private val context: Context) {
     suspend fun setReducedMotion(enabled: Boolean) = context.lanflixDataStore.edit { it[Keys.reducedMotion] = enabled }
     suspend fun setDynamicArtworkColors(enabled: Boolean) = context.lanflixDataStore.edit { it[Keys.dynamicArtworkColors] = enabled }
     suspend fun setNotificationsEnabled(enabled: Boolean) = context.lanflixDataStore.edit { it[Keys.notificationsEnabled] = enabled }
-    suspend fun setPlaybackQuality(value: String) = context.lanflixDataStore.edit { it[Keys.playbackQuality] = value }
-    suspend fun setPreferredAudioLanguage(value: String) = context.lanflixDataStore.edit { it[Keys.preferredAudioLanguage] = value.trim().lowercase().take(8) }
-    suspend fun setPreferredSubtitleLanguage(value: String) = context.lanflixDataStore.edit { it[Keys.preferredSubtitleLanguage] = value.trim().lowercase().take(8) }
+    suspend fun setPlaybackQuality(quality: String) = context.lanflixDataStore.edit { it[Keys.playbackQuality] = quality }
+    suspend fun setPreferredAudioLanguage(language: String) = context.lanflixDataStore.edit { it[Keys.preferredAudioLanguage] = language.trim().lowercase().take(8) }
+    suspend fun setPreferredSubtitleLanguage(language: String) = context.lanflixDataStore.edit { it[Keys.preferredSubtitleLanguage] = language.trim().lowercase().take(8) }
     suspend fun setAutomaticSubtitles(enabled: Boolean) = context.lanflixDataStore.edit { it[Keys.automaticSubtitles] = enabled }
+    suspend fun setPasskeyBiometricLock(enabled: Boolean) = context.lanflixDataStore.edit { it[Keys.passkeyBiometricLock] = enabled }
+    suspend fun setRequirePasskeyOnLaunch(enabled: Boolean) = context.lanflixDataStore.edit { it[Keys.requirePasskeyOnLaunch] = enabled }
+    suspend fun setTwoFactorEnabled(enabled: Boolean) = context.lanflixDataStore.edit { it[Keys.twoFactorEnabled] = enabled }
 }
