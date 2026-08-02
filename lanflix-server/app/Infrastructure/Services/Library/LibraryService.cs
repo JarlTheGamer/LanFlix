@@ -282,6 +282,16 @@ public class LibraryService : ILibraryService
 
         if (existing != null)
         {
+            var metaFile = Path.Combine(movieFolder, "metadata.json");
+            var posterFile = Path.Combine(movieFolder, "poster.jpg");
+            var backdropFile = Path.Combine(movieFolder, "backdrop.jpg");
+            if (!File.Exists(metaFile) || !File.Exists(posterFile) || !File.Exists(backdropFile))
+            {
+                _logger.LogInformation("Metadata or artwork missing for existing movie {Title}, re-saving to folder: {Folder}", existing.Title, movieFolder);
+                try { await _metadataService.SaveMetadataToMediaFolderAsync(existing.Id, movieFolder, cancellationToken); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to re-save metadata/artwork for movie {Title}", existing.Title); }
+            }
+
             // If existing content lacks MediaInfo, analyze and update it
             if (existing.MediaInfo == null)
             {
@@ -450,6 +460,16 @@ public class LibraryService : ILibraryService
         {
             _logger.LogInformation("Series already exists in database by path: {Title} (ID: {Id}, TMDB: {TmdbId})", existingByPath.Title, existingByPath.Id, existingByPath.TmdbId);
             
+            var metaFile = Path.Combine(seriesFolder, "metadata.json");
+            var posterFile = Path.Combine(seriesFolder, "poster.jpg");
+            var backdropFile = Path.Combine(seriesFolder, "backdrop.jpg");
+            if (!File.Exists(metaFile) || !File.Exists(posterFile) || !File.Exists(backdropFile))
+            {
+                _logger.LogInformation("Metadata or artwork missing for existing series {Title}, re-saving to folder: {Folder}", existingByPath.Title, seriesFolder);
+                try { await _metadataService.SaveMetadataToMediaFolderAsync(existingByPath.Id, seriesFolder, cancellationToken); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to re-save metadata/artwork for series {Title}", existingByPath.Title); }
+            }
+
             // Fetch and store episode metadata using MetadataService (like old backend)
             await _metadataService.FetchAndStoreEpisodeMetadataAsync(existingByPath.Id, existingByPath.TmdbId, seriesFolder, cancellationToken);
             

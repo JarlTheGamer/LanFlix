@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.lanflix.models.ContentItem
+import com.lanflix.api.DiscoveryPage
 import java.io.File
 
 /** Room-backed catalog and app-private media store for server-independent playback. */
@@ -12,7 +13,17 @@ class OfflineMediaStore(context: Context) {
     private val gson = Gson()
     private val dao = OfflineCatalogDatabase.get(appContext).catalog()
     private val legacyCatalogFile = File(appContext.filesDir, "offline-catalog.json")
+    private val discoveryCacheFile = File(appContext.filesDir, "discovery-cache.json")
     private val mediaDir = File(appContext.filesDir, "offline-media").apply { mkdirs() }
+
+    fun readDiscoveryPage(): DiscoveryPage? {
+        if (!discoveryCacheFile.isFile) return null
+        return runCatching { gson.fromJson(discoveryCacheFile.readText(), DiscoveryPage::class.java) }.getOrNull()
+    }
+
+    fun cacheDiscoveryPage(page: DiscoveryPage) {
+        runCatching { discoveryCacheFile.writeText(gson.toJson(page)) }
+    }
 
     suspend fun readCatalog(): List<ContentItem> {
         migrateLegacyCatalogIfNeeded()

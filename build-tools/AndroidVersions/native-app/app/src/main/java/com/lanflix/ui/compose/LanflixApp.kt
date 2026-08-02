@@ -125,6 +125,7 @@ import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
@@ -160,12 +161,28 @@ private enum class AppOverlay { Search, Profile, Settings, Account, Activity, No
 fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val appContext = LocalContext.current
+    val scope = rememberCoroutineScope()
     var destination by remember { mutableStateOf(Destination.Home) }
     var detail by remember { mutableStateOf<ContentItem?>(null) }
     var profileMenuVisible by remember { mutableStateOf(false) }
     val overlayStack = remember { mutableStateListOf<AppOverlay>() }
     var playerItem by remember { mutableStateOf<ContentItem?>(null) }
     val currentOverlay = overlayStack.lastOrNull()
+
+    // Smart TV DLNA Cast Manager
+    val castManager = remember { com.lanflix.cast.DlnaCastManager(appContext) }
+    val discoveredDevices by castManager.discoveredDevices.collectAsStateWithLifecycle()
+    val activeCastDevice by castManager.activeDevice.collectAsStateWithLifecycle()
+    val isCasting by castManager.isCasting.collectAsStateWithLifecycle()
+    val isPlayingOnTv by castManager.isPlayingOnTv.collectAsStateWithLifecycle()
+    var showCastDialog by remember { mutableStateOf(false) }
+    var itemToCast by remember { mutableStateOf<ContentItem?>(null) }
+
+    val startCastFlow = { targetItem: ContentItem? ->
+        itemToCast = targetItem ?: detail ?: state.library.firstOrNull()
+        showCastDialog = true
+        scope.launch { castManager.discoverDevices() }
+    }
 
     fun openOverlay(overlay: AppOverlay) {
         profileMenuVisible = false
@@ -207,7 +224,8 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                     onBack = { detail = null },
                     onPlay = { playerItem = detail },
                     onPlayEpisode = { episode -> playerItem = episode.asContentItem(detail!!) },
-                    onDownload = { viewModel.download(detail!!) { saved -> if (saved != null) detail = saved } }
+                    onDownload = { viewModel.download(detail!!) { saved -> if (saved != null) detail = saved } },
+                    onCast = { startCastFlow(it) }
                 )
                 currentOverlay == AppOverlay.Search -> SearchScreen(state.library, onBack = ::closeOverlay, onSelect = { detail = it })
                 currentOverlay == AppOverlay.Account && state.account != null -> AccountSecurityScreen(state.account!!, onBack = ::closeOverlay, onSignedOut = { overlayStack.clear(); viewModel.signOut() })
@@ -244,7 +262,8 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                         title = if (destination == Destination.Home) "lanflix" else destination.label,
                         online = state.online,
                         onSearch = { openOverlay(AppOverlay.Search) },
-                        onProfile = { profileMenuVisible = !profileMenuVisible }
+                        onProfile = { profileMenuVisible = !profileMenuVisible },
+                        onCast = { startCastFlow(null) }
                     )
                     AnimatedVisibility(
                         visible = profileMenuVisible,
@@ -259,6 +278,45 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                             onSettings = { openOverlay(AppOverlay.Settings) }
                         )
                     }
+
+                    // Smart TV Active Casting Bar
+                    if (isCasting && activeCastDevice != null) {
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 68.dp, start = 12.dp, end = 12.dp)
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xF7101820))
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.Cast, contentDescription = null, tint = Color(0xFFE50914), modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Casting to ${activeCastDevice!!.name}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                if (!itemToCast?.title.isNullOrBlank()) {
+                                    Text(itemToCast!!.title ?: "", color = Color.Gray, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                            IconButton(onClick = {
+                                scope.launch {
+                                    if (isPlayingOnTv) castManager.pause() else castManager.play()
+                                }
+                            }) {
+                                Icon(if (isPlayingOnTv) Icons.Filled.PlayArrow else Icons.Filled.PlayArrow, contentDescription = "Play/Pause", tint = Color.White)
+                            }
+                            Button(
+                                onClick = { scope.launch { castManager.stopCasting() } },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE50914), contentColor = Color.White),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text("Stop", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
                     Box(Modifier.align(Alignment.BottomCenter)) {
                         BottomChrome(destination, onSelect = { destination = it })
                     }
@@ -266,10 +324,64 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
             }
         }
     }
+
+    if (showCastDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showCastDialog = false },
+            title = { Text("Cast to Smart TV") },
+            text = {
+                Column {
+                    Text("Select a TV on your Wi-Fi network (Samsung, LG, Sony, Fire TV, DLNA):", fontSize = 14.sp, color = Color.Gray)
+                    Spacer(Modifier.height(12.dp))
+                    if (discoveredDevices.isEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Text("Searching for Smart TVs...")
+                        }
+                    } else {
+                        discoveredDevices.forEach { device ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        showCastDialog = false
+                                        val mediaItem = itemToCast ?: detail ?: state.library.firstOrNull()
+                                        if (mediaItem != null) {
+                                            val kind = if (mediaItem.type.equals("episode", true)) "episode" else "movie"
+                                            val mediaUrl = "${ServerManager.activeServerUrl}/api/v2/playback/$kind/${mediaItem.id}/file?client=direct"
+                                            scope.launch {
+                                                castManager.castMedia(device, mediaUrl, mediaItem.title ?: "Lanflix Media")
+                                            }
+                                        }
+                                    }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Filled.Cast, contentDescription = null, tint = Color(0xFFE50914))
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(device.name, fontWeight = FontWeight.Bold)
+                                    if (device.manufacturer.isNotBlank()) {
+                                        Text(device.manufacturer, fontSize = 12.sp, color = Color.Gray)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { showCastDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun TopChrome(title: String, online: Boolean, onSearch: () -> Unit, onProfile: () -> Unit) {
+private fun TopChrome(title: String, online: Boolean, onSearch: () -> Unit, onProfile: () -> Unit, onCast: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -289,7 +401,7 @@ private fun TopChrome(title: String, online: Boolean, onSearch: () -> Unit, onPr
         if (!online) Icon(Icons.Filled.CloudOff, "Server offline", tint = LanflixMuted, modifier = Modifier.size(19.dp))
         IconButton(onClick = onSearch, modifier = Modifier.size(44.dp)) { Icon(Icons.Filled.Search, "Search", tint = Color.White, modifier = Modifier.size(19.dp)) }
         Row(modifier = Modifier.padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            CompactHeaderAction(Icons.Filled.Cast, "Cast")
+            CompactHeaderAction(Icons.Filled.Cast, "Cast", onClick = onCast)
             CompactHeaderAction(Icons.Outlined.BookmarkBorder, "Watchlist")
             Box(
                 modifier = Modifier.size(38.dp).clickable(onClick = onProfile),
@@ -304,8 +416,8 @@ private fun TopChrome(title: String, online: Boolean, onSearch: () -> Unit, onPr
 }
 
 @Composable
-private fun CompactHeaderAction(icon: ImageVector, label: String) {
-    Box(Modifier.size(38.dp).clickable { }, contentAlignment = Alignment.Center) {
+private fun CompactHeaderAction(icon: ImageVector, label: String, onClick: () -> Unit = {}) {
+    Box(Modifier.size(38.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, label, tint = Color.White, modifier = Modifier.size(18.dp))
     }
 }
@@ -628,7 +740,7 @@ private fun DiscoverScreen(state: LanflixUiState, onSelect: (ContentItem) -> Uni
 @Composable
 private fun DiscoveryShelf(title: String, media: List<com.lanflix.api.DiscoveryItem>, onSelect: (ContentItem) -> Unit) {
     val context = LocalContext.current
-    val api = remember { LanflixApiClient(context) }
+    val api = remember(context) { LanflixApiClient.getInstance(context) }
     val scope = rememberCoroutineScope()
     var requestedId by remember { mutableStateOf<Int?>(null) }
     Column(Modifier.padding(top = 20.dp)) {
@@ -660,7 +772,8 @@ private fun DetailScreen(
     onBack: () -> Unit,
     onPlay: () -> Unit,
     onPlayEpisode: (EpisodeItem) -> Unit,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onCast: (ContentItem) -> Unit = {}
 ) {
     val isPlayableType = item.type.equals("movie", true) || item.type.equals("episode", true)
     val isDiscovery = item.id < 0 && item.tmdbId > 0
@@ -795,7 +908,7 @@ private fun DetailScreen(
                         onClick = onDownload
                     )
                     DetailAction(Icons.Filled.Star, "Rate")
-                    DetailAction(Icons.Filled.Cast, "Cast")
+                    DetailAction(Icons.Filled.Cast, "Cast", enabled = online, onClick = { onCast(item) })
                 }
                 if (item.type.equals("series", true)) {
                     SeriesEpisodeBrowser(item = item, online = online, onPlayEpisode = onPlayEpisode)
@@ -1267,6 +1380,7 @@ private fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
     val sessionStore = remember { com.lanflix.auth.LanflixSessionStore(context) }
     val playbackPreferencesRepository = remember { DevicePreferencesRepository(context.applicationContext) }
     val api = remember { LanflixApiClient(context) }
+
     val playbackPreferences by playbackPreferencesRepository.preferences.collectAsStateWithLifecycle(initialValue = DevicePreferences())
     var playbackInfo by remember(item.id) { mutableStateOf<com.lanflix.api.PlaybackInfo?>(null) }
     LaunchedEffect(item.id) { if (item.localFilePath == null) playbackInfo = api.getPlaybackInfo(item) }
@@ -1292,26 +1406,31 @@ private fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
         }
     }
     val player = remember(uri) {
-        val headers = sessionStore.accessToken?.let { mapOf("Authorization" to "Bearer $it") }.orEmpty()
-        val dataSource = DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(8_000)
-            .setReadTimeoutMs(8_000)
-            .setAllowCrossProtocolRedirects(true)
-            .setDefaultRequestProperties(headers)
+        val dataSourceFactory = DataSource.Factory {
+            val token = sessionStore.accessToken
+            val headers = token?.let { mapOf("Authorization" to "Bearer $it") }.orEmpty()
+            DefaultHttpDataSource.Factory()
+                .setConnectTimeoutMs(8_000)
+                .setReadTimeoutMs(8_000)
+                .setAllowCrossProtocolRedirects(true)
+                .setDefaultRequestProperties(headers)
+                .createDataSource()
+        }
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 /* minBufferMs = */ 15_000,
-                /* maxBufferMs = */ 50_000,
-                /* bufferForPlaybackMs = */ 500,
-                /* bufferForPlaybackAfterRebufferMs = */ 1_000
+                /* maxBufferMs = */ 30_000,
+                /* bufferForPlaybackMs = */ 1_000,
+                /* bufferForPlaybackAfterRebufferMs = */ 2_000
             )
-            .setPrioritizeTimeOverSizeThresholds(true)
+            .setTargetBufferBytes(64 * 1024 * 1024)
+            .setPrioritizeTimeOverSizeThresholds(false)
             .build()
         ExoPlayer.Builder(context)
             .setLoadControl(loadControl)
             .setSeekBackIncrementMs(10_000)
             .setSeekForwardIncrementMs(10_000)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource)).build().apply {
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory)).build().apply {
             setSeekParameters(SeekParameters.CLOSEST_SYNC)
             trackSelectionParameters = trackSelectionParameters.buildUpon()
                 .setPreferredAudioLanguage(playbackPreferences.preferredAudioLanguage.ifBlank { null })

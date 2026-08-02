@@ -52,40 +52,63 @@ class LanflixViewModel(application: Application) : AndroidViewModel(application)
 
     fun refresh() {
         viewModelScope.launch {
-            val cached = api.getOfflineCatalog()
-            if (cached.isNotEmpty() && _state.value.library.isEmpty()) {
-                _state.update { it.copy(loading = false, library = cached) }
+            val cachedCatalog = api.getOfflineCatalog()
+            val cachedDiscovery = api.readDiscoveryCache()
+            _state.update {
+                it.copy(
+                    loading = cachedCatalog.isEmpty(),
+                    library = if (it.library.isEmpty()) cachedCatalog else it.library,
+                    discovery = if (it.discovery == null) cachedDiscovery else it.discovery
+                )
             }
+            cachedDiscovery?.let { page -> launch { preloadDiscovery(page) } }
+
             val online = ServerManager.pingServer(getApplication(), ServerManager.activeServerUrl, timeoutMs = 1500)
             ServerManager.isOnline = online
             _state.update { it.copy(loading = it.library.isEmpty(), error = null, online = online) }
-            val setup = if (online) api.getSetupStatus() else null
-            val account = if (online && api.sessions.isSignedIn) api.getCurrentAccount() ?: api.sessions.account else api.sessions.account
-            val needsAuthentication = online && account == null
-            val content = if (needsAuthentication) api.getOfflineCatalog() else api.getHomeContent()
-            val social = if (online && account != null) api.getSocialFeed() else emptyList()
-            val notifications = if (online && account != null) api.getNotifications() else emptyList()
-            val music = if (online && account != null) api.getMusicHome() else null
-            val liveTv = if (online && account != null) api.getLiveTvChannels() else emptyList()
-            val admin = if (online && account?.isAdministrator == true) api.getAdministrationOverview() else null
-            val discovery = if (online && account != null) api.getDiscoveryPage() else null
-            _state.update {
-                it.copy(
-                    loading = false,
-                    library = content,
-                    account = account,
-                    requiresOwnerSetup = setup?.requiresOwnerSetup == true,
-                    authenticationRequired = needsAuthentication,
-                    socialFeed = social,
-                    notifications = notifications,
-                    music = music,
-                    liveTvChannels = liveTv,
-                    administration = admin,
-                    discovery = discovery,
-                    error = if (content.isEmpty() && !needsAuthentication) "Your library is empty" else null
-                )
+            if (!online) return@launch
+
+            coroutineScope {
+                val setupDeferred = async { api.getSetupStatus() }
+                val accountDeferred = async { if (api.sessions.isSignedIn) api.getCurrentAccount() ?: api.sessions.account else api.sessions.account }
+                val setup = setupDeferred.await()
+                val account = accountDeferred.await()
+                val needsAuthentication = account == null
+
+                val contentDeferred = async { if (needsAuthentication) api.getOfflineCatalog() else api.getHomeContent() }
+                val socialDeferred = async { if (account != null) api.getSocialFeed() else emptyList() }
+                val notificationsDeferred = async { if (account != null) api.getNotifications() else emptyList() }
+                val musicDeferred = async { if (account != null) api.getMusicHome() else null }
+                val liveTvDeferred = async { if (account != null) api.getLiveTvChannels() else emptyList() }
+                val adminDeferred = async { if (account?.isAdministrator == true) api.getAdministrationOverview() else null }
+                val discoveryDeferred = async { if (account != null) api.getDiscoveryPage() else null }
+
+                val content = contentDeferred.await()
+                val social = socialDeferred.await()
+                val notifications = notificationsDeferred.await()
+                val music = musicDeferred.await()
+                val liveTv = liveTvDeferred.await()
+                val admin = adminDeferred.await()
+                val discovery = discoveryDeferred.await()
+
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        library = content,
+                        account = account,
+                        requiresOwnerSetup = setup?.requiresOwnerSetup == true,
+                        authenticationRequired = needsAuthentication,
+                        socialFeed = social,
+                        notifications = notifications,
+                        music = music,
+                        liveTvChannels = liveTv,
+                        administration = admin,
+                        discovery = discovery ?: it.discovery,
+                        error = if (content.isEmpty() && !needsAuthentication) "Your library is empty" else null
+                    )
+                }
+                discovery?.let { page -> launch { preloadDiscovery(page) } }
             }
-            discovery?.let { page -> launch { preloadDiscovery(page) } }
         }
     }
 

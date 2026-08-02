@@ -9,6 +9,7 @@ using Lanflix.Infrastructure.Services.AppUpdate;
 using Lanflix.Infrastructure.Services.Library;
 using Lanflix.Infrastructure.Services.Metadata;
 using Lanflix.Infrastructure.Services.FFmpeg;
+using Lanflix.Infrastructure.Services.Streaming;
 using Lanflix.Modules.Administration;
 using Lanflix.Modules.Library;
 using Lanflix.Modules.Playback;
@@ -55,6 +56,14 @@ public static class AdapterRegistration
         services.AddScoped<IIntroScanner, AudioFingerprintIntroScanner>();
         services.AddSingleton<IReleaseMetadataService, ReleaseMetadataService>();
         services.AddScoped<IServerUpdateService, ServerUpdateService>();
+        services.AddSingleton<ITranscodingSessionManager, TranscodingSessionManager>();
+
+        // Background Jobs & Hosted Services
+        services.AddHostedService<Lanflix.Infrastructure.Services.BackgroundJobs.LibraryScanJob>();
+        services.AddHostedService<Lanflix.Infrastructure.Services.BackgroundJobs.ServerUpdateCheckJob>();
+        services.AddHostedService<Lanflix.Infrastructure.Services.BackgroundJobs.SessionCleanupService>();
+        services.AddHostedService<Lanflix.Infrastructure.Services.Discovery.MDnsDiscoveryService>();
+        services.AddHostedService<Lanflix.Infrastructure.Services.Discovery.DiscoveryPrewarmService>();
         return services;
     }
 }

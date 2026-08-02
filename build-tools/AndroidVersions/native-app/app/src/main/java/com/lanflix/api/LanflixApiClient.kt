@@ -98,7 +98,27 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
         mutate("POST", "/api/v2/live-tv/sources/", mapOf("name" to name, "kind" to kind, "sourceUri" to sourceUri, "guideUri" to guideUri, "maxTuners" to 1, "enabled" to true))
     suspend fun deleteLiveTvSource(id: Long): Boolean = mutate("DELETE", "/api/v2/live-tv/sources/$id")
     suspend fun refreshLiveTvSource(id: Long): Boolean = mutate("POST", "/api/v2/live-tv/sources/$id/refresh")
-    suspend fun getDiscoveryPage(): DiscoveryPage? = get("/api/v2/discovery/?page=1", true, DiscoveryPage::class.java)
+    companion object {
+        @Volatile private var instance: LanflixApiClient? = null
+        fun getInstance(context: Context): LanflixApiClient {
+            return instance ?: synchronized(this) {
+                instance ?: LanflixApiClient(context.applicationContext).also { instance = it }
+            }
+        }
+    }
+
+    suspend fun getDiscoveryPage(): DiscoveryPage? = withContext(Dispatchers.IO) {
+        if (!ServerManager.isOnline || !sessions.isSignedIn) return@withContext offlineStore.readDiscoveryPage()
+        val page = get("/api/v2/discovery/?page=1", true, DiscoveryPage::class.java)
+        if (page != null) {
+            offlineStore.cacheDiscoveryPage(page)
+            page
+        } else {
+            offlineStore.readDiscoveryPage()
+        }
+    }
+
+    fun readDiscoveryCache(): DiscoveryPage? = offlineStore.readDiscoveryPage()
     suspend fun acquire(item: DiscoveryItem): Boolean = mutate("POST", "/api/v2/discovery/${item.tmdbId}/acquire",
         mapOf("type" to item.type, "title" to item.title, "year" to item.year))
     suspend fun getAdministrationOverview(): AdministrationOverview? = get("/api/v2/admin/overview", true, AdministrationOverview::class.java)

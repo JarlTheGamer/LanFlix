@@ -76,14 +76,15 @@ public static class DependencyInjection
         // Device Pairing & Management Services
         services.AddSingleton<IDeviceService, DeviceService>();
 
-        // Discovery Services (mDNS lanflix.local)
+        // Discovery Services (mDNS lanflix.local & TMDB Pre-warm)
         services.AddHostedService<Lanflix.Infrastructure.Services.Discovery.MDnsDiscoveryService>();
+        services.AddHostedService<Lanflix.Infrastructure.Services.Discovery.DiscoveryPrewarmService>();
 
         // FFmpeg Services
         services.AddScoped<IHardwareAccelerationDetector, EnhancedHardwareAccelerationDetector>();
         services.AddScoped<ITranscodingPipeline, EnhancedTranscodingPipeline>();
         services.AddScoped<IProgressBroadcaster, SimpleProgressBroadcaster>();
-        
+
         // Audio Services
         services.AddScoped<Lanflix.Infrastructure.Services.Audio.AudioTrackSelector>();
 
