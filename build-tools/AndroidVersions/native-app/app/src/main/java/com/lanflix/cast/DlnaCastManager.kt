@@ -13,8 +13,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.DatagramPacket
-import java.net.DatagramSocket
 import java.net.InetAddress
+import java.net.MulticastSocket
 import java.net.URL
 import java.util.concurrent.TimeUnit
 
@@ -50,9 +50,10 @@ class DlnaCastManager(private val context: Context) {
     val isPlayingOnTv: StateFlow<Boolean> = _isPlayingOnTv.asStateFlow()
 
     /**
-     * Discover Smart TVs (Samsung, LG, Sony, Fire TV, Roku, DLNA Renderers) on local Wi-Fi via SSDP
+     * Discover Smart TVs (Samsung, LG, Sony, Fire TV, Roku, DLNA Renderers) on local Wi-Fi via SSDP.
+     * Uses a MulticastSocket so the OS actually delivers inbound multicast responses.
      */
-    suspend fun discoverDevices(timeoutMs: Long = 4000L) = withContext(Dispatchers.IO) {
+    suspend fun discoverDevices(timeoutMs: Long = 5000L) = withContext(Dispatchers.IO) {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
         val multicastLock = wifiManager?.createMulticastLock("LanflixDlnaCastLock")?.apply {
             setReferenceCounted(true)
@@ -60,33 +61,26 @@ class DlnaCastManager(private val context: Context) {
         }
 
         val foundMap = mutableMapOf<String, DlnaDevice>()
+        val group = InetAddress.getByName("239.255.255.250")
+
+        // MulticastSocket (not DatagramSocket) is required to receive multicast replies.
+        val socket = MulticastSocket(1900).apply {
+            soTimeout = timeoutMs.toInt()
+            timeToLive = 4
+            joinGroup(group)
+        }
 
         try {
-            val ssdpSearch = ("M-SEARCH * HTTP/1.1\r\n" +
-                    "HOST: 239.255.255.250:1900\r\n" +
-                    "MAN: \"ssdp:discover\"\r\n" +
-                    "MX: 3\r\n" +
-                    "ST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n" +
-                    "\r\n").toByteArray(Charsets.UTF_8)
+            // Search for MediaRenderer devices (TVs, speakers)
+            val ssdpRenderer = buildSsdpSearch("urn:schemas-upnp-org:device:MediaRenderer:1")
+            socket.send(DatagramPacket(ssdpRenderer, ssdpRenderer.size, group, 1900))
 
-            val group = InetAddress.getByName("239.255.255.250")
-            val socket = DatagramSocket()
-            socket.soTimeout = timeoutMs.toInt()
-
-            val packet = DatagramPacket(ssdpSearch, ssdpSearch.size, group, 1900)
-            socket.send(packet)
-
-            // Also search for all SSDP root devices as fallback
-            val ssdpAll = ("M-SEARCH * HTTP/1.1\r\n" +
-                    "HOST: 239.255.255.250:1900\r\n" +
-                    "MAN: \"ssdp:discover\"\r\n" +
-                    "MX: 3\r\n" +
-                    "ST: ssdp:all\r\n" +
-                    "\r\n").toByteArray(Charsets.UTF_8)
+            // Broad fallback: all SSDP devices
+            val ssdpAll = buildSsdpSearch("ssdp:all")
             socket.send(DatagramPacket(ssdpAll, ssdpAll.size, group, 1900))
 
             val startTime = System.currentTimeMillis()
-            val buf = ByteArray(2048)
+            val buf = ByteArray(4096)
 
             while (System.currentTimeMillis() - startTime < timeoutMs) {
                 try {
@@ -103,20 +97,27 @@ class DlnaCastManager(private val context: Context) {
                         }
                     }
                 } catch (e: java.io.InterruptedIOException) {
-                    // Socket timeout
-                    break
+                    break // socket timeout — done listening
                 } catch (e: Exception) {
                     Log.d(TAG, "SSDP receive loop error", e)
                 }
             }
-
-            socket.close()
         } catch (e: Exception) {
             Log.e(TAG, "SSDP discovery failed", e)
         } finally {
+            runCatching { socket.leaveGroup(group) }
+            runCatching { socket.close() }
             multicastLock?.release()
         }
     }
+
+    private fun buildSsdpSearch(searchTarget: String): ByteArray =
+        ("M-SEARCH * HTTP/1.1\r\n" +
+         "HOST: 239.255.255.250:1900\r\n" +
+         "MAN: \"ssdp:discover\"\r\n" +
+         "MX: 2\r\n" +
+         "ST: $searchTarget\r\n" +
+         "\r\n").toByteArray(Charsets.UTF_8)
 
     private fun parseHeader(response: String, headerName: String): String? {
         val lines = response.split("\r\n", "\n")

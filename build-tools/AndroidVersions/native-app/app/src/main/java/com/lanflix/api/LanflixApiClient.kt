@@ -218,7 +218,7 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
         return runCatching { client.newCall(builder.build()).execute() }.getOrNull()
     }
 
-    private fun refreshSession(): Boolean = synchronized(refreshLock) {
+    internal fun refreshSession(): Boolean = synchronized(refreshLock) {
         val refreshToken = sessions.refreshToken ?: return@synchronized false
         val request = Request.Builder().url(url("/api/v2/auth/refresh"))
             .post(gson.toJson(mapOf("refreshToken" to refreshToken, "deviceName" to "Android phone")).toRequestBody(jsonType)).build()
