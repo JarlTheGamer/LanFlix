@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AssistChip
@@ -74,10 +75,13 @@ fun ProfileScreen(
     library: List<ContentItem>,
     account: LanflixAccount?,
     activity: List<SocialActivity>,
+    pendingRequests: Int = 0,
     onBack: () -> Unit,
     onSelect: (ContentItem) -> Unit,
     onAccount: () -> Unit,
-    onActivity: () -> Unit
+    onActivity: () -> Unit,
+    onFriends: () -> Unit = {},
+    onEditProfile: () -> Unit = onAccount
 ) {
     val context = LocalContext.current
     val api = remember(context) { LanflixApiClient.getInstance(context) }
@@ -86,9 +90,10 @@ fun ProfileScreen(
     var backdropVersion by remember { mutableStateOf(System.currentTimeMillis()) }
     var watchHistory by remember { mutableStateOf<List<WatchHistoryItem>>(emptyList()) }
 
-    LaunchedEffect(account?.id) {
-        if (account != null) {
-            watchHistory = api.getWatchHistory()
+    LaunchedEffect(Unit) {
+        scope.launch(Dispatchers.IO) {
+            val history = api.getWatchHistory()
+            watchHistory = history
         }
     }
 
@@ -188,13 +193,49 @@ fun ProfileScreen(
                                 contentScale = ContentScale.Crop
                             )
                         }
-                        Text(account?.displayName ?: "Offline account", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 10.dp))
-                        Text(account?.let { "@${it.username}  •  ${it.role}" } ?: "Cached downloads", color = Color.White.copy(alpha = .7f), fontSize = 11.sp)
-                        Text("Tap avatar or backdrop banner to customize artwork.", color = Color.White.copy(alpha = .75f), fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                        Text(
+                            account?.displayName ?: "Offline account",
+                            color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.padding(top = 10.dp)
+                        )
+                        Text(
+                            account?.let { "@${it.username}" } ?: "Cached downloads",
+                            color = Color.White.copy(alpha = .6f), fontSize = 12.sp
+                        )
 
-                        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            AssistChip(onClick = onAccount, label = { Text("Account") }, leadingIcon = { Icon(Icons.Filled.Person, null, Modifier.size(16.dp)) })
-                            AssistChip(onClick = onActivity, label = { Text("Activity") }, leadingIcon = { Icon(Icons.Filled.Star, null, Modifier.size(16.dp)) })
+                        Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // Edit Profile button
+                            Surface(
+                                onClick = onEditProfile,
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color.White.copy(alpha = 0.15f)
+                            ) {
+                                Row(
+                                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Filled.Person, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                    Text(" Edit Profile", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                            // Friends / Requests button
+                            Surface(
+                                onClick = onFriends,
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color.White.copy(alpha = 0.15f)
+                            ) {
+                                Row(
+                                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(androidx.compose.material.icons.Icons.Filled.People, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                    Text(
+                                        if (pendingRequests > 0) " Requests ($pendingRequests)" else " Friends",
+                                        color = if (pendingRequests > 0) LanflixGold else Color.White,
+                                        fontSize = 13.sp, fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
                     }
                 }

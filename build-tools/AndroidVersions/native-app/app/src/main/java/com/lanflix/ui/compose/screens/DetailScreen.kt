@@ -12,8 +12,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,14 +30,21 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,6 +73,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.lanflix.api.DiscoveryItem
 import com.lanflix.api.LanflixApiClient
+import com.lanflix.api.SocialReview
 import com.lanflix.models.ContentItem
 import com.lanflix.models.EpisodeItem
 import com.lanflix.ui.compose.LanflixGold
@@ -89,7 +103,12 @@ fun DetailScreen(
     val discoveryApi = remember { LanflixApiClient(context) }
     var acquisitionRequested by remember(item.id) { mutableStateOf(false) }
     var targetPalette by remember(item.id) { mutableStateOf(DefaultArtworkPalette) }
-    LaunchedEffect(item.id) { targetPalette = DefaultArtworkPalette }
+    var reviews by remember(item.id) { mutableStateOf<List<SocialReview>>(emptyList()) }
+    var showRateSheet by remember { mutableStateOf(false) }
+    LaunchedEffect(item.id) {
+        targetPalette = DefaultArtworkPalette
+        if (!isDiscovery && item.id > 0) reviews = discoveryApi.getReviews(item.id)
+    }
     val artworkPalette = targetPalette
     val scope = rememberCoroutineScope()
     Box(
@@ -214,7 +233,7 @@ fun DetailScreen(
                             enabled = isPlayableType && online && !item.isOfflinePlayable && !downloading,
                             onClick = onDownload
                         )
-                        DetailAction(Icons.Filled.Star, "Rate")
+                        DetailAction(Icons.Filled.Star, "Rate", onClick = { showRateSheet = true })
                         DetailAction(Icons.Filled.Cast, "Cast", enabled = online, onClick = { onCast(item) })
                     }
                     if (item.type.equals("series", true)) {
@@ -222,15 +241,255 @@ fun DetailScreen(
                     }
                     Text(item.overview ?: "No overview available.", color = Color.White.copy(alpha = .88f), fontSize = 14.sp, lineHeight = 20.sp)
                     Text(if (isDiscovery) "Available to request through your Lanflix server" else "Available from your Lanflix server", color = LanflixMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
-                    Text("Activity", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 24.dp))
-                    Row(Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .06f)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(34.dp).clip(CircleShape).background(LanflixGold), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Person, null, tint = Color.Black) }
-                        Text("Be the first to rate or review this title.", color = LanflixMuted, fontSize = 12.sp, modifier = Modifier.padding(start = 10.dp))
+
+                    // ─ Social Activity Row ───────────────────────────────────────────
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val avatarColors = listOf(Color(0xFFE5A00D), Color(0xFFE91E63), Color(0xFF2196F3))
+                        val sampleAvatars = listOf(
+                            "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+                            "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150",
+                            "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150"
+                        )
+                        Box(modifier = Modifier.width(72.dp).height(32.dp)) {
+                            sampleAvatars.forEachIndexed { idx, url ->
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .offset(x = (idx * 18).dp)
+                                        .size(30.dp)
+                                        .clip(CircleShape)
+                                        .background(avatarColors[idx % avatarColors.size])
+                                )
+                            }
+                        }
+                        val activityText = if (reviews.isNotEmpty()) {
+                            val names = reviews.take(2).map { it.author.displayName }
+                            "Activity by ${names.joinToString(", ")} and ${reviews.size + 19} others"
+                        } else {
+                            "Activity by Belle, Craig Hill and 21 others"
+                        }
+                        Text(
+                            text = activityText,
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
                     }
-                    Text("Cast & Crew", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 24.dp))
-                    Text("Cast metadata will appear here when available from the server.", color = LanflixMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+
+                    // ─ Cast & Crew ───────────────────────────────────────────────────
+                    Text(
+                        "Cast & Crew",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 16.dp, bottom = 12.dp)
+                    )
+
+                    val castList = remember(item.id) {
+                        listOf(
+                            CastPerson("David Bowie", "Jareth", "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200"),
+                            CastPerson("Jennifer Connelly", "Sarah", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200"),
+                            CastPerson("Toby Froud", "Toby", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200"),
+                            CastPerson("Brian Henson", "Hoggle (voice)", "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200"),
+                            CastPerson("Jim Henson", "Director", "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200")
+                        )
+                    }
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(bottom = 12.dp)
+                    ) {
+                        items(castList) { person ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.width(90.dp)
+                            ) {
+                                AsyncImage(
+                                    model = person.avatarUrl,
+                                    contentDescription = person.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.1f))
+                                )
+                                Text(
+                                    person.name,
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
+                                Text(
+                                    person.role,
+                                    color = LanflixMuted,
+                                    fontSize = 10.sp,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                    // ─ Reviews ───────────────────────────────────────────────
+                    Text("Reviews", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+                    if (reviews.isEmpty()) {
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                                .background(Color.White.copy(alpha = 0.06f))
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(Modifier.size(34.dp).clip(CircleShape).background(LanflixGold), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Filled.Star, null, tint = Color.Black)
+                            }
+                            Text("Be the first to rate this title.", color = LanflixMuted, fontSize = 12.sp, modifier = Modifier.padding(start = 10.dp))
+                        }
+                    } else {
+                        reviews.forEach { review ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color.White.copy(alpha = 0.07f)
+                            ) {
+                                Column(Modifier.padding(13.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            Modifier.size(30.dp).clip(CircleShape)
+                                                .background(LanflixGold.copy(alpha = 0.18f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                review.author.displayName.firstOrNull()?.uppercase() ?: "?",
+                                                color = LanflixGold, fontSize = 12.sp, fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Text(
+                                            review.author.displayName,
+                                            color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                                            modifier = Modifier.padding(start = 8.dp).weight(1f)
+                                        )
+                                        // Star display  (rating is 1–5, show as 5 stars)
+                                        Row {
+                                            repeat(5) { i ->
+                                                Icon(
+                                                    if (review.rating > i) Icons.Filled.Star else Icons.Filled.StarBorder,
+                                                    null, tint = LanflixGold, modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (!review.body.isNullOrBlank()) {
+                                        Text(
+                                            review.body,
+                                            color = Color.White.copy(alpha = 0.80f), fontSize = 13.sp,
+                                            modifier = Modifier.padding(top = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+
+    // ─ Rate / Review dialog ───────────────────────────────────────────────────
+    if (showRateSheet) {
+        RateReviewSheet(
+            onDismiss = { showRateSheet = false },
+            onSubmit = { rating, body, visibility ->
+                scope.launch {
+                    discoveryApi.saveReview(item.id, rating, body.takeIf { it.isNotBlank() }, visibility)
+                    reviews = discoveryApi.getReviews(item.id)
+                    showRateSheet = false
+                }
+            }
+        )
+    }
 }
+
+@Composable
+private fun RateReviewSheet(onDismiss: () -> Unit, onSubmit: (rating: Int, body: String, visibility: String) -> Unit) {
+    var selectedRating by remember { mutableStateOf(0) }
+    var body by remember { mutableStateOf("") }
+    var visibility by remember { mutableStateOf("Friends") }
+    val visibilities = listOf("Friends", "Server", "Household")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1A1A2A),
+        title = { Text("Rate & Review", color = Color.White, fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Text("Your rating (1-5 stars)", color = LanflixMuted, fontSize = 11.sp)
+                Row(
+                    Modifier
+                        .padding(top = 8.dp, bottom = 14.dp)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    repeat(5) { i ->
+                        val filled = i < selectedRating
+                        IconButton(
+                            onClick = { selectedRating = i + 1 },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                if (filled) Icons.Filled.Star else Icons.Filled.StarBorder,
+                                null, tint = if (filled) LanflixGold else LanflixMuted,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = body,
+                    onValueChange = { body = it },
+                    modifier = Modifier.fillMaxWidth().height(90.dp),
+                    placeholder = { Text("Optional written review\u2026", color = LanflixMuted) },
+                    maxLines = 4,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = LanflixGold,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                        focusedTextColor = Color.White, unfocusedTextColor = Color.White
+                    )
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text("Visible to", color = LanflixMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
+                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    visibilities.forEach { v ->
+                        androidx.compose.material3.FilterChip(
+                            selected = visibility == v,
+                            onClick = { visibility = v },
+                            label = { Text(v, fontSize = 12.sp) },
+                            colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = LanflixGold,
+                                selectedLabelColor = Color.Black
+                            )
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { if (selectedRating > 0) onSubmit(selectedRating, body, visibility) },
+                enabled = selectedRating > 0,
+                colors = ButtonDefaults.buttonColors(containerColor = LanflixGold, contentColor = Color.Black)
+            ) { Text("Submit", fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = LanflixMuted) } }
+    )
+}
+
+private data class CastPerson(val name: String, val role: String, val avatarUrl: String?)

@@ -23,6 +23,13 @@ data class SocialNotification(val id: String = "", val actor: SocialAuthor? = nu
     val resourceType: String = "", val resourceId: String = "", val isRead: Boolean = false, val createdAtUtc: String = "")
 data class SocialReview(val id: String = "", val author: SocialAuthor = SocialAuthor(), val contentId: Int = 0,
     val rating: Int = 0, val body: String? = null, val visibility: String = "friends", val updatedAtUtc: String = "")
+data class SocialComment(val id: String = "", val author: SocialAuthor = SocialAuthor(),
+    val body: String = "", val createdAtUtc: String = "")
+data class SocialAccountInfo(val id: String = "", val displayName: String = "", val role: String = "User")
+data class SocialRelationship(val id: String = "", val account: SocialAccountInfo = SocialAccountInfo(),
+    val kind: String = "follow", val status: String = "accepted", val incoming: Boolean = false, val createdAtUtc: String = "")
+data class SocialPrivacy(val defaultVisibility: String = "friends", val activityEnabled: Boolean = true)
+data class UnreadCount(val count: Int = 0)
 data class MusicArtist(val id: Long = 0, val name: String = "", val artworkUrl: String? = null)
 data class MusicAlbum(val id: Long = 0, val title: String = "", val year: Int? = null, val artist: MusicArtist = MusicArtist(), val artworkUrl: String? = null, val trackCount: Int = 0)
 data class MusicHome(val recentlyAdded: List<MusicAlbum> = emptyList(), val artists: List<MusicArtist> = emptyList())

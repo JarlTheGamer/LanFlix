@@ -136,7 +136,7 @@ fun EpisodeRow(episode: EpisodeItem, onClick: () -> Unit) {
 }
 
 @Composable
-fun DetailAction(icon: ImageVector, label: String, enabled: Boolean = false, onClick: () -> Unit = {}) {
+fun DetailAction(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit = {}) {
     Column(
         modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(enabled = enabled, onClick = onClick).padding(5.dp),
         horizontalAlignment = Alignment.CenterHorizontally

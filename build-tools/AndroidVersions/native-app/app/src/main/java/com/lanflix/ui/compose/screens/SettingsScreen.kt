@@ -21,8 +21,10 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -74,7 +76,9 @@ fun SettingsScreen(
     onRetry: () -> Unit,
     onAccount: () -> Unit,
     onActivity: () -> Unit,
-    onNotifications: () -> Unit
+    onNotifications: () -> Unit,
+    onFriends: () -> Unit = {},
+    onEditProfile: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val repository = remember(context) { DevicePreferencesRepository(context.applicationContext) }
@@ -93,7 +97,9 @@ fun SettingsScreen(
         "admin-live-tv" -> state.administration?.let { AdministrationScreen(it, AdministrationSection.LiveTv) { subpage = null }; return }
     }
     LazyColumn(
-        Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF14374A), LanflixBackground), endY = 1000f)),
+        Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(Color(0xFF1E1738), LanflixBackground))),
         contentPadding = PaddingValues(bottom = 42.dp)
     ) {
         item {
@@ -104,10 +110,10 @@ fun SettingsScreen(
         }
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
-                SettingsHeading("Account and security")
+                SettingsHeading("Account and profile")
                 SettingsCard {
-                    ProfileMenuRow(Icons.Filled.AccountCircle, state.account?.displayName ?: "Lanflix account", "${state.account?.role ?: "Offline"} account and security", onAccount)
-                    ProfileMenuRow(Icons.Filled.Storage, "Device sessions", "Review, revoke and sign out connected devices", onAccount)
+                    ProfileMenuRow(Icons.Filled.Person, "Edit profile", "Avatar, background banner, display name & status", onEditProfile)
+                    ProfileMenuRow(Icons.Filled.AccountCircle, state.account?.displayName ?: "Account security", "Password, email and security preferences", onAccount)
                 }
                 SettingsHeading("Server connection")
                 SettingsCard {
@@ -141,11 +147,16 @@ fun SettingsScreen(
                         scope.launch { repository.setReducedMotion(it) }
                     }
                 }
-                SettingsHeading("Notifications and privacy")
+                SettingsHeading("Notifications and social")
                 SettingsCard {
-                    ProfileMenuRow(Icons.Filled.Notifications, "Notifications", "${state.notifications.count { !it.isRead }} unread server notifications", onNotifications)
-                    ProfileMenuRow(Icons.Filled.Person, "Activity and social", "Friends, reviews, reactions and privacy", onActivity)
-                    SettingsToggleRow(Icons.Filled.Notifications, "Notifications", "Downloads, activity, invites and requests", preferences.notificationsEnabled) {
+                    ProfileMenuRow(Icons.Filled.Notifications, "Notifications",
+                        if (state.unreadNotificationCount > 0) "${state.unreadNotificationCount} unread" else "No new notifications",
+                        onNotifications)
+                    ProfileMenuRow(Icons.Filled.People, "Friends & Social",
+                        "Friends, following, requests and activity", onFriends)
+                    ProfileMenuRow(Icons.Filled.DynamicFeed, "Activity feed",
+                        "See what friends are watching and reviewing", onActivity)
+                    SettingsToggleRow(Icons.Filled.Notifications, "Push notifications", "Downloads, activity, invites and requests", preferences.notificationsEnabled) {
                         scope.launch { repository.setNotificationsEnabled(it) }
                     }
                 }

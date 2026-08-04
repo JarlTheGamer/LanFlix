@@ -7,6 +7,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import com.lanflix.ui.compose.screens.EditProfileScreen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -135,24 +136,52 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                 )
                 currentOverlay == AppOverlay.Search -> SearchScreen(state.library, onBack = ::closeOverlay, onSelect = { detail = it })
                 currentOverlay == AppOverlay.Account && state.account != null -> AccountSecurityScreen(state.account!!, onBack = ::closeOverlay, onSignedOut = { overlayStack.clear(); viewModel.signOut() })
-                currentOverlay == AppOverlay.Activity -> ActivityScreen(state.socialFeed, onBack = ::closeOverlay)
-                currentOverlay == AppOverlay.Notifications -> NotificationsScreen(state.notifications, onBack = ::closeOverlay)
+                currentOverlay == AppOverlay.Activity -> ActivityScreen(
+                    feed = state.socialFeed,
+                    onBack = ::closeOverlay,
+                    onCreatePost = { body, visibility -> viewModel.createPost(body, visibility) },
+                    onReact = { postId, kind -> viewModel.react(postId, kind) },
+                    onDelete = { postId -> viewModel.deletePost(postId) }
+                )
+                currentOverlay == AppOverlay.Notifications -> NotificationsScreen(
+                    notifications = state.notifications,
+                    onBack = ::closeOverlay,
+                    onMarkAllRead = { viewModel.markAllNotificationsRead() },
+                    onMarkRead = { id -> viewModel.markNotificationRead(id) }
+                )
                 currentOverlay == AppOverlay.Settings -> SettingsScreen(
                     state = state,
                     onBack = ::closeOverlay,
                     onRetry = viewModel::refresh,
                     onAccount = { openOverlay(AppOverlay.Account) },
                     onActivity = { openOverlay(AppOverlay.Activity) },
-                    onNotifications = { openOverlay(AppOverlay.Notifications) }
+                    onNotifications = { openOverlay(AppOverlay.Notifications) },
+                    onFriends = { viewModel.loadRelationships(); openOverlay(AppOverlay.Friends) },
+                    onEditProfile = { openOverlay(AppOverlay.EditProfile) }
                 )
                 currentOverlay == AppOverlay.Profile -> ProfileScreen(
                     library = state.library,
                     account = state.account,
                     activity = state.socialFeed,
+                    pendingRequests = state.relationships.count { it.kind == "friend" && it.status == "pending" && it.incoming },
                     onBack = ::closeOverlay,
                     onSelect = { detail = it },
                     onAccount = { openOverlay(AppOverlay.Account) },
-                    onActivity = { openOverlay(AppOverlay.Activity) }
+                    onActivity = { openOverlay(AppOverlay.Activity) },
+                    onFriends = { viewModel.loadRelationships(); openOverlay(AppOverlay.Friends) },
+                    onEditProfile = { openOverlay(AppOverlay.EditProfile) }
+                )
+                currentOverlay == AppOverlay.Friends -> FriendsScreen(
+                    relationships = state.relationships,
+                    onBack = ::closeOverlay,
+                    onAccept = { id -> viewModel.acceptFriendRequest(id) },
+                    onRemoveFriend = { id -> viewModel.removeFriend(id) },
+                    onUnfollow = { id -> viewModel.unfollow(id) }
+                )
+                currentOverlay == AppOverlay.EditProfile -> EditProfileScreen(
+                    account = state.account,
+                    onBack = ::closeOverlay,
+                    onProfileUpdated = { viewModel.refresh() }
                 )
                 else -> Box(Modifier.fillMaxSize()) {
                     AnimatedContent(targetState = destination, label = "main-destination") { target ->

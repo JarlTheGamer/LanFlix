@@ -116,13 +116,58 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
         return get("/api/v2/playback/$kind/${item.id}", true, PlaybackInfo::class.java)
     }
 
+    // ── Feed & Posts ─────────────────────────────────────────────────────────
     suspend fun getSocialFeed(): List<SocialActivity> = getList("/api/v2/social/feed?limit=50")
-    suspend fun createPost(body: String, visibility: String = "Friends"): Boolean = mutate("POST", "/api/v2/social/posts", mapOf("body" to body, "visibility" to visibility))
-    suspend fun getNotifications(): List<SocialNotification> = getList("/api/v2/social/notifications?limit=100")
-    suspend fun markNotificationRead(id: String): Boolean = mutate("POST", "/api/v2/social/notifications/$id/read")
+    suspend fun createPost(body: String, visibility: String = "Friends"): Boolean =
+        mutate("POST", "/api/v2/social/posts", mapOf("body" to body, "visibility" to visibility))
+    suspend fun deletePost(id: String): Boolean = mutate("DELETE", "/api/v2/social/posts/$id")
+
+    // ── Comments ─────────────────────────────────────────────────────────────
+    suspend fun getComments(postId: String): List<SocialComment> = getList("/api/v2/social/posts/$postId/comments")
+    suspend fun addComment(postId: String, body: String): Boolean =
+        mutate("POST", "/api/v2/social/posts/$postId/comments", mapOf("body" to body))
+    suspend fun deleteComment(commentId: String): Boolean = mutate("DELETE", "/api/v2/social/comments/$commentId")
+
+    // ── Reactions ────────────────────────────────────────────────────────────
+    suspend fun saveReaction(postId: String, kind: String): Boolean =
+        mutate("PUT", "/api/v2/social/posts/$postId/reaction", mapOf("kind" to kind))
+    suspend fun deleteReaction(postId: String): Boolean = mutate("DELETE", "/api/v2/social/posts/$postId/reaction")
+
+    // ── Reviews ──────────────────────────────────────────────────────────────
     suspend fun getReviews(contentId: Int): List<SocialReview> = getList("/api/v2/social/reviews/$contentId")
     suspend fun saveReview(contentId: Int, rating: Int, body: String?, visibility: String = "Friends"): Boolean =
         mutate("PUT", "/api/v2/social/reviews/$contentId", mapOf("rating" to rating, "body" to body, "visibility" to visibility))
+    suspend fun deleteReview(contentId: Int): Boolean = mutate("DELETE", "/api/v2/social/reviews/$contentId")
+
+    // ── Relationships ────────────────────────────────────────────────────────
+    suspend fun getRelationships(): List<SocialRelationship> = getList("/api/v2/social/relationships")
+    suspend fun follow(targetId: String): Boolean = mutate("PUT", "/api/v2/social/follows/$targetId")
+    suspend fun unfollow(targetId: String): Boolean = mutate("DELETE", "/api/v2/social/follows/$targetId")
+    suspend fun sendFriendRequest(targetId: String): Boolean = mutate("POST", "/api/v2/social/friends/$targetId")
+    suspend fun acceptFriendRequest(relationshipId: String): Boolean =
+        mutate("POST", "/api/v2/social/friends/requests/$relationshipId/accept")
+    suspend fun removeFriend(targetId: String): Boolean = mutate("DELETE", "/api/v2/social/friends/$targetId")
+
+    // ── Safety ───────────────────────────────────────────────────────────────
+    suspend fun blockUser(targetId: String): Boolean = mutate("PUT", "/api/v2/social/blocks/$targetId")
+    suspend fun unblockUser(targetId: String): Boolean = mutate("DELETE", "/api/v2/social/blocks/$targetId")
+    suspend fun muteUser(targetId: String): Boolean = mutate("PUT", "/api/v2/social/mutes/$targetId")
+    suspend fun unmuteUser(targetId: String): Boolean = mutate("DELETE", "/api/v2/social/mutes/$targetId")
+
+    // ── Privacy & Notifications ──────────────────────────────────────────────
+    suspend fun getPrivacy(): SocialPrivacy? = get("/api/v2/social/privacy", true, SocialPrivacy::class.java)
+    suspend fun updatePrivacy(defaultVisibility: String, activityEnabled: Boolean): Boolean =
+        mutate("PUT", "/api/v2/social/privacy", mapOf("defaultVisibility" to defaultVisibility, "activityEnabled" to activityEnabled))
+    suspend fun getNotifications(): List<SocialNotification> = getList("/api/v2/social/notifications?limit=100")
+    suspend fun getUnreadNotificationCount(): Int =
+        get("/api/v2/social/notifications/unread-count", true, UnreadCount::class.java)?.count ?: 0
+    suspend fun markNotificationRead(id: String): Boolean = mutate("POST", "/api/v2/social/notifications/$id/read")
+    suspend fun markAllNotificationsRead(): Boolean = mutate("POST", "/api/v2/social/notifications/read-all")
+
+    // ── Reports ──────────────────────────────────────────────────────────────
+    suspend fun reportContent(targetType: String, targetId: String, reason: String): Boolean =
+        mutate("POST", "/api/v2/social/reports", mapOf("targetType" to targetType, "targetId" to targetId, "reason" to reason))
+
 
     suspend fun getMusicHome(): MusicHome? = get("/api/v2/music/home", true, MusicHome::class.java)
     suspend fun getLiveTvChannels(): List<LiveTvChannel> = getList("/api/v2/live-tv/channels")

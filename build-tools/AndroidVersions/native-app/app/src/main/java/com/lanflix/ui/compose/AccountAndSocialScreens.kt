@@ -1,6 +1,8 @@
 package com.lanflix.ui.compose
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,17 +17,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanflix.api.AccountSession
 import com.lanflix.api.LanflixApiClient
 import com.lanflix.api.SocialActivity
+import com.lanflix.api.SocialComment
 import com.lanflix.api.SocialNotification
+import com.lanflix.api.SocialRelationship
 import com.lanflix.auth.LanflixAccount
 import com.lanflix.settings.DevicePreferences
 import com.lanflix.settings.DevicePreferencesRepository
@@ -253,22 +259,391 @@ fun AccountSecurityScreen(account: LanflixAccount, onBack: () -> Unit, onSignedO
 }
 
 @Composable
-fun ActivityScreen(feed: List<SocialActivity>, onBack: () -> Unit) {
-    LazyColumn(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF3C1837), LanflixBackground))), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item { ScreenHeader("Activity", onBack) }
-        if (feed.isEmpty()) item { EmptyMessage("No activity yet", "Follow or befriend another account, or publish a review.") }
-        items(feed, key = { it.id }) { activity -> SocialCard(activity.author.displayName, activity.kind, activity.body, "${activity.reactionCount} reactions • ${activity.commentCount} comments") }
+fun ActivityScreen(
+    feed: List<SocialActivity>,
+    onBack: () -> Unit,
+    onCreatePost: (String, String) -> Unit = { _, _ -> },
+    onReact: (postId: String, kind: String) -> Unit = { _, _ -> },
+    onDelete: (postId: String) -> Unit = {}
+) {
+    val context = LocalContext.current
+    val api = remember(context) { LanflixApiClient(context) }
+    val scope = rememberCoroutineScope()
+    var showCreateSheet by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF3C1837), LanflixBackground))),
+            contentPadding = PaddingValues(bottom = 96.dp)
+        ) {
+            item {
+                ScreenHeader("Activity", onBack)
+                if (feed.isEmpty()) {
+                    EmptyMessage(
+                        Icons.Default.DynamicFeed,
+                        "No activity yet",
+                        "Follow or befriend another account, or publish a review."
+                    )
+                }
+            }
+            items(feed, key = { it.id }) { activity ->
+                FeedCard(activity, api, scope, onReact, onDelete)
+            }
+        }
+
+        // Create post FAB
+        FloatingActionButton(
+            onClick = { showCreateSheet = true },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+            containerColor = LanflixGold,
+            contentColor = Color.Black,
+            shape = CircleShape
+        ) { Icon(Icons.Default.Edit, "New post") }
+    }
+
+    if (showCreateSheet) {
+        CreatePostSheet(onDismiss = { showCreateSheet = false }, onSubmit = { body, visibility ->
+            onCreatePost(body, visibility)
+            showCreateSheet = false
+        })
     }
 }
 
 @Composable
-fun NotificationsScreen(notifications: List<SocialNotification>, onBack: () -> Unit) {
-    LazyColumn(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF26384E), LanflixBackground))), contentPadding = PaddingValues(bottom = 40.dp)) {
-        item { ScreenHeader("Notifications", onBack) }
-        if (notifications.isEmpty()) item { EmptyMessage("You are all caught up", "New friend requests, reactions, comments and server activity appear here.") }
-        items(notifications, key = { it.id }) { value -> SocialCard(value.actor?.displayName ?: "Lanflix", value.kind.replace('-', ' '), value.resourceType, if (value.isRead) "Read" else "New") }
+private fun FeedCard(
+    activity: SocialActivity,
+    api: LanflixApiClient,
+    scope: kotlinx.coroutines.CoroutineScope,
+    onReact: (String, String) -> Unit,
+    onDelete: (String) -> Unit
+) {
+    var commentsExpanded by remember { mutableStateOf(false) }
+    var comments by remember { mutableStateOf<List<SocialComment>>(emptyList()) }
+    var commentInput by remember { mutableStateOf("") }
+    var myReaction by remember { mutableStateOf<String?>(null) }
+
+    val kindLabel = when (activity.kind) {
+        "post" -> "Posted"
+        "review" -> "Reviewed"
+        "watch" -> "Watched"
+        else -> activity.kind.replaceFirstChar { it.uppercase() }
+    }
+    val kindColor = when (activity.kind) {
+        "review" -> Color(0xFFFFD700)
+        "watch" -> Color(0xFF58C8FF)
+        else -> LanflixGold
+    }
+
+    Surface(
+        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White.copy(alpha = 0.07f)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(15.dp)) {
+            // ─ Author row ─────────────────────────────────────────────────
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Avatar initial
+                Box(
+                    modifier = Modifier.size(38.dp).clip(CircleShape)
+                        .background(LanflixGold.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = activity.author.displayName.firstOrNull()?.uppercase() ?: "?",
+                        color = LanflixGold, fontSize = 16.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+                Column(Modifier.padding(start = 10.dp).weight(1f)) {
+                    Text(activity.author.displayName, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text(kindLabel, color = kindColor, fontSize = 11.sp)
+                }
+                // Visibility badge
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color.White.copy(alpha = 0.08f)
+                ) {
+                    Text(
+                        text = activity.visibility.replaceFirstChar { it.uppercase() },
+                        color = LanflixMuted, fontSize = 10.sp,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            // ─ Body ───────────────────────────────────────────────────────
+            if (!activity.body.isNullOrBlank()) {
+                Text(
+                    text = activity.body,
+                    color = Color.White.copy(alpha = 0.88f),
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+            }
+
+            // ─ Reactions row ──────────────────────────────────────────────
+            Row(
+                modifier = Modifier.padding(top = 12.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ReactionButton("👍", activity.reactionCount, myReaction == "like") {
+                    myReaction = if (myReaction == "like") null else "like"
+                    onReact(activity.id, "like")
+                }
+                Spacer(Modifier.width(6.dp))
+                ReactionButton("❤️", 0, myReaction == "love") {
+                    myReaction = if (myReaction == "love") null else "love"
+                    onReact(activity.id, "love")
+                }
+                Spacer(Modifier.width(6.dp))
+                ReactionButton("🔥", 0, myReaction == "fire") {
+                    myReaction = if (myReaction == "fire") null else "fire"
+                    onReact(activity.id, "fire")
+                }
+                Spacer(Modifier.weight(1f))
+                // Comments toggle
+                TextButton(
+                    onClick = {
+                        commentsExpanded = !commentsExpanded
+                        if (commentsExpanded && comments.isEmpty()) {
+                            scope.launch { comments = api.getComments(activity.id) }
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.ChatBubbleOutline, null, tint = LanflixMuted, modifier = Modifier.size(15.dp))
+                    Text(" ${activity.commentCount}", color = LanflixMuted, fontSize = 12.sp)
+                }
+            }
+
+            // ─ Comments section ───────────────────────────────────────────
+            AnimatedVisibility(visible = commentsExpanded) {
+                Column(Modifier.padding(top = 8.dp)) {
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                    Spacer(Modifier.height(8.dp))
+                    comments.forEach { c ->
+                        Row(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Box(
+                                modifier = Modifier.size(26.dp).clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.10f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = c.author.displayName.firstOrNull()?.uppercase() ?: "?",
+                                    color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Column(Modifier.padding(start = 8.dp)) {
+                                Text(c.author.displayName, color = LanflixGold, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                Text(c.body, color = Color.White.copy(alpha = 0.82f), fontSize = 13.sp)
+                            }
+                        }
+                    }
+                    // Add comment input
+                    Row(
+                        modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = commentInput,
+                            onValueChange = { commentInput = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("Add a comment…", color = LanflixMuted, fontSize = 13.sp) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = LanflixGold,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            )
+                        )
+                        IconButton(
+                            onClick = {
+                                if (commentInput.isNotBlank()) {
+                                    scope.launch {
+                                        api.addComment(activity.id, commentInput)
+                                        comments = api.getComments(activity.id)
+                                        commentInput = ""
+                                    }
+                                }
+                            }
+                        ) { Icon(Icons.Default.Send, "Send", tint = LanflixGold) }
+                    }
+                }
+            }
+        }
     }
 }
+
+@Composable
+private fun ReactionButton(emoji: String, count: Int, active: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = if (active) LanflixGold.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.07f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(emoji, fontSize = 14.sp)
+            if (count > 0) Text(" $count", color = if (active) LanflixGold else LanflixMuted, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun CreatePostSheet(onDismiss: () -> Unit, onSubmit: (String, String) -> Unit) {
+    var body by remember { mutableStateOf("") }
+    var visibility by remember { mutableStateOf("Friends") }
+    val visibilities = listOf("Friends", "Server", "Household")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New post", color = Color.White, fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = body,
+                    onValueChange = { body = it },
+                    modifier = Modifier.fillMaxWidth().height(110.dp),
+                    placeholder = { Text("What\'s on your mind?", color = LanflixMuted) },
+                    maxLines = 5,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = LanflixGold,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                        focusedTextColor = Color.White, unfocusedTextColor = Color.White
+                    )
+                )
+                Spacer(Modifier.height(12.dp))
+                Text("Visible to", color = LanflixMuted, fontSize = 11.sp)
+                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    visibilities.forEach { v ->
+                        FilterChip(
+                            selected = visibility == v,
+                            onClick = { visibility = v },
+                            label = { Text(v, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = LanflixGold,
+                                selectedLabelColor = Color.Black
+                            )
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { if (body.isNotBlank()) onSubmit(body, visibility) },
+                enabled = body.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = LanflixGold, contentColor = Color.Black)
+            ) { Text("Post", fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = LanflixMuted) } },
+        containerColor = Color(0xFF1A1A2A)
+    )
+}
+
+@Composable
+fun NotificationsScreen(
+    notifications: List<SocialNotification>,
+    onBack: () -> Unit,
+    onMarkAllRead: () -> Unit = {},
+    onMarkRead: (String) -> Unit = {}
+) {
+    LazyColumn(
+        Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF26384E), LanflixBackground))),
+        contentPadding = PaddingValues(bottom = 40.dp)
+    ) {
+        item {
+            Row(
+                Modifier.fillMaxWidth().statusBarsPadding().height(60.dp).padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Color.White) }
+                Text("Notifications", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (notifications.any { !it.isRead }) {
+                    TextButton(onClick = onMarkAllRead) {
+                        Text("Mark all read", color = LanflixGold, fontSize = 12.sp)
+                    }
+                }
+            }
+            if (notifications.isEmpty()) EmptyMessage(
+                Icons.Default.Notifications,
+                "All caught up",
+                "Friend requests, reactions, comments and server events appear here."
+            )
+        }
+        items(notifications, key = { it.id }) { n ->
+            NotificationItem(n, onClick = { if (!n.isRead) onMarkRead(n.id) })
+        }
+    }
+}
+
+@Composable
+private fun NotificationItem(n: SocialNotification, onClick: () -> Unit) {
+    val (icon, tint) = when (n.kind) {
+        "friend-request" -> Icons.Default.PersonAdd to Color(0xFF58C878)
+        "friend-accepted" -> Icons.Default.People to Color(0xFF58C878)
+        "reaction" -> Icons.Default.Favorite to Color(0xFFE05080)
+        "comment" -> Icons.Default.ChatBubble to Color(0xFF58C8FF)
+        "follow" -> Icons.Default.PersonAdd to LanflixGold
+        "review" -> Icons.Default.Star to Color(0xFFFFD700)
+        else -> Icons.Default.Notifications to LanflixMuted
+    }
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .padding(horizontal = 14.dp, vertical = 4.dp)
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = if (!n.isRead) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.05f)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Unread accent stripe
+            if (!n.isRead) {
+                Box(
+                    Modifier.width(3.dp).height(36.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(LanflixGold)
+                        .padding(end = 10.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+            }
+            Box(
+                modifier = Modifier.size(40.dp).clip(CircleShape)
+                    .background(tint.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) { Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp)) }
+            Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                val actor = n.actor?.displayName ?: "Lanflix"
+                val description = when (n.kind) {
+                    "friend-request" -> "$actor sent you a friend request"
+                    "friend-accepted" -> "$actor accepted your friend request"
+                    "reaction" -> "$actor reacted to your post"
+                    "comment" -> "$actor commented on your post"
+                    "follow" -> "$actor started following you"
+                    "review" -> "$actor left a review"
+                    else -> "$actor — ${n.kind.replace('-', ' ')}"
+                }
+                Text(description, color = Color.White, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = n.createdAtUtc.take(10),
+                    color = LanflixMuted, fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+            if (!n.isRead) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(LanflixGold))
+            }
+        }
+    }
+}
+
 
 @Composable private fun ScreenHeader(title: String, onBack: () -> Unit) { Row(Modifier.fillMaxWidth().statusBarsPadding().height(60.dp), verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Color.White) }; Text(title, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold) } }
 @Composable private fun SettingsPanel(title: String?, content: @Composable ColumnScope.() -> Unit) { Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(17.dp), color = Color.White.copy(alpha = .07f)) { Column(Modifier.padding(15.dp)) { if (title != null) Text(title, color = LanflixGold, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 7.dp)); content() } } }
@@ -283,7 +658,18 @@ private fun SocialCard(author: String, kind: String, body: String?, footer: Stri
         }
     }
 }
-@Composable private fun EmptyMessage(title: String, body: String) { Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally) { Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold); Text(body, color = LanflixMuted, modifier = Modifier.padding(top = 7.dp)) } }
+@Composable
+private fun EmptyMessage(icon: ImageVector, title: String, body: String) {
+    Column(
+        Modifier.fillMaxWidth().padding(40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(icon, null, tint = LanflixMuted, modifier = Modifier.size(48.dp))
+        Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
+        Text(body, color = LanflixMuted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 7.dp))
+    }
+}
+
 
 fun promptBiometricAuthentication(context: android.content.Context, onSuccess: () -> Unit, onError: (String) -> Unit) {
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {

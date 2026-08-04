@@ -10,6 +10,7 @@ import com.lanflix.webview.ServerManager
 import com.lanflix.auth.LanflixAccount
 import com.lanflix.api.SocialActivity
 import com.lanflix.api.SocialNotification
+import com.lanflix.api.SocialRelationship
 import com.lanflix.api.MusicHome
 import com.lanflix.api.LiveTvChannel
 import com.lanflix.api.AdministrationOverview
@@ -22,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import coil.imageLoader
 import coil.request.ImageRequest
 
@@ -34,6 +36,8 @@ data class LanflixUiState(
     val authenticationRequired: Boolean = false,
     val socialFeed: List<SocialActivity> = emptyList(),
     val notifications: List<SocialNotification> = emptyList(),
+    val unreadNotificationCount: Int = 0,
+    val relationships: List<SocialRelationship> = emptyList(),
     val music: MusicHome? = null,
     val liveTvChannels: List<LiveTvChannel> = emptyList(),
     val administration: AdministrationOverview? = null,
@@ -48,7 +52,19 @@ class LanflixViewModel(application: Application) : AndroidViewModel(application)
     private val _state = MutableStateFlow(LanflixUiState())
     val state: StateFlow<LanflixUiState> = _state.asStateFlow()
 
-    init { refresh() }
+    init {
+        refresh()
+        // Poll unread notification count every 60s for the badge
+        viewModelScope.launch {
+            while (true) {
+                delay(60_000)
+                if (_state.value.account != null && ServerManager.isOnline) {
+                    val count = api.getUnreadNotificationCount()
+                    _state.update { it.copy(unreadNotificationCount = count) }
+                }
+            }
+        }
+    }
 
     fun refresh() {
         viewModelScope.launch {
@@ -146,9 +162,98 @@ class LanflixViewModel(application: Application) : AndroidViewModel(application)
     fun signOut() {
         viewModelScope.launch {
             api.logout()
-            _state.update { it.copy(account = null, authenticationRequired = it.online, socialFeed = emptyList(), notifications = emptyList(), administration = null) }
+            _state.update { it.copy(account = null, authenticationRequired = it.online,
+                socialFeed = emptyList(), notifications = emptyList(), relationships = emptyList(),
+                unreadNotificationCount = 0, administration = null) }
         }
     }
+
+    fun createPost(body: String, visibility: String = "Friends") {
+        viewModelScope.launch {
+            if (api.createPost(body, visibility)) {
+                val feed = api.getSocialFeed()
+                _state.update { it.copy(socialFeed = feed) }
+            }
+        }
+    }
+
+    fun deletePost(id: String) {
+        viewModelScope.launch {
+            if (api.deletePost(id)) _state.update { it.copy(socialFeed = it.socialFeed.filterNot { p -> p.id == id }) }
+        }
+    }
+
+    fun react(postId: String, kind: String) {
+        viewModelScope.launch { api.saveReaction(postId, kind) }
+    }
+
+    fun loadRelationships() {
+        viewModelScope.launch {
+            val rel = api.getRelationships()
+            _state.update { it.copy(relationships = rel) }
+        }
+    }
+
+    fun follow(targetId: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch { onResult(api.follow(targetId)) }
+    }
+
+    fun unfollow(targetId: String) {
+        viewModelScope.launch {
+            api.unfollow(targetId)
+            _state.update { it.copy(relationships = it.relationships.filterNot { r -> r.account.id == targetId && r.kind == "follow" }) }
+        }
+    }
+
+    fun sendFriendRequest(targetId: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch { onResult(api.sendFriendRequest(targetId)) }
+    }
+
+    fun acceptFriendRequest(relationshipId: String) {
+        viewModelScope.launch {
+            if (api.acceptFriendRequest(relationshipId)) loadRelationships()
+        }
+    }
+
+    fun removeFriend(targetId: String) {
+        viewModelScope.launch {
+            api.removeFriend(targetId)
+            _state.update { it.copy(relationships = it.relationships.filterNot { r -> r.account.id == targetId }) }
+        }
+    }
+
+    fun blockUser(targetId: String) {
+        viewModelScope.launch {
+            api.blockUser(targetId)
+            // Also purge from relationships
+            _state.update { it.copy(relationships = it.relationships.filterNot { r -> r.account.id == targetId }) }
+        }
+    }
+
+    fun muteUser(targetId: String) {
+        viewModelScope.launch { api.muteUser(targetId) }
+    }
+
+    fun markAllNotificationsRead() {
+        viewModelScope.launch {
+            if (api.markAllNotificationsRead()) {
+                val updated = _state.value.notifications.map { it.copy(isRead = true) }
+                _state.update { it.copy(notifications = updated, unreadNotificationCount = 0) }
+            }
+        }
+    }
+
+    fun markNotificationRead(id: String) {
+        viewModelScope.launch {
+            if (api.markNotificationRead(id)) {
+                _state.update {
+                    val updated = it.notifications.map { n -> if (n.id == id) n.copy(isRead = true) else n }
+                    it.copy(notifications = updated, unreadNotificationCount = maxOf(0, it.unreadNotificationCount - 1))
+                }
+            }
+        }
+    }
+
 
     fun download(item: ContentItem, onComplete: (ContentItem?) -> Unit) {
         val key = "${item.type}:${item.id}"

@@ -21,4 +21,4 @@ enum class Destination(val label: String, val selected: ImageVector, val unselec
     Discover("Discover", Icons.Filled.TravelExplore, Icons.Outlined.TravelExplore)
 }
 
-enum class AppOverlay { Search, Profile, Settings, Account, Activity, Notifications }
+enum class AppOverlay { Search, Profile, Settings, Account, Activity, Notifications, Friends, EditProfile }
