@@ -420,6 +420,24 @@ public class TmdbClient : ITmdbClient
             throw;
         }
     }
+
+    public async Task<TmdbCreditsResult?> GetMovieCreditsAsync(int tmdbId, CancellationToken cancellationToken = default)
+    {
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(apiKey)) return null;
+        var url = $"movie/{tmdbId}/credits?api_key={apiKey}";
+        try { return await _httpClient.GetFromJsonAsync<TmdbCreditsResult>(url, _jsonOptions, cancellationToken); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Error getting movie credits for TMDB ID {TmdbId}", tmdbId); return null; }
+    }
+
+    public async Task<TmdbCreditsResult?> GetTvCreditsAsync(int tmdbId, CancellationToken cancellationToken = default)
+    {
+        var apiKey = await GetApiKeyAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(apiKey)) return null;
+        var url = $"tv/{tmdbId}/credits?api_key={apiKey}";
+        try { return await _httpClient.GetFromJsonAsync<TmdbCreditsResult>(url, _jsonOptions, cancellationToken); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Error getting TV credits for TMDB ID {TmdbId}", tmdbId); return null; }
+    }
 }
 
 internal sealed class TmdbImagesResponse

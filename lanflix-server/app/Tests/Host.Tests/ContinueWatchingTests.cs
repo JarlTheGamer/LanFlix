@@ -110,6 +110,8 @@ public sealed class ContinueWatchingTests
         public Task<TmdbSearchResult> GetPopularMoviesAsync(int page = 1, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<TmdbSearchResult> GetPopularTvSeriesAsync(int page = 1, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<string?> GetLogoPathAsync(int tmdbId, bool isSeries, string language = "en", CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<TmdbCreditsResult?> GetMovieCreditsAsync(int tmdbId, CancellationToken cancellationToken = default) => Task.FromResult<TmdbCreditsResult?>(null);
+        public Task<TmdbCreditsResult?> GetTvCreditsAsync(int tmdbId, CancellationToken cancellationToken = default) => Task.FromResult<TmdbCreditsResult?>(null);
     }
 
     private sealed class UnusedMetadataService : IMetadataService

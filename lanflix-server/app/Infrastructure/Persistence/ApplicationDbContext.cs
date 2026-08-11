@@ -91,6 +91,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext, IIdentityD
                 modelBuilder.Entity(entityType.ClrType).HasQueryFilter(filter);
             }
         }
+
+        // CastJson is managed via raw SQL at runtime — exclude it from the EF model
+        // so it never triggers a pending-migration warning.
+        modelBuilder.Entity<Lanflix.Domain.Entities.Content>().Ignore(nameof(Lanflix.Domain.Entities.Content.CastJson));
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

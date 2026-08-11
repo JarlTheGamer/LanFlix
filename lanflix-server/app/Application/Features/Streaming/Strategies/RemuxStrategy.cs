@@ -55,7 +55,8 @@ public class RemuxStrategy : IStreamingStrategy
             HwAccelMethod = HwAccelMethod.None, // No transcoding needed
             OutputFormat = decision.TargetContainer ?? "mpegts", // Use MPEG-TS for better seeking
             SessionId = request.SessionId,
-            TotalDuration = request.MediaInfo.Duration.TotalSeconds
+            TotalDuration = request.MediaInfo.Duration.TotalSeconds,
+            Duration = request.SegmentDuration
         };
 
         // Create remux stream

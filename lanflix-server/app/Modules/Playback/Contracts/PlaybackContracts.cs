@@ -3,12 +3,13 @@ namespace Lanflix.Modules.Playback;
 public sealed record PlaybackSource(
     int Id, string Kind, string Title, string FilePath, string MimeType, long FileSize,
     int? SeasonNumber, int? EpisodeNumber, double? IntroStartSeconds,
-    double? IntroEndSeconds, double? CreditsStartSeconds);
+    double? IntroEndSeconds, double? CreditsStartSeconds, double DurationSeconds);
 
 public sealed record PlaybackInfoDto(
     int Id, string Kind, string Title, string StreamUrl, string MimeType, long FileSize,
     int? SeasonNumber, int? EpisodeNumber, double? IntroStartSeconds,
-    double? IntroEndSeconds, double? CreditsStartSeconds, PlaybackProgressDto? Progress);
+    double? IntroEndSeconds, double? CreditsStartSeconds, PlaybackProgressDto? Progress,
+    double DurationSeconds = 0, string PlaybackMode = "Unknown");
 
 public sealed record PlaybackProgressDto(
     string MediaKind, int MediaId, long PositionMilliseconds, long DurationMilliseconds,
@@ -31,6 +32,16 @@ public sealed record AdaptivePlaybackDelivery(
 
 public interface IAdaptivePlaybackService
 {
+    Task<string> GetPlaybackModeAsync(
+        PlaybackSource source, string clientType, CancellationToken cancellationToken);
+
     Task<AdaptivePlaybackDelivery> OpenAsync(
         PlaybackSource source, string clientType, double? startSeconds, string? rangeHeader, CancellationToken cancellationToken);
+
+    /// <summary>Transcodes a fixed-duration HLS segment starting at <paramref name="startSeconds"/>.</summary>
+    Task<AdaptivePlaybackDelivery> OpenSegmentAsync(
+        PlaybackSource source, string clientType, double startSeconds, double segmentDuration, CancellationToken cancellationToken);
+
+    /// <summary>Returns the duration in seconds of the media file, probing via ffprobe if needed.</summary>
+    Task<double> ProbeDurationAsync(string filePath, CancellationToken cancellationToken);
 }

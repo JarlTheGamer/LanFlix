@@ -79,7 +79,9 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
 
     val playbackPreferences by playbackPreferencesRepository.preferences.collectAsStateWithLifecycle(initialValue = DevicePreferences())
     var playbackInfo by remember(item.id) { mutableStateOf<PlaybackInfo?>(null) }
-    LaunchedEffect(item.id) { if (item.localFilePath == null) playbackInfo = api.getPlaybackInfo(item) }
+    val playbackClient = if (playbackPreferences.playbackQuality == "Data saver") "mobile-low" else "mobile-high"
+    LaunchedEffect(item.id, playbackClient) { if (item.localFilePath == null) playbackInfo = api.getPlaybackInfo(item, playbackClient) }
+    var initialPositionApplied by remember(item.id) { mutableStateOf(false) }
     DisposableEffect(activity) {
         if (activity == null) return@DisposableEffect onDispose { }
         val previousOrientation = activity.requestedOrientation
@@ -94,11 +96,19 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
             activity.requestedOrientation = previousOrientation
         }
     }
-    val uri = remember(item, playbackPreferences.playbackQuality) {
+    val uri = remember(item, playbackPreferences.playbackQuality, playbackInfo?.progress?.positionMilliseconds, playbackInfo?.playbackMode) {
         item.localFilePath?.let { Uri.fromFile(File(it)) } ?: run {
             val kind = if (item.type.equals("episode", true)) "episode" else "movie"
-            val client = if (playbackPreferences.playbackQuality == "Data saver") "mobile-low" else "direct"
-            Uri.parse("${ServerManager.activeServerUrl}/api/v2/playback/$kind/${item.id}/file?client=$client")
+            val client = playbackClient
+            val startSeconds = playbackInfo?.progress?.positionMilliseconds?.takeIf { it > 0L }?.div(1000.0)
+            val useHls = !playbackInfo?.playbackMode.isNullOrBlank() &&
+                playbackInfo?.playbackMode != "Unknown" &&
+                !playbackInfo?.playbackMode.equals("DirectPlay", ignoreCase = true)
+            Uri.parse(buildString {
+                append("${ServerManager.activeServerUrl}/api/v2/playback/$kind/${item.id}/")
+                append(if (useHls) "hls/playlist.m3u8?client=$client" else "file?client=$client")
+                if (startSeconds != null) append("&startTime=$startSeconds")
+            })
         }
     }
     val player = remember(uri) {
@@ -148,6 +158,13 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
         }
     }
     DisposableEffect(player) { onDispose { player.release() } }
+    LaunchedEffect(player, playbackInfo?.progress?.positionMilliseconds) {
+        val position = playbackInfo?.progress?.positionMilliseconds ?: return@LaunchedEffect
+        if (position > 0L && !initialPositionApplied) {
+            player.seekTo(position)
+            initialPositionApplied = true
+        }
+    }
 
     // Track the real video aspect ratio so the zoom ring hugs the video frame,
     // not the black letterbox bars.

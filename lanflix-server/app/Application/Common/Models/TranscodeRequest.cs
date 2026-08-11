@@ -87,4 +87,9 @@ public class TranscodeRequest
     /// Total duration of the media in seconds (for progress calculation)
     /// </summary>
     public double TotalDuration { get; init; }
+
+    /// <summary>
+    /// Duration in seconds to transcode (null for infinite/whole file)
+    /// </summary>
+    public double? Duration { get; init; }
 }

@@ -54,6 +54,20 @@ public class EnhancedStreamingService
         // Make transcoding decision
         var decision = _decisionEngine.MakeDecision(request.MediaInfo, clientProfiles, hwAccel, settings);
 
+        // HLS segments always need a real MPEG-TS payload. A source that is otherwise direct-playable
+        // must still be remuxed here; serving the original MKV/MP4 bytes with a .ts label creates a
+        // non-seekable timeline in Media3 and makes rewind/fast-forward controls unavailable.
+        if (!string.IsNullOrWhiteSpace(request.ForceOutputFormat))
+        {
+            decision = decision with
+            {
+                PlaybackMethod = decision.PlaybackMethod == PlaybackMethod.DirectPlay
+                    ? PlaybackMethod.Remux
+                    : decision.PlaybackMethod,
+                TargetContainer = request.ForceOutputFormat
+            };
+        }
+
         _logger.LogInformation("Transcoding decision for session {SessionId}: {PlaybackMethod}, Reason: {Reason}",
             request.SessionId, decision.PlaybackMethod, decision.Reason);
 
@@ -211,35 +225,43 @@ public class EnhancedStreamingService
 
     private TranscodingProfile[] CreateMobileProfiles()
     {
+        // All common source containers are listed here. The output is always MPEG-TS for HLS so
+        // the source container should NEVER be the reason for a full re-encode.
+        var allContainers = new[] { "mp4", "mkv", "webm", "avi", "mov", "m4v", "ts", "flv", "wmv" };
         return new[]
         {
             new TranscodingProfile
             {
                 Id = "mobile-high",
                 Name = "Mobile High Quality",
-                SupportedContainers = new[] { "mp4" },
+                SupportedContainers = allContainers,
                 VideoCodecs = new[]
                 {
-                    new VideoCodecProfile { Codec = "h264", MaxBitrate = 4_000_000, MaxResolution = VideoResolution.HD1080p },
-                    new VideoCodecProfile { Codec = "hevc", MaxBitrate = 3_000_000, MaxResolution = VideoResolution.HD1080p }
+                    // H.264 and HEVC are natively playable on Android — copy them directly
+                    new VideoCodecProfile { Codec = "h264", MaxBitrate = 20_000_000, MaxResolution = VideoResolution.UHD4K },
+                    new VideoCodecProfile { Codec = "hevc", MaxBitrate = 20_000_000, MaxResolution = VideoResolution.UHD4K },
                 },
                 AudioCodecs = new[]
                 {
-                    new AudioCodecProfile { Codec = "aac", MaxBitrate = 128_000, MaxChannels = 2 }
+                    new AudioCodecProfile { Codec = "aac",  MaxBitrate = 320_000, MaxChannels = 8 },
+                    new AudioCodecProfile { Codec = "mp3",  MaxBitrate = 320_000, MaxChannels = 2 },
+                    new AudioCodecProfile { Codec = "flac", MaxBitrate = 1_411_000, MaxChannels = 8 },
+                    new AudioCodecProfile { Codec = "opus", MaxBitrate = 256_000, MaxChannels = 8 },
                 },
-                MaxBitrate = 5_000_000,
-                MaxResolution = VideoResolution.HD1080p,
+                MaxBitrate = 25_000_000,
+                MaxResolution = VideoResolution.UHD4K,
                 SupportsHDR = false,
-                MaxAudioChannels = 2
+                MaxAudioChannels = 8
             },
             new TranscodingProfile
             {
                 Id = "mobile-low",
                 Name = "Mobile Low Quality",
-                SupportedContainers = new[] { "mp4" },
+                SupportedContainers = allContainers,
                 VideoCodecs = new[]
                 {
-                    new VideoCodecProfile { Codec = "h264", MaxBitrate = 1_500_000, MaxResolution = VideoResolution.HD720p }
+                    new VideoCodecProfile { Codec = "h264", MaxBitrate = 1_500_000, MaxResolution = VideoResolution.HD720p },
+                    new VideoCodecProfile { Codec = "hevc", MaxBitrate = 1_500_000, MaxResolution = VideoResolution.HD720p }
                 },
                 AudioCodecs = new[]
                 {

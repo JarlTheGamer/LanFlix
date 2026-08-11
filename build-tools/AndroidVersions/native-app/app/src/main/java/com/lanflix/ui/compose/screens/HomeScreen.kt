@@ -29,7 +29,12 @@ import com.lanflix.ui.compose.components.OfflineNotice
 import com.lanflix.ui.compose.theme.DefaultArtworkPalette
 
 @Composable
-fun HomeScreen(state: LanflixUiState, onSelect: (ContentItem) -> Unit, onRetry: () -> Unit) {
+fun HomeScreen(
+    state: LanflixUiState,
+    onSelect: (ContentItem) -> Unit,
+    onRetry: () -> Unit,
+    onOpenMusic: () -> Unit
+) {
     val hero = state.library.firstOrNull()
     var targetPalette by remember(hero?.id) { mutableStateOf(DefaultArtworkPalette) }
     LaunchedEffect(hero?.id) { targetPalette = DefaultArtworkPalette }
@@ -93,7 +98,7 @@ fun HomeScreen(state: LanflixUiState, onSelect: (ContentItem) -> Unit, onRetry: 
                 item { MediaShelf("Recently Added", state.library.drop(1).take(10), onSelect) }
                 item { MediaShelf("Because it’s movie night", state.library.shuffled().take(8), onSelect) }
             }
-            item { MusicPreview() }
+            item { MusicPreview(onClick = onOpenMusic) }
         }
     }
 }

@@ -46,4 +46,14 @@ public class StreamRequest
     /// HTTP range header value (for range requests)
     /// </summary>
     public string? RangeHeader { get; init; }
+
+    /// <summary>
+    /// If set, limits the output to this many seconds (used for HLS segment transcoding).
+    /// </summary>
+    public double? SegmentDuration { get; init; }
+
+    /// <summary>
+    /// If set, overrides the output container format (e.g. "mpegts" for HLS).
+    /// </summary>
+    public string? ForceOutputFormat { get; init; }
 }

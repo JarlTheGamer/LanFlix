@@ -14,25 +14,33 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lanflix.api.MusicHome
+import com.lanflix.api.MusicAlbum
 import com.lanflix.models.ContentItem
 import com.lanflix.ui.compose.components.EmptyState
-import com.lanflix.ui.compose.components.MusicLibrary
 import com.lanflix.ui.compose.components.PosterCard
 
 @Composable
-fun LibraryScreen(media: List<ContentItem>, music: MusicHome?, onSelect: (ContentItem) -> Unit) {
-    var selectedFilter by remember { mutableStateOf("Movies") }
+fun LibraryScreen(
+    media: List<ContentItem>,
+    music: MusicHome?,
+    selectedFilter: String,
+    onFilterSelected: (String) -> Unit,
+    onOpenMusic: () -> Unit,
+    onSelect: (ContentItem) -> Unit,
+    onMusicAlbum: (MusicAlbum) -> Unit,
+    onMusicPlay: (com.lanflix.api.MusicTrack, List<com.lanflix.api.MusicTrack>) -> Unit
+) {
     Column(Modifier.fillMaxSize().padding(top = 68.dp, bottom = 58.dp)) {
         LazyRow(contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(listOf("Movies", "Series", "Music", "Collections")) { filter ->
-                FilterChip(selected = selectedFilter == filter, onClick = { selectedFilter = filter }, label = { Text(filter) })
+                FilterChip(
+                    selected = filter != "Music" && selectedFilter == filter,
+                    onClick = { if (filter == "Music") onOpenMusic() else onFilterSelected(filter) },
+                    label = { Text(filter) }
+                )
             }
         }
         val filtered = when (selectedFilter) {
@@ -40,7 +48,7 @@ fun LibraryScreen(media: List<ContentItem>, music: MusicHome?, onSelect: (Conten
             "Series" -> media.filter { it.type.equals("series", true) }
             else -> emptyList()
         }
-        if (selectedFilter == "Music") MusicLibrary(music) else if (filtered.isEmpty()) EmptyState("No $selectedFilter yet", "When this library is scanned, it will appear here.") else {
+        if (filtered.isEmpty()) EmptyState("No $selectedFilter yet", "When this library is scanned, it will appear here.") else {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 contentPadding = PaddingValues(10.dp),

@@ -1,5 +1,8 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Diagnostics;
+using System.Buffers.Binary;
+using Lanflix.Application.Common.Interfaces;
 using Lanflix.Infrastructure.Persistence;
 using Lanflix.Modules.Music;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +14,7 @@ namespace Lanflix.Infrastructure.Adapters.Music;
 internal sealed partial class LocalMusicCatalog(
     ApplicationDbContext db,
     IConfiguration configuration,
+    ISettingsService settings,
     ILogger<LocalMusicCatalog> logger) : IMusicCatalog
 {
     private static readonly SemaphoreSlim ScanLock = new(1, 1);
@@ -44,7 +48,11 @@ internal sealed partial class LocalMusicCatalog(
     public async Task<MusicTrackDto?> GetTrackAsync(long trackId, CancellationToken ct)
     { var value = await db.MusicTracks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == trackId, ct); return value is null ? null : (await MapTracksAsync([value], ct)).Single(); }
 
-    public Task<MusicTrack?> GetPlayableTrackAsync(long trackId, CancellationToken ct) => db.MusicTracks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == trackId && File.Exists(x.FilePath), ct);
+    public async Task<MusicTrack?> GetPlayableTrackAsync(long trackId, CancellationToken ct)
+    {
+        var track = await db.MusicTracks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == trackId, ct);
+        return track is not null && File.Exists(track.FilePath) ? track : null;
+    }
 
     public async Task<MusicArtworkFile?> GetAlbumArtworkAsync(long albumId, CancellationToken ct)
     {
@@ -54,14 +62,79 @@ internal sealed partial class LocalMusicCatalog(
         return new(path, ContentType(file.Extension), $"\"{file.Length:x}-{file.LastWriteTimeUtc.Ticks:x}\"");
     }
 
+    public async Task<MusicWaveformDto?> GetWaveformAsync(long trackId, CancellationToken ct)
+    {
+        var track = await db.MusicTracks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == trackId, ct);
+        if (track is null || !File.Exists(track.FilePath)) return null;
+
+        var folder = Path.Combine(AppContext.BaseDirectory, "cache", "music", "waveforms");
+        Directory.CreateDirectory(folder);
+        var cachePath = Path.Combine(folder, $"track-{track.Id}-{track.FileModifiedUtc.Ticks}.json");
+        if (File.Exists(cachePath))
+        {
+            try
+            {
+                var cached = JsonSerializer.Deserialize<float[]>(await File.ReadAllTextAsync(cachePath, ct));
+                if (cached is { Length: > 0 }) return new MusicWaveformDto(track.Id, cached);
+            }
+            catch (JsonException) { File.Delete(cachePath); }
+        }
+
+        var executable = ResolveFfmpeg();
+        var start = new ProcessStartInfo(executable)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (var argument in new[] { "-v", "error", "-i", track.FilePath, "-map", "0:a:0", "-ac", "1", "-ar", "8000", "-f", "s16le", "pipe:1" })
+            start.ArgumentList.Add(argument);
+
+        try
+        {
+            using var process = Process.Start(start);
+            if (process is null) return null;
+            await using var pcm = new MemoryStream();
+            var copyTask = process.StandardOutput.BaseStream.CopyToAsync(pcm, ct);
+            var errorTask = process.StandardError.ReadToEndAsync(ct);
+            await Task.WhenAll(copyTask, process.WaitForExitAsync(ct));
+            var error = await errorTask;
+            if (process.ExitCode != 0)
+            {
+                logger.LogWarning("FFmpeg waveform analysis failed for {Path}: {Error}", track.FilePath, error);
+                return null;
+            }
+
+            var amplitudes = BuildWaveform(pcm.ToArray(), 96);
+            if (amplitudes.Length == 0) return null;
+            var temporary = cachePath + ".tmp";
+            await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(amplitudes), ct);
+            File.Move(temporary, cachePath, true);
+            return new MusicWaveformDto(track.Id, amplitudes);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "Could not analyze waveform for {Path}", track.FilePath);
+            return null;
+        }
+    }
+
     public async Task<MusicScanResult> ScanAsync(CancellationToken ct)
     {
         await ScanLock.WaitAsync(ct);
         try
         {
-            var roots = GetRoots();
-            if (roots.Length == 0) return new(0, 0, 0, 0, 0, 0);
+            var roots = await GetRootsAsync(ct);
+            if (roots.Length == 0)
+            {
+                logger.LogWarning("Music scan skipped because no existing music folders are configured");
+                return new(0, 0, 0, 0, 0, 0);
+            }
             var discovered = EnumerateFiles(roots);
+            logger.LogInformation("Music scan found {FileCount} supported files beneath {Roots}", discovered.Count, roots);
+            var forceMetadataRefresh = !string.Equals(
+                await settings.GetSettingAsync("Lanflix:Music:ScannerVersion", ct), "2", StringComparison.Ordinal);
             var existing = await db.MusicTracks.ToDictionaryAsync(x => x.FilePath, PathComparer(), ct);
             var artists = await db.MusicArtists.ToDictionaryAsync(x => x.NormalizedName, StringComparer.Ordinal, ct);
             var albums = await db.MusicAlbums.ToListAsync(ct);
@@ -72,12 +145,12 @@ internal sealed partial class LocalMusicCatalog(
                 ct.ThrowIfCancellationRequested();
                 var info = new FileInfo(path);
                 existing.TryGetValue(path, out var track);
-                if (track is not null && track.FileSize == info.Length && track.FileModifiedUtc == info.LastWriteTimeUtc) { await SaveLyricsAsync(track.Id, path, null, ct); skipped++; continue; }
+                if (!forceMetadataRefresh && track is not null && track.FileSize == info.Length && track.FileModifiedUtc == info.LastWriteTimeUtc) { await SaveLyricsAsync(track.Id, path, null, ct); skipped++; continue; }
                 try
                 {
                     using var file = TagLib.File.Create(path);
                     var tag = file.Tag;
-                    var artistName = First(tag.AlbumArtists) ?? First(tag.Performers) ?? "Unknown Artist";
+                    var artistName = First(tag.Performers) ?? First(tag.AlbumArtists) ?? "Unknown Artist";
                     var artistKey = artistName.Trim().ToUpperInvariant();
                     if (!artists.TryGetValue(artistKey, out var artist))
                     {
@@ -86,12 +159,18 @@ internal sealed partial class LocalMusicCatalog(
                     else artist.Update(artistName, tag.MusicBrainzArtistId);
 
                     var albumTitle = string.IsNullOrWhiteSpace(tag.Album) ? "Unknown Album" : tag.Album.Trim();
+                    var albumArtistName = First(tag.AlbumArtists) ?? (albumTitle == "Unknown Album" ? artistName : "Various Artists");
+                    var albumArtistKey = albumArtistName.Trim().ToUpperInvariant();
+                    if (!artists.TryGetValue(albumArtistKey, out var albumArtist))
+                    {
+                        albumArtist = MusicArtist.Create(albumArtistName); db.MusicArtists.Add(albumArtist); await db.SaveChangesAsync(ct); artists[albumArtistKey] = albumArtist;
+                    }
                     var year = tag.Year is >= 1000 and <= 9999 ? (int?)tag.Year : null;
                     var albumKey = albumTitle.ToUpperInvariant();
-                    var album = albums.FirstOrDefault(x => x.ArtistId == artist.Id && x.NormalizedTitle == albumKey && x.Year == year);
+                    var album = albums.FirstOrDefault(x => x.ArtistId == albumArtist.Id && x.NormalizedTitle == albumKey && x.Year == year);
                     if (album is null)
                     {
-                        album = MusicAlbum.Create(artist.Id, albumTitle, year, tag.MusicBrainzReleaseId); db.MusicAlbums.Add(album); await db.SaveChangesAsync(ct); albums.Add(album);
+                        album = MusicAlbum.Create(albumArtist.Id, albumTitle, year, tag.MusicBrainzReleaseId); db.MusicAlbums.Add(album); await db.SaveChangesAsync(ct); albums.Add(album);
                     }
                     else album.Update(albumTitle, year, tag.MusicBrainzReleaseId);
 
@@ -119,7 +198,10 @@ internal sealed partial class LocalMusicCatalog(
             if (orphanAlbums.Length > 0) { db.MusicAlbums.RemoveRange(orphanAlbums); await db.SaveChangesAsync(ct); }
             var orphanArtists = await db.MusicArtists.Where(artist => !db.MusicAlbums.Any(album => album.ArtistId == artist.Id)).ToArrayAsync(ct);
             if (orphanArtists.Length > 0) { db.MusicArtists.RemoveRange(orphanArtists); await db.SaveChangesAsync(ct); }
-            return new(imported, updated, missing.Length, skipped, orphanAlbums.Length, orphanArtists.Length);
+            var result = new MusicScanResult(imported, updated, missing.Length, skipped, orphanAlbums.Length, orphanArtists.Length);
+            await settings.UpdateSettingAsync("Lanflix:Music:ScannerVersion", "2", ct);
+            logger.LogInformation("Music scan completed: {Imported} imported, {Updated} updated, {Removed} removed, {Skipped} skipped", result.Imported, result.Updated, result.Removed, result.Skipped);
+            return result;
         }
         finally { ScanLock.Release(); }
     }
@@ -161,8 +243,20 @@ internal sealed partial class LocalMusicCatalog(
         await db.SaveChangesAsync(ct);
     }
 
-    private string[] GetRoots() => (configuration.GetSection("Music:Folders").Get<string[]>() ?? [])
-        .Where(x => !string.IsNullOrWhiteSpace(x)).Select(Path.GetFullPath).Where(Directory.Exists).Distinct(PathComparer()).ToArray();
+    private async Task<string[]> GetRootsAsync(CancellationToken ct)
+    {
+        var configured = configuration.GetSection("Music:Folders").Get<string[]>() ?? [];
+        var generatedDefault = configuration["Lanflix:MediaPaths:Music"];
+        var saved = await settings.GetSettingAsync("Lanflix:MediaPaths:Music", ct);
+        return configured
+            .Append(saved)
+            .Append(generatedDefault)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => Path.GetFullPath(x!))
+            .Where(Directory.Exists)
+            .Distinct(PathComparer())
+            .ToArray();
+    }
     private static HashSet<string> EnumerateFiles(IEnumerable<string> roots)
     {
         var result = new HashSet<string>(PathComparer());
@@ -205,6 +299,36 @@ internal sealed partial class LocalMusicCatalog(
     private static void DeleteArtwork(string? path) { if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) try { File.Delete(path); } catch (IOException) { } }
     private static string ContentType(string extension) => extension.ToLowerInvariant() switch { ".png" => "image/png", ".webp" => "image/webp", _ => "image/jpeg" };
     private static string MimeType(string extension) => extension.ToLowerInvariant() switch { ".flac" => "audio/flac", ".ogg" => "audio/ogg", ".opus" => "audio/ogg", ".wav" or ".aif" or ".aiff" => "audio/wav", ".m4a" or ".aac" => "audio/mp4", ".wma" => "audio/x-ms-wma", _ => "audio/mpeg" };
+    private string ResolveFfmpeg()
+    {
+        var configured = configuration["FFmpeg:Path"] ?? configuration["FFmpegPath"];
+        if (!string.IsNullOrWhiteSpace(configured)) return configured;
+        var local = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg");
+        return File.Exists(local) ? local : OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
+    }
+    private static float[] BuildWaveform(byte[] pcm, int bins)
+    {
+        var sampleCount = pcm.Length / sizeof(short);
+        if (sampleCount == 0) return [];
+        var values = new float[bins];
+        var peak = 0f;
+        for (var bin = 0; bin < bins; bin++)
+        {
+            var from = (long)bin * sampleCount / bins;
+            var to = Math.Max(from + 1, (long)(bin + 1) * sampleCount / bins);
+            double squareSum = 0;
+            for (var sample = from; sample < to; sample++)
+            {
+                var value = BinaryPrimitives.ReadInt16LittleEndian(pcm.AsSpan((int)sample * 2, 2)) / 32768f;
+                squareSum += value * value;
+            }
+            values[bin] = (float)Math.Sqrt(squareSum / (to - from));
+            peak = Math.Max(peak, values[bin]);
+        }
+        if (peak <= 0f) return values.Select(_ => .08f).ToArray();
+        for (var index = 0; index < values.Length; index++) values[index] = Math.Clamp(values[index] / peak, .08f, 1f);
+        return values;
+    }
     [GeneratedRegex(@"\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]")]
     private static partial Regex LrcTimestamp();
 }

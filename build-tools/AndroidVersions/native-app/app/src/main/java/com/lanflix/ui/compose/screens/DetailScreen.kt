@@ -71,6 +71,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.lanflix.api.CastMemberDto
 import com.lanflix.api.DiscoveryItem
 import com.lanflix.api.LanflixApiClient
 import com.lanflix.api.SocialReview
@@ -104,10 +105,13 @@ fun DetailScreen(
     var acquisitionRequested by remember(item.id) { mutableStateOf(false) }
     var targetPalette by remember(item.id) { mutableStateOf(DefaultArtworkPalette) }
     var reviews by remember(item.id) { mutableStateOf<List<SocialReview>>(emptyList()) }
+    var castMembers by remember(item.id) { mutableStateOf<List<CastMemberDto>>(emptyList()) }
     var showRateSheet by remember { mutableStateOf(false) }
-    LaunchedEffect(item.id) {
+    val reviewTargetId = if (item.id > 0) item.id else item.tmdbId
+    LaunchedEffect(item.id, reviewTargetId) {
         targetPalette = DefaultArtworkPalette
-        if (!isDiscovery && item.id > 0) reviews = discoveryApi.getReviews(item.id)
+        if (reviewTargetId > 0) reviews = discoveryApi.getReviews(reviewTargetId)
+        if (item.id > 0) castMembers = discoveryApi.getCast(item.id)
     }
     val artworkPalette = targetPalette
     val scope = rememberCoroutineScope()
@@ -282,60 +286,53 @@ fun DetailScreen(
                     }
 
                     // ─ Cast & Crew ───────────────────────────────────────────────────
-                    Text(
-                        "Cast & Crew",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 16.dp, bottom = 12.dp)
-                    )
-
-                    val castList = remember(item.id) {
-                        listOf(
-                            CastPerson("David Bowie", "Jareth", "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200"),
-                            CastPerson("Jennifer Connelly", "Sarah", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200"),
-                            CastPerson("Toby Froud", "Toby", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200"),
-                            CastPerson("Brian Henson", "Hoggle (voice)", "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200"),
-                            CastPerson("Jim Henson", "Director", "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200")
+                    if (castMembers.isNotEmpty()) {
+                        Text(
+                            "Cast & Crew",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 16.dp, bottom = 12.dp)
                         )
-                    }
-
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(bottom = 12.dp)
-                    ) {
-                        items(castList) { person ->
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.width(90.dp)
-                            ) {
-                                AsyncImage(
-                                    model = person.avatarUrl,
-                                    contentDescription = person.name,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(80.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.1f))
-                                )
-                                Text(
-                                    person.name,
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = 6.dp)
-                                )
-                                Text(
-                                    person.role,
-                                    color = LanflixMuted,
-                                    fontSize = 10.sp,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            contentPadding = PaddingValues(bottom = 12.dp)
+                        ) {
+                            items(castMembers) { person ->
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.width(90.dp)
+                                ) {
+                                    AsyncImage(
+                                        model = person.profileUrl,
+                                        contentDescription = person.name,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(80.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.1f))
+                                    )
+                                    Text(
+                                        person.name,
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 6.dp)
+                                    )
+                                    if (!person.character.isNullOrBlank()) {
+                                        Text(
+                                            person.character,
+                                            color = LanflixMuted,
+                                            fontSize = 10.sp,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -409,8 +406,8 @@ fun DetailScreen(
             onDismiss = { showRateSheet = false },
             onSubmit = { rating, body, visibility ->
                 scope.launch {
-                    discoveryApi.saveReview(item.id, rating, body.takeIf { it.isNotBlank() }, visibility)
-                    reviews = discoveryApi.getReviews(item.id)
+                    discoveryApi.saveReview(reviewTargetId, rating, body.takeIf { it.isNotBlank() }, visibility)
+                    reviews = discoveryApi.getReviews(reviewTargetId)
                     showRateSheet = false
                 }
             }
@@ -491,5 +488,3 @@ private fun RateReviewSheet(onDismiss: () -> Unit, onSubmit: (rating: Int, body:
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = LanflixMuted) } }
     )
 }
-
-private data class CastPerson(val name: String, val role: String, val avatarUrl: String?)

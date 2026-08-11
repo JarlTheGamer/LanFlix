@@ -20,6 +20,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.util.concurrent.TimeUnit
 
+data class CastMemberDto(
+    val id: Int = 0,
+    val name: String = "",
+    val character: String? = null,
+    val profileUrl: String? = null,
+    val order: Int = 0
+)
+
 data class WatchHistoryItem(
     val id: String,
     val mediaId: Int,
@@ -111,9 +119,9 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
         return get("/api/v2/playback/$kind/${item.id}/download-manifest", true, PlaybackDownloadManifest::class.java)
     }
 
-    suspend fun getPlaybackInfo(item: ContentItem): PlaybackInfo? {
+    suspend fun getPlaybackInfo(item: ContentItem, client: String = "mobile-high"): PlaybackInfo? {
         val kind = if (item.type.equals("episode", true)) "episode" else "movie"
-        return get("/api/v2/playback/$kind/${item.id}", true, PlaybackInfo::class.java)
+        return get("/api/v2/playback/$kind/${item.id}?client=$client", true, PlaybackInfo::class.java)
     }
 
     // ── Feed & Posts ─────────────────────────────────────────────────────────
@@ -138,6 +146,18 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
     suspend fun saveReview(contentId: Int, rating: Int, body: String?, visibility: String = "Friends"): Boolean =
         mutate("PUT", "/api/v2/social/reviews/$contentId", mapOf("rating" to rating, "body" to body, "visibility" to visibility))
     suspend fun deleteReview(contentId: Int): Boolean = mutate("DELETE", "/api/v2/social/reviews/$contentId")
+
+    // ── Cast & Crew ──────────────────────────────────────────────────────────
+    suspend fun getCast(contentId: Int): List<CastMemberDto> = getList("/api/v2/content/$contentId/cast")
+
+    // ── Episode stills batch ──────────────────────────────────────────
+    /** Single round-trip: returns a map of episodeId → still path for all requested IDs. */
+    suspend fun getEpisodeStillsBatch(ids: List<Int>): Map<Int, String?> = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext emptyMap()
+        val param = ids.joinToString(",")
+        val type = object : TypeToken<Map<Int, String?>>() {}.type
+        getTyped<Map<Int, String?>?>("/api/v2/artwork/episode/stills?ids=$param", type) ?: emptyMap()
+    }
 
     // ── Relationships ────────────────────────────────────────────────────────
     suspend fun getRelationships(): List<SocialRelationship> = getList("/api/v2/social/relationships")
@@ -170,6 +190,19 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
 
 
     suspend fun getMusicHome(): MusicHome? = get("/api/v2/music/home", true, MusicHome::class.java)
+    suspend fun getMusicAlbumTracks(albumId: Long): List<MusicTrack> = getList("/api/v2/music/albums/$albumId/tracks")
+    suspend fun getMusicLyrics(trackId: Long): MusicLyrics? = get("/api/v2/music/tracks/$trackId/lyrics", true, MusicLyrics::class.java)
+    suspend fun getMusicWaveform(trackId: Long): MusicWaveform? = get("/api/v2/music/tracks/$trackId/waveform", true, MusicWaveform::class.java)
+    suspend fun getMusicFavorites(): List<MusicTrack> = getList("/api/v2/music/favorites")
+    suspend fun setMusicFavorite(trackId: Long, favorite: Boolean): Boolean =
+        mutate(if (favorite) "PUT" else "DELETE", "/api/v2/music/favorites/$trackId")
+    suspend fun getMusicPlaylists(): List<MusicPlaylist> = getList("/api/v2/music/playlists")
+    suspend fun createMusicPlaylist(name: String): Boolean = mutate("POST", "/api/v2/music/playlists", mapOf("name" to name.trim()))
+    suspend fun addTrackToMusicPlaylist(playlistId: Long, trackId: Long): Boolean =
+        mutate("POST", "/api/v2/music/playlists/$playlistId/tracks", mapOf("trackId" to trackId))
+    suspend fun replaceMusicQueue(trackIds: List<Long>): Boolean = mutate("PUT", "/api/v2/music/queue", mapOf("trackIds" to trackIds))
+    suspend fun recordMusicPlay(trackId: Long, positionMilliseconds: Long, completed: Boolean): Boolean =
+        mutate("POST", "/api/v2/music/tracks/$trackId/play", mapOf("positionMilliseconds" to positionMilliseconds, "completed" to completed))
     suspend fun getLiveTvChannels(): List<LiveTvChannel> = getList("/api/v2/live-tv/channels")
     suspend fun getLiveTvSources(): List<LiveTvSource> = getList("/api/v2/live-tv/sources/")
     suspend fun createLiveTvSource(name: String, kind: String, sourceUri: String, guideUri: String?): Boolean =

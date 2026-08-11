@@ -156,7 +156,6 @@ fun ProfileScreen(
                         model = activeBackdropUrl,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize()
-                            .clickable { backdropLauncher.launch("image/*") }
                             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                             .drawWithContent {
                                 drawContent()
@@ -183,7 +182,7 @@ fun ProfileScreen(
                     IconButton(onClick = onBack, modifier = Modifier.statusBarsPadding().padding(8.dp).clip(CircleShape).background(Color.Black.copy(alpha = .28f))) { Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
                     Column(Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
-                            Modifier.size(94.dp).clip(CircleShape).background(Color.White.copy(alpha = .12f)).clickable { avatarLauncher.launch("image/*") },
+                            Modifier.size(94.dp).clip(CircleShape).background(Color.White.copy(alpha = .12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             AsyncImage(
@@ -249,14 +248,15 @@ fun ProfileScreen(
                     }
                 }
                 if (watchHistory.isNotEmpty()) {
-                    Text("Real Watch History", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                    Text("Watch History", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
                     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(watchHistory, key = { it.id }) { history ->
-                            val matchingContent = library.firstOrNull { it.id == history.mediaId }
-                            Column(Modifier.width(130.dp).clickable { matchingContent?.let(onSelect) }) {
+                            val matchingContent = library.firstOrNull { it.id == history.mediaId } 
+                                ?: ContentItem(id = history.mediaId, title = history.title, backdropUrl = history.backdropUrl, type = history.kind)
+                            Column(Modifier.width(130.dp).clickable { onSelect(matchingContent) }) {
                                 Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = .08f))) {
                                     AsyncImage(
-                                        model = history.backdropUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" } ?: matchingContent?.resolvedPosterUrl,
+                                        model = history.backdropUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" } ?: matchingContent.resolvedPosterUrl,
                                         contentDescription = history.title,
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
@@ -275,8 +275,11 @@ fun ProfileScreen(
                         }
                     }
                 } else {
-                    Text("Watch History", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
-                    MediaShelf("Continue and recently watched", library.sortedByDescending { it.progressPercentage ?: 0.0 }.take(8), onSelect)
+                    val fallbackItems = library.filter { (it.progressPercentage ?: 0.0) > 0.0 }.ifEmpty { library.take(8) }
+                    if (fallbackItems.isNotEmpty()) {
+                        Text("Watch History", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                        MediaShelf("Continue Watching", fallbackItems, onSelect)
+                    }
                 }
                 if (activity.isNotEmpty()) {
                     Text("Recent Activity", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))

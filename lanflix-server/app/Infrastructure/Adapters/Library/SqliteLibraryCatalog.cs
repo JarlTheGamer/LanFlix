@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Domain.Entities;
 using Lanflix.Domain.Enums;
@@ -459,6 +460,68 @@ internal sealed class SqliteLibraryCatalog(
             _ => "image/jpeg"
         };
         return new ArtworkFileDto(path, contentType, $"\"{file.Length:x}-{file.LastWriteTimeUtc.Ticks:x}\"");
+    }
+
+    public async Task<IReadOnlyList<CastMemberDto>> GetCastAsync(int id, CancellationToken cancellationToken)
+    {
+        // 1. Try reading cached CastJson via ADO.NET (EF ignores this column)
+        string? cachedJson = null;
+        var conn = db.Database.GetDbConnection();
+        var wasOpen = conn.State == System.Data.ConnectionState.Open;
+        if (!wasOpen) await conn.OpenAsync(cancellationToken);
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT CastJson FROM Contents WHERE Id = @id AND IsDeleted = 0 LIMIT 1";
+            var p = cmd.CreateParameter(); p.ParameterName = "@id"; p.Value = id;
+            cmd.Parameters.Add(p);
+            var scalar = await cmd.ExecuteScalarAsync(cancellationToken);
+            cachedJson = scalar is DBNull ? null : scalar as string;
+        }
+        finally { if (!wasOpen) await conn.CloseAsync(); }
+
+        if (!string.IsNullOrEmpty(cachedJson))
+        {
+            try
+            {
+                var cached = JsonSerializer.Deserialize<List<CastMemberDto>>(cachedJson);
+                if (cached is { Count: > 0 }) return cached;
+            }
+            catch { /* fall through to TMDB fetch */ }
+        }
+
+        // 2. Look up TmdbId and type to call TMDB
+        var row = await db.Contents.AsNoTracking()
+            .Where(c => c.Id == id)
+            .Select(c => new { c.TmdbId, c.Type })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (row is null) return Array.Empty<CastMemberDto>();
+
+        var isSeries = row.Type == ContentType.Series;
+        var credits = isSeries
+            ? await tmdb.GetTvCreditsAsync(row.TmdbId, cancellationToken)
+            : await tmdb.GetMovieCreditsAsync(row.TmdbId, cancellationToken);
+
+        if (credits is null) return Array.Empty<CastMemberDto>();
+
+        var cast = credits.Cast
+            .OrderBy(c => c.Order)
+            .Take(20)
+            .Select(c => new CastMemberDto(c.Id, c.Name, c.Character, c.ProfileUrl, c.Order))
+            .ToList();
+
+        // 3. Persist back to the DB column via raw SQL
+        try
+        {
+            var json = JsonSerializer.Serialize(cast);
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE Contents SET CastJson = {0} WHERE Id = {1}",
+                json, id);
+        }
+        catch { /* non-fatal */ }
+
+        return cast;
     }
 
     private static string MimeType(string extension) => extension.ToLowerInvariant() switch

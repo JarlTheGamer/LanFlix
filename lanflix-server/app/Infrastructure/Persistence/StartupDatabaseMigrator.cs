@@ -42,6 +42,19 @@ public sealed class StartupDatabaseMigrator(
 
         await connection.CloseAsync();
         await context.Database.MigrateAsync(cancellationToken);
+
+        // Ensure CastJson column exists in Contents table
+        await using (var castConnection = new SqliteConnection(connectionString))
+        {
+            await castConnection.OpenAsync(cancellationToken);
+            await using (var transaction = await castConnection.BeginTransactionAsync(cancellationToken))
+            {
+                await EnsureColumnAsync(castConnection, transaction, "Contents", "CastJson", "TEXT NULL", cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+            await castConnection.CloseAsync();
+        }
+
         var schema = (await context.Database.GetAppliedMigrationsAsync(cancellationToken)).LastOrDefault() ?? BaselineMigrationId;
         logger.LogInformation("SQLite database is at schema {MigrationId}", schema);
     }

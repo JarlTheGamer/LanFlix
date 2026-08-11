@@ -18,6 +18,8 @@ public static class MusicEndpoints
         music.MapGet("/tracks/{id:long}", async (long id, IMusicCatalog c, CancellationToken ct) => await c.GetTrackAsync(id, ct) is { } track ? Results.Ok(track) : Results.NotFound());
         music.MapGet("/tracks/{id:long}/file", async (long id, IMusicCatalog c, CancellationToken ct) => await c.GetPlayableTrackAsync(id, ct) is { } track ? Results.File(track.FilePath, track.MimeType, enableRangeProcessing: true) : Results.NotFound());
         music.MapGet("/tracks/{id:long}/lyrics", GetLyricsAsync);
+        music.MapGet("/tracks/{id:long}/waveform", async (long id, IMusicCatalog c, CancellationToken ct) =>
+            await c.GetWaveformAsync(id, ct) is { } waveform ? Results.Ok(waveform) : Results.NotFound());
         music.MapPost("/tracks/{id:long}/play", RecordPlayAsync);
         music.MapPost("/scan", async (IMusicCatalog c, CancellationToken ct) => Results.Ok(await c.ScanAsync(ct))).RequireAuthorization("ServerManage");
 

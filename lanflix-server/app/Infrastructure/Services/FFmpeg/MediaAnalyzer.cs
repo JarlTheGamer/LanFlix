@@ -291,13 +291,20 @@ public class MediaAnalyzer : IMediaAnalyzer
 
         if (stream.ColorSpace != null && stream.ColorSpace.Contains("bt2020", StringComparison.OrdinalIgnoreCase))
         {
-            return true;
+            // bt2020 color space is only truly HDR when paired with an HDR transfer function.
+            // Alone it may just be a wide-gamut SDR encode, but we still treat it conservatively.
+            if (stream.ColorTransfer != null)
+            {
+                var hdrTransfers = new[] { "smpte2084", "arib-std-b67" };
+                return hdrTransfers.Contains(stream.ColorTransfer.ToLowerInvariant());
+            }
+            // No transfer function info — assume not HDR to avoid unnecessary transcoding
+            return false;
         }
 
-        if (stream.PixFmt != null && stream.PixFmt.Contains("10le"))
-        {
-            return true;
-        }
+        // 10-bit pixel format (yuv420p10le, yuv444p10le, etc.) is NOT HDR by itself.
+        // Many BluRay x265 encodes use 10-bit SDR for improved gradient quality.
+        // Only flag as HDR if the transfer function explicitly says so (handled above).
 
         return false;
     }

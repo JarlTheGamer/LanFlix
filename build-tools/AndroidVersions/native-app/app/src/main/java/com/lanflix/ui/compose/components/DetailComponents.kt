@@ -74,7 +74,23 @@ fun SeriesEpisodeBrowser(item: ContentItem, online: Boolean, onPlayEpisode: (Epi
     }
     LaunchedEffect(item.id, selectedSeason, seasonPayloads) {
         val season = selectedSeason ?: return@LaunchedEffect
-        episodes = seasonPayloads.firstOrNull { it.seasonNumber == season }?.episodes.orEmpty()
+        val raw = seasonPayloads.firstOrNull { it.seasonNumber == season }?.episodes.orEmpty()
+        episodes = raw
+
+        // Batch-fetch stills for this season in one round-trip instead of N individual requests
+        val ids = raw.map { it.id }
+        if (ids.isNotEmpty()) {
+            runCatching {
+                val stillMap = api.getEpisodeStillsBatch(ids)
+                episodes = raw.map { ep ->
+                    val resolved = stillMap[ep.id]?.let { path ->
+                        if (path.startsWith("http")) path
+                        else "${com.lanflix.webview.ServerManager.activeServerUrl}$path"
+                    }
+                    if (resolved != null) ep.copy(stillUrl = resolved) else ep
+                }
+            }
+        }
     }
 
     Column(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {

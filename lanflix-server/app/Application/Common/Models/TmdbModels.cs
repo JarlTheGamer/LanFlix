@@ -168,3 +168,20 @@ public class TmdbEpisode
     // Computed property for full image URL
     public string? StillUrl => !string.IsNullOrEmpty(StillPath) ? $"{ImageBaseUrl}/w300{StillPath}" : null;
 }
+
+public class TmdbCastMember
+{
+    private const string ImageBaseUrl = "https://image.tmdb.org/t/p";
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Character { get; set; }
+    public string? ProfilePath { get; set; }
+    public int Order { get; set; }
+    public string? ProfileUrl => !string.IsNullOrEmpty(ProfilePath) ? $"{ImageBaseUrl}/w185{ProfilePath}" : null;
+}
+
+public class TmdbCreditsResult
+{
+    public int Id { get; set; }
+    public List<TmdbCastMember> Cast { get; set; } = new();
+}

@@ -95,6 +95,11 @@ public class Content : BaseEntity, IAuditableEntity, ISoftDelete
     /// </summary>
     public DateTime? DeletedAt { get; set; }
 
+    /// <summary>
+    /// Serialized JSON string containing cast and crew metadata.
+    /// </summary>
+    public string? CastJson { get; set; }
+
     // Navigation properties
 
     /// <summary>

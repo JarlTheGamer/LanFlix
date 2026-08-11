@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Globalization;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application.Common.Models;
 using Lanflix.Domain.Enums;
@@ -281,11 +282,16 @@ public class EnhancedTranscodingPipeline : ITranscodingPipeline
         // Fast input seeking
         if (request.StartPosition.HasValue && request.StartPosition.Value > 0)
         {
-            args.Append($"-ss {request.StartPosition.Value:F3} ");
+            args.Append($"-ss {request.StartPosition.Value.ToString("0.000", CultureInfo.InvariantCulture)} ");
             args.Append("-noaccurate_seek ");
         }
         
         args.Append($"-i \"{request.InputPath}\" ");
+
+        if (request.Duration.HasValue && request.Duration.Value > 0)
+        {
+            args.Append($"-t {request.Duration.Value.ToString("0.000", CultureInfo.InvariantCulture)} ");
+        }
 
         // Video encoding
         AddVideoEncodingArgs(args, request);

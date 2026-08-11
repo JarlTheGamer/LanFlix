@@ -75,4 +75,12 @@ public interface ILibraryCatalog
     Task<ArtworkFileDto?> GetEpisodeArtworkAsync(int episodeId, CancellationToken cancellationToken);
     Task<IReadOnlyList<WatchHistoryDto>> GetWatchHistoryAsync(Guid accountId, CancellationToken cancellationToken);
     Task ClearWatchHistoryAsync(Guid accountId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<CastMemberDto>> GetCastAsync(int id, CancellationToken cancellationToken);
 }
+
+public sealed record CastMemberDto(
+    int Id,
+    string Name,
+    string? Character,
+    string? ProfileUrl,
+    int Order);

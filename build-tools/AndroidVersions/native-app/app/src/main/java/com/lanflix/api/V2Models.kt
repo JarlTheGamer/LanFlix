@@ -13,7 +13,10 @@ data class V2MediaDetail(val media: ContentItem = ContentItem(), val seasons: Li
 data class PlaybackDownloadManifest(val id: Int = 0, val kind: String = "movie", val title: String = "", val fileSize: Long = 0,
     val mimeType: String = "video/mp4", val sha256: String = "", val downloadUrl: String = "")
 data class PlaybackInfo(val id: Int = 0, val kind: String = "movie", val title: String = "", val streamUrl: String = "",
-    val introStartSeconds: Double? = null, val introEndSeconds: Double? = null, val creditsStartSeconds: Double? = null)
+    val introStartSeconds: Double? = null, val introEndSeconds: Double? = null, val creditsStartSeconds: Double? = null,
+    val progress: PlaybackProgress? = null, val durationSeconds: Double = 0.0, val playbackMode: String = "Unknown")
+data class PlaybackProgress(val mediaKind: String = "", val mediaId: Int = 0, val positionMilliseconds: Long = 0L,
+    val durationMilliseconds: Long = 0L, val percentage: Double = 0.0, val completed: Boolean = false)
 
 data class SocialAuthor(val id: String = "", val displayName: String = "")
 data class SocialActivity(val id: String = "", val author: SocialAuthor = SocialAuthor(), val kind: String = "",
@@ -33,6 +36,14 @@ data class UnreadCount(val count: Int = 0)
 data class MusicArtist(val id: Long = 0, val name: String = "", val artworkUrl: String? = null)
 data class MusicAlbum(val id: Long = 0, val title: String = "", val year: Int? = null, val artist: MusicArtist = MusicArtist(), val artworkUrl: String? = null, val trackCount: Int = 0)
 data class MusicHome(val recentlyAdded: List<MusicAlbum> = emptyList(), val artists: List<MusicArtist> = emptyList())
+data class MusicTrack(val id: Long = 0, val title: String = "", val trackNumber: Int = 0, val discNumber: Int? = null,
+    val durationMilliseconds: Long = 0, val genres: List<String> = emptyList(), val codec: String = "",
+    val bitrateKbps: Int? = null, val sampleRateHz: Int? = null, val channels: Int? = null,
+    val artist: MusicArtist = MusicArtist(), val album: MusicAlbum = MusicAlbum(), val streamUrl: String = "",
+    val serverAvailable: Boolean = false)
+data class MusicLyrics(val trackId: Long = 0, val text: String = "", val isSynchronized: Boolean = false, val source: String = "")
+data class MusicWaveform(val trackId: Long = 0, val amplitudes: List<Float> = emptyList())
+data class MusicPlaylist(val id: Long = 0, val name: String = "", val tracks: List<MusicTrack> = emptyList(), val updatedAtUtc: String = "")
 data class LiveTvProgram(val id: Long = 0, val title: String = "", val startsAtUtc: String = "", val endsAtUtc: String = "")
 data class LiveTvChannel(val id: Long = 0, val number: String = "", val name: String = "", val logoUrl: String? = null,
     val groupName: String? = null, val favorite: Boolean = false, val now: LiveTvProgram? = null, val next: LiveTvProgram? = null)

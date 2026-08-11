@@ -59,6 +59,22 @@ public static class LibraryEndpoints
         api.MapGet("/artwork/content/{id:int}/{kind}", ServeContentArtworkAsync).WithTags("Artwork");
         api.MapGet("/artwork/episode/{id:int}/still", ServeEpisodeArtworkAsync).WithTags("Artwork");
 
+        // Batch stills — single round-trip for a whole season's episode thumbnails
+        api.MapGet("/artwork/episode/stills", async (string? ids, HttpContext context, ILibraryCatalog catalog, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(ids)) return Results.BadRequest("ids query param required");
+            var idList = ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => int.TryParse(s, out var v) ? (int?)v : null)
+                .Where(v => v.HasValue).Select(v => v!.Value).Distinct().Take(200).ToArray();
+            var result = new Dictionary<int, string?>();
+            foreach (var id in idList)
+            {
+                var art = await catalog.GetEpisodeArtworkAsync(id, ct);
+                result[id] = art is not null ? $"/api/v2/artwork/episode/{id}/still" : null;
+            }
+            return Results.Ok(result);
+        }).WithTags("Artwork");
+
         var watchlist = api.MapGroup("/watchlist").WithTags("Library").RequireAuthorization();
         watchlist.MapGet("/", GetWatchlistAsync);
         watchlist.MapPut("/{contentId:int}", AddWatchlistAsync);
@@ -67,6 +83,16 @@ public static class LibraryEndpoints
         var history = api.MapGroup("/history").WithTags("History").RequireAuthorization();
         history.MapGet("/", GetHistoryAsync);
         history.MapDelete("/", ClearHistoryAsync);
+
+        // Cast & crew — use a separate CTS so navigation away doesn't abort the TMDB fetch
+        api.MapGet("/content/{id:int}/cast", async (int id, ILibraryCatalog catalog, CancellationToken ct) =>
+        {
+            // Allow up to 15 s for TMDB, independent of the client's request lifetime
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(15));
+            var cast = await catalog.GetCastAsync(id, cts.Token);
+            return Results.Ok(cast);
+        }).WithTags("Library");
 
         return endpoints;
     }

@@ -31,17 +31,25 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,13 +58,17 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
+import coil.request.ImageRequest
 import com.lanflix.api.MusicHome
+import com.lanflix.api.MusicAlbum
 import com.lanflix.models.ContentItem
+import com.lanflix.auth.LanflixSessionStore
 import com.lanflix.ui.compose.LanflixBackground
 import com.lanflix.ui.compose.LanflixGold
 import com.lanflix.ui.compose.LanflixMuted
 import com.lanflix.ui.compose.LanflixSurfaceRaised
 import com.lanflix.ui.compose.theme.ArtworkPalette
+import com.lanflix.ui.compose.theme.DefaultArtworkPalette
 import com.lanflix.ui.compose.theme.extractArtworkPalette
 import com.lanflix.webview.ServerManager
 import kotlinx.coroutines.launch
@@ -76,19 +88,48 @@ fun OfflineNotice() {
 }
 
 @Composable
-fun MusicLibrary(music: MusicHome?) {
+fun MusicLibrary(music: MusicHome?, onAlbum: (MusicAlbum) -> Unit) {
     if (music == null || music.recentlyAdded.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { EmptyState("Music library", "Add a music folder on the server and run a music scan.") }
         return
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 90.dp)) {
+    val context = LocalContext.current
+    val session = remember { LanflixSessionStore(context) }
+    val scope = rememberCoroutineScope()
+    var palette by remember(music.recentlyAdded.first().id) { mutableStateOf(DefaultArtworkPalette) }
+    fun artwork(path: String?): Any? {
+        if (path.isNullOrBlank()) return null
+        val url = if (path.startsWith("http")) path else "${ServerManager.activeServerUrl}$path"
+        return ImageRequest.Builder(context).data(url).apply {
+            session.accessToken?.let { addHeader("Authorization", "Bearer $it") }
+        }.build()
+    }
+    Box(Modifier.fillMaxSize().background(palette.depth)) {
+        AsyncImage(
+            model = artwork(music.recentlyAdded.first().artworkUrl),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize().blur(60.dp).alpha(.42f),
+            contentScale = ContentScale.Crop,
+            onSuccess = { state -> scope.launch { palette = extractArtworkPalette(state.result.drawable) } }
+        )
+        Box(Modifier.fillMaxSize().background(Brush.radialGradient(
+            0f to palette.glow.copy(alpha = .76f), .55f to palette.base.copy(alpha = .35f), 1f to Color.Transparent,
+            center = Offset(780f, 220f), radius = 1350f
+        )))
+        Box(Modifier.fillMaxSize().background(Brush.radialGradient(
+            0f to palette.accent.copy(alpha = .48f), .62f to Color.Transparent,
+            center = Offset(80f, 1300f), radius = 1100f
+        )))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .08f), 1f to palette.depth.copy(alpha = .86f))))
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 90.dp)) {
         item { Text("Recently added albums", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp)) }
         items(music.recentlyAdded, key = { it.id }) { album ->
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .07f)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(album.artworkUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" }, album.title, Modifier.size(58.dp).clip(RoundedCornerShape(9.dp)), contentScale = ContentScale.Crop)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .07f)).clickable { onAlbum(album) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(artwork(album.artworkUrl), album.title, Modifier.size(58.dp).clip(RoundedCornerShape(9.dp)), contentScale = ContentScale.Crop)
                 Column(Modifier.padding(start = 12.dp).weight(1f)) { Text(album.title, color = Color.White, fontWeight = FontWeight.Bold); Text("${album.artist.name} • ${album.trackCount} tracks", color = LanflixMuted, fontSize = 11.sp) }
                 Icon(Icons.Filled.PlayArrow, "Play album", tint = Color.White)
             }
+        }
         }
     }
 }
@@ -211,10 +252,18 @@ fun EmptyState(title: String, message: String) {
 }
 
 @Composable
-fun MusicPreview() {
+fun MusicPreview(onClick: () -> Unit) {
     Column(Modifier.padding(16.dp)) {
         Text("Recently Added in Music", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        Box(Modifier.fillMaxWidth().height(130.dp).padding(top = 10.dp).clip(RoundedCornerShape(16.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF721449), Color(0xFF3C123C))))) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+                .padding(top = 10.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .clickable(onClick = onClick)
+                .background(Brush.horizontalGradient(listOf(Color(0xFF721449), Color(0xFF3C123C))))
+        ) {
             Icon(Icons.Filled.MusicNote, null, tint = Color.White.copy(alpha = .18f), modifier = Modifier.align(Alignment.CenterEnd).padding(18.dp).size(82.dp))
             Column(Modifier.align(Alignment.CenterStart).padding(18.dp)) { Text("Your music, reimagined", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold); Text("Albums, mixes, radio and offline listening", color = Color.White.copy(alpha = .7f), fontSize = 11.sp) }
         }

@@ -54,6 +54,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.activity.compose.BackHandler
 import com.lanflix.models.ContentItem
+import com.lanflix.api.MusicAlbum
+import com.lanflix.api.MusicTrack
+import com.lanflix.music.MusicPlaybackController
 import com.lanflix.webview.ServerBrowserActivity
 import com.lanflix.webview.ServerManager
 import com.lanflix.ui.compose.navigation.Destination
@@ -69,11 +72,18 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val appContext = LocalContext.current
     val scope = rememberCoroutineScope()
+    val musicController = remember { MusicPlaybackController.get(appContext) }
+    val musicPlayback by musicController.state.collectAsStateWithLifecycle()
     var destination by remember { mutableStateOf(Destination.Home) }
     var detail by remember { mutableStateOf<ContentItem?>(null) }
     var profileMenuVisible by remember { mutableStateOf(false) }
     val overlayStack = remember { mutableStateListOf<AppOverlay>() }
     var playerItem by remember { mutableStateOf<ContentItem?>(null) }
+    var musicAlbum by remember { mutableStateOf<MusicAlbum?>(null) }
+    var musicTrack by remember { mutableStateOf<MusicTrack?>(null) }
+    var musicQueue by remember { mutableStateOf<List<MusicTrack>>(emptyList()) }
+    var libraryFilter by remember { mutableStateOf("Movies") }
+    var musicHomeVisible by remember { mutableStateOf(false) }
     val currentOverlay = overlayStack.lastOrNull()
 
     // Smart TV DLNA Cast Manager
@@ -111,10 +121,13 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
         return
     }
 
-    BackHandler(enabled = playerItem != null || detail != null || profileMenuVisible || overlayStack.isNotEmpty()) {
+    BackHandler(enabled = playerItem != null || musicTrack != null || musicAlbum != null || detail != null || musicHomeVisible || profileMenuVisible || overlayStack.isNotEmpty()) {
         when {
             playerItem != null -> playerItem = null
+            musicTrack != null -> musicTrack = null
+            musicAlbum != null -> musicAlbum = null
             detail != null -> detail = null
+            musicHomeVisible -> musicHomeVisible = false
             profileMenuVisible -> profileMenuVisible = false
             overlayStack.isNotEmpty() -> closeOverlay()
         }
@@ -124,6 +137,12 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
         Surface(modifier = Modifier.fillMaxSize(), color = LanflixBackground) {
             when {
                 playerItem != null -> PlayerScreen(playerItem!!, onBack = { playerItem = null })
+                musicTrack != null -> MusicPlayerScreen(musicTrack!!, musicQueue, onBack = { musicTrack = null })
+                musicAlbum != null -> MusicAlbumScreen(
+                    album = musicAlbum!!,
+                    onBack = { musicAlbum = null },
+                    onPlay = { track, queue -> musicQueue = queue; musicTrack = track }
+                )
                 detail != null -> DetailScreen(
                     item = detail!!,
                     online = state.online,
@@ -184,22 +203,47 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                     onProfileUpdated = { viewModel.refresh() }
                 )
                 else -> Box(Modifier.fillMaxSize()) {
-                    AnimatedContent(targetState = destination, label = "main-destination") { target ->
+                    if (musicHomeVisible) {
+                        MusicLibraryScreen(
+                            music = state.music,
+                            onAlbum = { musicAlbum = it },
+                            onPlay = { track, queue -> musicQueue = queue; musicTrack = track }
+                        )
+                    } else AnimatedContent(targetState = destination, label = "main-destination") { target ->
                         when (target) {
-                            Destination.Home -> HomeScreen(state, onSelect = { detail = it }, onRetry = viewModel::refresh)
-                            Destination.Libraries -> LibraryScreen(state.library, state.music, onSelect = { detail = it })
+                            Destination.Home -> HomeScreen(
+                                state = state,
+                                onSelect = { detail = it },
+                                onRetry = viewModel::refresh,
+                                onOpenMusic = {
+                                    destination = Destination.Libraries
+                                    musicHomeVisible = true
+                                }
+                            )
+                            Destination.Libraries -> LibraryScreen(
+                                media = state.library,
+                                music = state.music,
+                                selectedFilter = libraryFilter,
+                                onFilterSelected = { libraryFilter = it },
+                                onOpenMusic = { musicHomeVisible = true },
+                                onSelect = { detail = it },
+                                onMusicAlbum = { musicAlbum = it },
+                                onMusicPlay = { track, queue -> musicQueue = queue; musicTrack = track }
+                            )
                             Destination.Live -> LiveTvScreen(state.online, state.liveTvChannels)
                             Destination.Demand -> DownloadsScreen(state.library, onSelect = { detail = it })
                             Destination.Discover -> DiscoverScreen(state, onSelect = { detail = it })
                         }
                     }
-                    TopChrome(
-                        title = if (destination == Destination.Home) "lanflix" else destination.label,
-                        online = state.online,
-                        onSearch = { openOverlay(AppOverlay.Search) },
-                        onProfile = { profileMenuVisible = !profileMenuVisible },
-                        onCast = { startCastFlow(null) }
-                    )
+                    if (!musicHomeVisible) {
+                        TopChrome(
+                            title = if (destination == Destination.Home) "lanflix" else destination.label,
+                            online = state.online,
+                            onSearch = { openOverlay(AppOverlay.Search) },
+                            onProfile = { profileMenuVisible = !profileMenuVisible },
+                            onCast = { startCastFlow(null) }
+                        )
+                    }
                     AnimatedVisibility(
                         visible = profileMenuVisible,
                         enter = fadeIn(),
@@ -253,7 +297,18 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                     }
 
                     Box(Modifier.align(Alignment.BottomCenter)) {
-                        BottomChrome(destination, onSelect = { destination = it })
+                        BottomChrome(destination, onSelect = {
+                            musicHomeVisible = false
+                            destination = it
+                        })
+                    }
+                    if (musicHomeVisible && musicPlayback.currentTrack != null) {
+                        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 58.dp)) {
+                            MusicMiniPlayer(musicPlayback) {
+                                musicQueue = musicPlayback.queue
+                                musicTrack = musicPlayback.currentTrack
+                            }
+                        }
                     }
                 }
             }
@@ -284,7 +339,7 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                                         val mediaItem = itemToCast ?: detail ?: state.library.firstOrNull()
                                         if (mediaItem != null) {
                                             val kind = if (mediaItem.type.equals("episode", true)) "episode" else "movie"
-                                            val mediaUrl = "${ServerManager.activeServerUrl}/api/v2/playback/$kind/${mediaItem.id}/file?client=direct"
+                                            val mediaUrl = "${ServerManager.activeServerUrl}/api/v2/playback/$kind/${mediaItem.id}/file?client=tv"
                                             scope.launch {
                                                 castManager.castMedia(device, mediaUrl, mediaItem.title ?: "Lanflix Media")
                                             }

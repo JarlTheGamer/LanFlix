@@ -13,9 +13,9 @@ internal sealed class SqlitePlaybackSourceCatalog(ApplicationDbContext db) : IPl
         {
             var movie = await db.Contents.AsNoTracking()
                 .Where(item => item.Id == id && item.Type == ContentType.Movie)
-                .Select(item => new { item.Id, item.Title, item.FilePath })
+                .Select(item => new { item.Id, item.Title, item.FilePath, Duration = item.MediaInfo != null ? item.MediaInfo.Duration : TimeSpan.Zero })
                 .SingleOrDefaultAsync(cancellationToken);
-            return movie is null ? null : Create(movie.Id, "movie", movie.Title, movie.FilePath, null, null, null, null, null);
+            return movie is null ? null : Create(movie.Id, "movie", movie.Title, movie.FilePath, null, null, null, null, null, movie.Duration.TotalSeconds);
         }
 
         if (!string.Equals(kind, "episode", StringComparison.OrdinalIgnoreCase)) return null;
@@ -24,21 +24,22 @@ internal sealed class SqlitePlaybackSourceCatalog(ApplicationDbContext db) : IPl
             .Select(item => new
             {
                 item.Id, item.Title, item.FilePath, item.SeasonNumber, item.EpisodeNumber,
-                item.IntroStartTime, item.IntroEndTime, item.CreditsStartTime
+                item.IntroStartTime, item.IntroEndTime, item.CreditsStartTime,
+                Duration = item.MediaInfo != null ? item.MediaInfo.Duration : TimeSpan.Zero
             })
             .SingleOrDefaultAsync(cancellationToken);
         return episode is null ? null : Create(episode.Id, "episode", episode.Title, episode.FilePath,
-            episode.SeasonNumber, episode.EpisodeNumber, episode.IntroStartTime, episode.IntroEndTime, episode.CreditsStartTime);
+            episode.SeasonNumber, episode.EpisodeNumber, episode.IntroStartTime, episode.IntroEndTime, episode.CreditsStartTime, episode.Duration.TotalSeconds);
     }
 
     private static PlaybackSource? Create(
         int id, string kind, string title, string? path, int? season, int? episode,
-        double? introStart, double? introEnd, double? creditsStart)
+        double? introStart, double? introEnd, double? creditsStart, double durationSeconds)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
         var file = new FileInfo(path);
         return new PlaybackSource(id, kind, title, file.FullName, MimeType(file.Extension), file.Length,
-            season, episode, introStart, introEnd, creditsStart);
+            season, episode, introStart, introEnd, creditsStart, durationSeconds);
     }
 
     private static string MimeType(string extension) => extension.ToLowerInvariant() switch

@@ -58,7 +58,8 @@ public class DirectStreamStrategy : IStreamingStrategy
             HwAccelMethod = HwAccelMethod.None, // No video transcoding
             OutputFormat = decision.TargetContainer ?? "mpegts", // Use MPEG-TS for better seeking
             SessionId = request.SessionId,
-            TotalDuration = request.MediaInfo.Duration.TotalSeconds
+            TotalDuration = request.MediaInfo.Duration.TotalSeconds,
+            Duration = request.SegmentDuration
         };
 
         // Create direct stream

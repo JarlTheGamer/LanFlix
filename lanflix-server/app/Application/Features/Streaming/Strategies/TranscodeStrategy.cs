@@ -72,9 +72,10 @@ public class TranscodeStrategy : IStreamingStrategy
             AudioStreamIndex = request.AudioStreamIndex,
             SubtitleStreamIndex = request.SubtitleStreamIndex,
             HwAccelMethod = decision.HwAccelMethod,
-            OutputFormat = decision.TargetContainer ?? "mpegts", // Use MPEG-TS for better seeking
+            OutputFormat = request.ForceOutputFormat ?? decision.TargetContainer ?? "mpegts",
             SessionId = request.SessionId,
-            TotalDuration = request.MediaInfo.Duration.TotalSeconds
+            TotalDuration = request.MediaInfo.Duration.TotalSeconds,
+            Duration = request.SegmentDuration  // null = transcode to end; set = HLS segment
         };
 
         // Create transcoding stream

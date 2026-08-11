@@ -8,6 +8,7 @@ public sealed record MusicTrackDto(long Id, string Title, int TrackNumber, int? 
 public sealed record MusicHomeDto(IReadOnlyList<MusicAlbumDto> RecentlyAdded, IReadOnlyList<MusicArtistDto> Artists);
 public sealed record MusicPlaylistDto(long Id, string Name, IReadOnlyList<MusicTrackDto> Tracks, DateTime UpdatedAtUtc);
 public sealed record MusicLyricsDto(long TrackId, string Text, bool IsSynchronized, string Source);
+public sealed record MusicWaveformDto(long TrackId, IReadOnlyList<float> Amplitudes);
 public sealed record MusicScanResult(int Imported, int Updated, int Removed, int Skipped, int AlbumsRemoved, int ArtistsRemoved);
 public sealed record MusicArtworkFile(string Path, string ContentType, string ETag);
 public sealed record CreatePlaylistRequest(string Name);
@@ -25,5 +26,6 @@ public interface IMusicCatalog
     Task<MusicTrackDto?> GetTrackAsync(long trackId, CancellationToken cancellationToken);
     Task<MusicTrack?> GetPlayableTrackAsync(long trackId, CancellationToken cancellationToken);
     Task<MusicArtworkFile?> GetAlbumArtworkAsync(long albumId, CancellationToken cancellationToken);
+    Task<MusicWaveformDto?> GetWaveformAsync(long trackId, CancellationToken cancellationToken);
     Task<MusicScanResult> ScanAsync(CancellationToken cancellationToken);
 }

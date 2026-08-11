@@ -53,4 +53,10 @@ public interface ITmdbClient
         bool isSeries,
         string language = "en",
         CancellationToken cancellationToken = default);
+
+    /// <summary>Get movie cast credits</summary>
+    Task<TmdbCreditsResult?> GetMovieCreditsAsync(int tmdbId, CancellationToken cancellationToken = default);
+
+    /// <summary>Get TV series cast credits</summary>
+    Task<TmdbCreditsResult?> GetTvCreditsAsync(int tmdbId, CancellationToken cancellationToken = default);
 }
