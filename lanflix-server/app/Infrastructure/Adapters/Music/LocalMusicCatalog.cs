@@ -196,7 +196,9 @@ internal sealed partial class LocalMusicCatalog(
             var orphanAlbums = await db.MusicAlbums.Where(album => !db.MusicTracks.Any(track => track.AlbumId == album.Id)).ToArrayAsync(ct);
             foreach (var album in orphanAlbums) DeleteArtwork(album.ArtworkPath);
             if (orphanAlbums.Length > 0) { db.MusicAlbums.RemoveRange(orphanAlbums); await db.SaveChangesAsync(ct); }
-            var orphanArtists = await db.MusicArtists.Where(artist => !db.MusicAlbums.Any(album => album.ArtistId == artist.Id)).ToArrayAsync(ct);
+            var orphanArtists = await db.MusicArtists.Where(artist =>
+                !db.MusicAlbums.Any(album => album.ArtistId == artist.Id) &&
+                !db.MusicTracks.Any(track => track.ArtistId == artist.Id)).ToArrayAsync(ct);
             if (orphanArtists.Length > 0) { db.MusicArtists.RemoveRange(orphanArtists); await db.SaveChangesAsync(ct); }
             var result = new MusicScanResult(imported, updated, missing.Length, skipped, orphanAlbums.Length, orphanArtists.Length);
             await settings.UpdateSettingAsync("Lanflix:Music:ScannerVersion", "2", ct);
