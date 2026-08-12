@@ -41,7 +41,7 @@ public sealed class SocialModuleTests
         await db.Database.EnsureCreatedAsync();
         var authorId = Guid.NewGuid();
         var reactorId = Guid.NewGuid();
-        var review = SocialReview.Create(authorId, 42, 8, "Excellent", SocialVisibility.Server);
+        var review = SocialReview.Create(authorId, 42, 5, "Excellent", SocialVisibility.Server);
         var activity = SocialActivity.Review(authorId, review);
         var reaction = SocialReaction.Create(activity.Id, reactorId, "love");
         var notification = SocialNotification.Create(authorId, reactorId, "reaction", "activity", activity.Id.ToString());
@@ -54,9 +54,10 @@ public sealed class SocialModuleTests
         report.Resolve(Guid.NewGuid(), false, "Reviewed and retained");
         await db.SaveChangesAsync();
 
-        Assert.Equal(8, (await db.SocialReviews.SingleAsync()).Rating);
+        Assert.Equal(5, (await db.SocialReviews.SingleAsync()).Rating);
         Assert.Equal("love", (await db.SocialReactions.SingleAsync()).Kind);
         Assert.NotNull((await db.SocialNotifications.SingleAsync()).ReadAtUtc);
         Assert.Equal(ReportStatus.Resolved, (await db.SocialReports.SingleAsync()).Status);
+        Assert.Throws<ArgumentOutOfRangeException>(() => SocialReview.Create(authorId, 42, 6, "Invalid", SocialVisibility.Server));
     }
 }

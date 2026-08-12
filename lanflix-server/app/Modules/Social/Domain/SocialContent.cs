@@ -20,7 +20,7 @@ public sealed class SocialReview : Entity<Guid>
 
     public void Update(int rating, string? body, SocialVisibility visibility)
     {
-        if (rating is < 1 or > 10) throw new ArgumentOutOfRangeException(nameof(rating));
+        if (rating is < 1 or > 5) throw new ArgumentOutOfRangeException(nameof(rating));
         Rating = rating;
         Body = Clean(body, 4000);
         Visibility = visibility;

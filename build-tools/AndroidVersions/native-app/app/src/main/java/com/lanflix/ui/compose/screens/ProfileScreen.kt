@@ -264,8 +264,8 @@ fun ProfileScreen(
                 Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp).offset(y = (-8).dp), shape = RoundedCornerShape(18.dp), color = Color.Black.copy(alpha = .28f)) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 17.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                         Stat(watchHistory.size.toString(), "Watched")
-                        Stat(watchHistory.count { it.kind == "movie" }.toString(), "Movies")
-                        Stat(watchHistory.count { it.kind == "episode" }.toString(), "Episodes")
+                        Stat(library.count { it.type == "movie" }.toString(), "Movies")
+                        Stat(library.count { it.type == "series" }.toString(), "Shows")
                         Stat(listeningStats.listens.toString(), "Listens")
                     }
                 }
@@ -275,10 +275,10 @@ fun ProfileScreen(
                         items(watchHistory, key = { it.id }) { history ->
                             val matchingContent = library.firstOrNull { it.id == history.mediaId } 
                                 ?: ContentItem(id = history.mediaId, title = history.title, backdropUrl = history.backdropUrl, type = history.kind)
-                            Column(Modifier.width(130.dp).clickable { onSelect(matchingContent) }) {
-                                Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = .08f))) {
+                            Column(Modifier.width(116.dp).clickable { onSelect(matchingContent) }) {
+                                Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = .08f))) {
                                     AsyncImage(
-                                        model = history.backdropUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" } ?: matchingContent.resolvedPosterUrl,
+                                        model = matchingContent.resolvedPosterUrl ?: history.posterUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" } ?: history.backdropUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" },
                                         contentDescription = history.title,
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop

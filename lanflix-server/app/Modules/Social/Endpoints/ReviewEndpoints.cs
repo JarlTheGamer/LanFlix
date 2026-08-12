@@ -55,7 +55,7 @@ internal static class ReviewEndpoints
                 else activity.UpdateFromReview(review);
             }
         }
-        catch (ArgumentOutOfRangeException) { return Results.Problem(statusCode: 400, title: "Rating must be between 1 and 10"); }
+        catch (ArgumentOutOfRangeException) { return Results.Problem(statusCode: 400, title: "Rating must be between 1 and 5"); }
         await db.SaveChangesAsync(ct);
         return Results.Ok(new { review.Id, review.Rating });
     }

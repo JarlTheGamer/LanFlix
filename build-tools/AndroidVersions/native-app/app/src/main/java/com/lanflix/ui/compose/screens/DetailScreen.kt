@@ -349,36 +349,33 @@ fun DetailScreen(
                     } else {
                         reviews.forEach { review ->
                             Surface(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                color = Color.White.copy(alpha = 0.07f)
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                shape = RoundedCornerShape(18.dp),
+                                color = Color.White.copy(alpha = 0.08f)
                             ) {
-                                Column(Modifier.padding(13.dp)) {
+                                Column(Modifier.padding(14.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            Modifier.size(30.dp).clip(CircleShape)
-                                                .background(LanflixGold.copy(alpha = 0.18f)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                review.author.displayName.firstOrNull()?.uppercase() ?: "?",
-                                                color = LanflixGold, fontSize = 12.sp, fontWeight = FontWeight.Bold
-                                            )
-                                        }
+                                        AsyncImage(
+                                            model = review.author.avatarUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" }
+                                                ?: "${ServerManager.activeServerUrl}/api/v2/accounts/${review.author.id}/avatar",
+                                            contentDescription = "${review.author.displayName}'s profile photo",
+                                            modifier = Modifier.size(38.dp).clip(CircleShape).background(Color.White.copy(alpha = .12f)),
+                                            contentScale = ContentScale.Crop
+                                        )
                                         Text(
                                             review.author.displayName,
-                                            color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
-                                            modifier = Modifier.padding(start = 8.dp).weight(1f)
+                                            color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                                            modifier = Modifier.padding(start = 10.dp).weight(1f)
                                         )
                                         if (review.author.id == currentAccount?.id) {
-                                            TextButton(onClick = { showRateSheet = true }) { Text("Edit", color = LanflixGold, fontSize = 12.sp) }
+                                            TextButton(onClick = { showRateSheet = true }) { Text("Edit", color = artworkPalette.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
                                         }
                                         // Star display  (rating is 1–5, show as 5 stars)
                                         Row {
                                             repeat(5) { i ->
                                                 Icon(
-                                                    if (review.rating > i) Icons.Filled.Star else Icons.Filled.StarBorder,
-                                                    null, tint = LanflixGold, modifier = Modifier.size(14.dp)
+                                                    if (review.rating.coerceIn(1, 5) > i) Icons.Filled.Star else Icons.Filled.StarBorder,
+                                                    null, tint = artworkPalette.accent, modifier = Modifier.size(16.dp)
                                                 )
                                             }
                                         }
@@ -386,8 +383,8 @@ fun DetailScreen(
                                     if (!review.body.isNullOrBlank()) {
                                         Text(
                                             review.body,
-                                            color = Color.White.copy(alpha = 0.80f), fontSize = 13.sp,
-                                            modifier = Modifier.padding(top = 6.dp)
+                                            color = Color.White.copy(alpha = 0.92f), fontSize = 14.sp, lineHeight = 20.sp,
+                                            modifier = Modifier.padding(top = 12.dp)
                                         )
                                     }
                                 }
@@ -431,7 +428,9 @@ fun DetailScreen(
 
 @Composable
 private fun RateReviewSheet(existing: SocialReview?, onDismiss: () -> Unit, onSubmit: (rating: Int, body: String, visibility: String) -> Unit, onDelete: () -> Unit) {
-    var selectedRating by remember(existing?.id) { mutableStateOf(existing?.rating ?: 0) }
+    // Older servers stored 1–10 scores. The mobile UI is deliberately five-star,
+    // so clamp legacy values before an edit is submitted again.
+    var selectedRating by remember(existing?.id, existing?.rating) { mutableStateOf(existing?.rating?.coerceIn(1, 5) ?: 0) }
     var body by remember(existing?.id) { mutableStateOf(existing?.body.orEmpty()) }
     var visibility by remember(existing?.id) { mutableStateOf(existing?.visibility?.replaceFirstChar { it.uppercase() } ?: "Friends") }
     val visibilities = listOf("Friends", "Server", "Household")

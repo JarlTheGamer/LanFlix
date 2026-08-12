@@ -27,7 +27,10 @@ public class ETagMiddleware
             || !path.StartsWith("/api", StringComparison.OrdinalIgnoreCase)
             || path.Contains("/playback", StringComparison.OrdinalIgnoreCase)
             || path.Contains("/stream", StringComparison.OrdinalIgnoreCase)
-            || path.Contains("/hubs", StringComparison.OrdinalIgnoreCase))
+            || path.Contains("/hubs", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/api/v2/social", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/api/v2/history", StringComparison.OrdinalIgnoreCase)
+            )
         {
             await _next(context);
             return;

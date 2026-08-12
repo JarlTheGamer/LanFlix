@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Application;
@@ -45,6 +46,8 @@ builder.Host.UseSerilog((context, _, logger) => logger
     .Enrich.WithProperty("Application", "Lanflix.Host"));
 
 builder.Services.AddProblemDetails();
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddOpenApi();
 builder.Services.AddResponseCompression();
 builder.Services.AddSignalR();
