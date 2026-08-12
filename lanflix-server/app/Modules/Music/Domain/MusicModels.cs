@@ -68,6 +68,37 @@ public sealed class MusicTrack : Entity<long>
 
 public sealed record TrackMetadata(string Title, string FilePath, string MimeType, string Codec, string GenresJson, string? MusicBrainzId, int TrackNumber, int? DiscNumber, int? BitrateKbps, int? SampleRateHz, int? Channels, long DurationMilliseconds, long FileSize, DateTime FileModifiedUtc);
 
+/// <summary>
+/// Durable response cache for a MusicBrainz release lookup. The full track list
+/// is intentionally kept with the release: a later rescan can repair missing
+/// local track numbers and recording IDs without calling MusicBrainz again.
+/// </summary>
+public sealed class MusicMetadataCache : Entity<long>
+{
+    private MusicMetadataCache() { }
+    public string LookupKey { get; private set; } = string.Empty;
+    public string ReleaseMusicBrainzId { get; private set; } = string.Empty;
+    public string? AlbumArtist { get; private set; }
+    public string TrackListJson { get; private set; } = "[]";
+    public DateTime ResolvedAtUtc { get; private set; }
+
+    public static MusicMetadataCache Create(string lookupKey, string releaseMusicBrainzId, string? albumArtist, string trackListJson) => new()
+    {
+        LookupKey = Require(lookupKey), ReleaseMusicBrainzId = Require(releaseMusicBrainzId),
+        AlbumArtist = BlankToNull(albumArtist), TrackListJson = string.IsNullOrWhiteSpace(trackListJson) ? "[]" : trackListJson,
+        ResolvedAtUtc = DateTime.UtcNow
+    };
+
+    public void Refresh(string releaseMusicBrainzId, string? albumArtist, string trackListJson)
+    {
+        ReleaseMusicBrainzId = Require(releaseMusicBrainzId); AlbumArtist = BlankToNull(albumArtist);
+        TrackListJson = string.IsNullOrWhiteSpace(trackListJson) ? "[]" : trackListJson; ResolvedAtUtc = DateTime.UtcNow; MarkUpdated();
+    }
+
+    private static string Require(string value) => string.IsNullOrWhiteSpace(value) ? throw new ArgumentException("Music metadata value is required.", nameof(value)) : value.Trim();
+    private static string? BlankToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
 public sealed class MusicPlaylist : Entity<long>
 {
     private MusicPlaylist() { }

@@ -43,6 +43,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext, IIdentityD
     public DbSet<MusicPlayHistory> MusicPlayHistory => Set<MusicPlayHistory>();
     public DbSet<MusicQueueItem> MusicQueueItems => Set<MusicQueueItem>();
     public DbSet<MusicLyrics> MusicLyrics => Set<MusicLyrics>();
+    public DbSet<MusicMetadataCache> MusicMetadataCaches => Set<MusicMetadataCache>();
     public DbSet<LiveTvSource> LiveTvSources => Set<LiveTvSource>();
     public DbSet<LiveTvChannel> LiveTvChannels => Set<LiveTvChannel>();
     public DbSet<LiveTvProgram> LiveTvPrograms => Set<LiveTvProgram>();

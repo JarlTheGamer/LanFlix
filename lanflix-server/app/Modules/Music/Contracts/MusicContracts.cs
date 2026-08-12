@@ -11,6 +11,8 @@ public sealed record MusicLyricsDto(long TrackId, string Text, bool IsSynchroniz
 public sealed record MusicWaveformDto(long TrackId, IReadOnlyList<float> Amplitudes);
 public sealed record MusicScanResult(int Imported, int Updated, int Removed, int Skipped, int AlbumsRemoved, int ArtistsRemoved);
 public sealed record MusicArtworkFile(string Path, string ContentType, string ETag);
+public sealed record MusicMetadataHint(string AlbumTitle, int? Year, string TrackTitle, string ArtistName, long DurationMilliseconds);
+public sealed record MusicMetadataMatch(string? AlbumArtist, string? AlbumMusicBrainzId, string? TrackMusicBrainzId, int? TrackNumber, int? DiscNumber);
 public sealed record CreatePlaylistRequest(string Name);
 public sealed record RenamePlaylistRequest(string Name);
 public sealed record AddPlaylistTrackRequest(long TrackId);
@@ -28,4 +30,10 @@ public interface IMusicCatalog
     Task<MusicArtworkFile?> GetAlbumArtworkAsync(long albumId, CancellationToken cancellationToken);
     Task<MusicWaveformDto?> GetWaveformAsync(long trackId, CancellationToken cancellationToken);
     Task<MusicScanResult> ScanAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>Online enrichment only for missing embedded music tags. Results are persisted by the scanner.</summary>
+public interface IMusicMetadataProvider
+{
+    Task<MusicMetadataMatch?> FindAsync(MusicMetadataHint hint, CancellationToken cancellationToken);
 }

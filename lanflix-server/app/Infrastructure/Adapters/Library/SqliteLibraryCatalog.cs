@@ -20,7 +20,8 @@ internal sealed class SqliteLibraryCatalog(
     ITmdbClient tmdb,
     IMetadataService metadata,
     IMemoryCache cache,
-    ArtworkPaletteService palettes) : ILibraryCatalog
+    ArtworkPaletteService palettes,
+    IImageCacheService images) : ILibraryCatalog
 {
     public async Task<HomeDto> GetHomeAsync(Guid accountId, int limit, CancellationToken cancellationToken)
     {
@@ -485,7 +486,25 @@ internal sealed class SqliteLibraryCatalog(
             try
             {
                 var cached = JsonSerializer.Deserialize<List<CastMemberDto>>(cachedJson);
-                if (cached is { Count: > 0 }) return cached;
+                if (cached is { Count: > 0 })
+                {
+                    // Upgrade old cache rows (which pointed at TMDB directly) on
+                    // first read. From this point profiles are served by Lanflix.
+                    if (cached.Any(x => string.IsNullOrWhiteSpace(x.SourceProfileUrl) && x.ProfileUrl?.StartsWith("http", StringComparison.OrdinalIgnoreCase) == true))
+                    {
+                        var migrated = new List<CastMemberDto>(cached.Count);
+                        foreach (var person in cached)
+                        {
+                            var source = person.SourceProfileUrl ?? person.ProfileUrl;
+                            if (!string.IsNullOrWhiteSpace(source)) await images.GetOrFetchImageAsync(source, cancellationToken);
+                            migrated.Add(new CastMemberDto(person.Id, person.Name, person.Character,
+                                $"/api/v2/artwork/content/{id}/cast/{person.Id}", person.Order, source));
+                        }
+                        await PersistCastAsync(id, migrated, cancellationToken);
+                        return migrated;
+                    }
+                    return cached;
+                }
             }
             catch { /* fall through to TMDB fetch */ }
         }
@@ -508,20 +527,51 @@ internal sealed class SqliteLibraryCatalog(
         var cast = credits.Cast
             .OrderBy(c => c.Order)
             .Take(20)
-            .Select(c => new CastMemberDto(c.Id, c.Name, c.Character, c.ProfileUrl, c.Order))
             .ToList();
 
+        var persistedCast = new List<CastMemberDto>(cast.Count);
+        foreach (var person in cast)
+        {
+            if (!string.IsNullOrWhiteSpace(person.ProfileUrl))
+                await images.GetOrFetchImageAsync(person.ProfileUrl, cancellationToken);
+            persistedCast.Add(new CastMemberDto(person.Id, person.Name, person.Character,
+                $"/api/v2/artwork/content/{id}/cast/{person.Id}", person.Order, person.ProfileUrl));
+        }
+
         // 3. Persist back to the DB column via raw SQL
+        await PersistCastAsync(id, persistedCast, cancellationToken);
+
+        return persistedCast;
+    }
+
+    private async Task PersistCastAsync(int contentId, IReadOnlyList<CastMemberDto> cast, CancellationToken cancellationToken)
+    {
         try
         {
-            var json = JsonSerializer.Serialize(cast);
-            await db.Database.ExecuteSqlRawAsync(
-                "UPDATE Contents SET CastJson = {0} WHERE Id = {1}",
-                json, id);
+            await db.Database.ExecuteSqlRawAsync("UPDATE Contents SET CastJson = {0} WHERE Id = {1}",
+                JsonSerializer.Serialize(cast), contentId, cancellationToken);
         }
-        catch { /* non-fatal */ }
+        catch { /* A cast response can still be returned if persistence is temporarily unavailable. */ }
+    }
 
-        return cast;
+    public async Task<ArtworkFileDto?> GetCastProfileArtworkAsync(int contentId, int personId, CancellationToken cancellationToken)
+    {
+        var cast = await GetCastAsync(contentId, cancellationToken);
+        var person = cast.FirstOrDefault(x => x.Id == personId);
+        if (person is null) return null;
+
+        // Current records use a Lanflix endpoint URL. Older cached records still
+        // contain TMDB paths and are migrated lazily the next time cast is read.
+        var profileUrl = person.SourceProfileUrl;
+        if (string.IsNullOrWhiteSpace(profileUrl)) return null;
+        var cached = await images.GetOrFetchImageAsync(profileUrl, cancellationToken);
+        if (cached is null) return null;
+
+        var cacheDirectory = Path.Combine(AppContext.BaseDirectory, "config", "cache", "images");
+        var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(profileUrl)));
+        var extension = Path.GetExtension(new Uri(profileUrl).AbsolutePath);
+        if (string.IsNullOrWhiteSpace(extension)) extension = ".jpg";
+        return CreateArtworkFile(Path.Combine(cacheDirectory, hash + extension));
     }
 
     private static string MimeType(string extension) => extension.ToLowerInvariant() switch

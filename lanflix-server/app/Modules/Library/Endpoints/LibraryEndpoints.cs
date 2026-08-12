@@ -94,6 +94,9 @@ public static class LibraryEndpoints
             return Results.Ok(cast);
         }).WithTags("Library");
 
+        api.MapGet("/artwork/content/{id:int}/cast/{personId:int}", async (int id, int personId, HttpContext context, ILibraryCatalog catalog, CancellationToken ct) =>
+            ServeArtwork(await catalog.GetCastProfileArtworkAsync(id, personId, ct), context)).WithTags("Artwork");
+
         return endpoints;
     }
 

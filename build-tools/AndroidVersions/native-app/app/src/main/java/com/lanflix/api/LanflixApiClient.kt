@@ -126,6 +126,8 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
 
     // ── Feed & Posts ─────────────────────────────────────────────────────────
     suspend fun getSocialFeed(): List<SocialActivity> = getList("/api/v2/social/feed?limit=50")
+    suspend fun getContentActivity(contentId: Int): List<SocialActivity> =
+        getList("/api/v2/social/feed?limit=20&contentId=$contentId")
     suspend fun createPost(body: String, visibility: String = "Friends"): Boolean =
         mutate("POST", "/api/v2/social/posts", mapOf("body" to body, "visibility" to visibility))
     suspend fun deletePost(id: String): Boolean = mutate("DELETE", "/api/v2/social/posts/$id")

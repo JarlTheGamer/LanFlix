@@ -20,7 +20,7 @@ internal static class FeedEndpoints
         social.MapDelete("/posts/{activityId:guid}/reaction", DeleteReactionAsync);
     }
 
-    private static async Task<IResult> GetFeedAsync(int? offset, int? limit, ClaimsPrincipal user,
+    private static async Task<IResult> GetFeedAsync(int? offset, int? limit, int? contentId, ClaimsPrincipal user,
         ISocialDbContext db, ISocialResourceDirectory directory, CancellationToken ct)
     {
         var accountId = SocialEndpointSupport.AccountId(user);
@@ -38,7 +38,8 @@ internal static class FeedEndpoints
         var activities = await db.SocialActivities.AsNoTracking()
             .Where(x => !blocked.Contains(x.AccountId) && !muted.Contains(x.AccountId)
                 && (x.AccountId == accountId || x.Visibility == SocialVisibility.Server || x.Visibility == SocialVisibility.Household
-                    || (x.Visibility == SocialVisibility.Friends && friends.Contains(x.AccountId))))
+                    || (x.Visibility == SocialVisibility.Friends && friends.Contains(x.AccountId)))
+                && (!contentId.HasValue || x.ContentId == contentId.Value))
             .OrderByDescending(x => x.CreatedAtUtc).Skip(skip).Take(take).ToListAsync(ct);
         var ids = activities.Select(x => x.Id).ToArray();
         var comments = await db.SocialComments.AsNoTracking().Where(x => ids.Contains(x.ActivityId))

@@ -52,6 +52,7 @@ public static class AdapterRegistration
         services.AddScoped<IDiscoveryProvider, ExternalDiscoveryProvider>();
         services.AddScoped<ISubtitleCatalog, FfmpegSubtitleCatalog>();
         services.AddSingleton<IProgressBroadcaster, SignalRProgressBroadcaster>();
+        services.AddScoped<IMusicMetadataProvider, MusicBrainzMetadataProvider>();
         services.AddScoped<IMusicCatalog, LocalMusicCatalog>();
         services.AddScoped<ILiveTvCatalog, LiveTvCatalog>();
         services.AddScoped<ISocialResourceDirectory, SocialResourceDirectory>();

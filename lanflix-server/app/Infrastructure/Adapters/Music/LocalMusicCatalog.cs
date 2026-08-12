@@ -15,6 +15,7 @@ internal sealed partial class LocalMusicCatalog(
     ApplicationDbContext db,
     IConfiguration configuration,
     ISettingsService settings,
+    IMusicMetadataProvider metadataProvider,
     ILogger<LocalMusicCatalog> logger) : IMusicCatalog
 {
     private static readonly SemaphoreSlim ScanLock = new(1, 1);
@@ -134,7 +135,7 @@ internal sealed partial class LocalMusicCatalog(
             var discovered = EnumerateFiles(roots);
             logger.LogInformation("Music scan found {FileCount} supported files beneath {Roots}", discovered.Count, roots);
             var forceMetadataRefresh = !string.Equals(
-                await settings.GetSettingAsync("Lanflix:Music:ScannerVersion", ct), "2", StringComparison.Ordinal);
+                await settings.GetSettingAsync("Lanflix:Music:ScannerVersion", ct), "3", StringComparison.Ordinal);
             var existing = await db.MusicTracks.ToDictionaryAsync(x => x.FilePath, PathComparer(), ct);
             var artists = await db.MusicArtists.ToDictionaryAsync(x => x.NormalizedName, StringComparer.Ordinal, ct);
             var albums = await db.MusicAlbums.ToListAsync(ct);
@@ -151,6 +152,21 @@ internal sealed partial class LocalMusicCatalog(
                     using var file = TagLib.File.Create(path);
                     var tag = file.Tag;
                     var artistName = First(tag.Performers) ?? First(tag.AlbumArtists) ?? "Unknown Artist";
+                    var albumTitle = string.IsNullOrWhiteSpace(tag.Album) ? "Unknown Album" : tag.Album.Trim();
+                    var year = tag.Year is >= 1000 and <= 9999 ? (int?)tag.Year : null;
+                    var embeddedAlbumArtist = First(tag.AlbumArtists);
+                    var embeddedTrackNumber = (int)tag.Track;
+                    var embeddedDiscNumber = tag.Disc == 0 ? null : (int?)tag.Disc;
+                    var embeddedReleaseId = tag.MusicBrainzReleaseId;
+                    var embeddedRecordingId = tag.MusicBrainzTrackId;
+                    var title = string.IsNullOrWhiteSpace(tag.Title) ? Path.GetFileNameWithoutExtension(path) : tag.Title.Trim();
+                    MusicMetadataMatch? online = null;
+                    if (string.IsNullOrWhiteSpace(embeddedAlbumArtist) || embeddedTrackNumber <= 0 ||
+                        string.IsNullOrWhiteSpace(embeddedReleaseId) || string.IsNullOrWhiteSpace(embeddedRecordingId))
+                    {
+                        online = await metadataProvider.FindAsync(new(albumTitle, year, title, artistName,
+                            (long)file.Properties.Duration.TotalMilliseconds), ct);
+                    }
                     var artistKey = artistName.Trim().ToUpperInvariant();
                     if (!artists.TryGetValue(artistKey, out var artist))
                     {
@@ -158,27 +174,27 @@ internal sealed partial class LocalMusicCatalog(
                     }
                     else artist.Update(artistName, tag.MusicBrainzArtistId);
 
-                    var albumTitle = string.IsNullOrWhiteSpace(tag.Album) ? "Unknown Album" : tag.Album.Trim();
-                    var albumArtistName = First(tag.AlbumArtists) ?? (albumTitle == "Unknown Album" ? artistName : "Various Artists");
+                    var albumArtistName = embeddedAlbumArtist ?? online?.AlbumArtist ??
+                        (albumTitle == "Unknown Album" ? artistName : "Various Artists");
                     var albumArtistKey = albumArtistName.Trim().ToUpperInvariant();
                     if (!artists.TryGetValue(albumArtistKey, out var albumArtist))
                     {
                         albumArtist = MusicArtist.Create(albumArtistName); db.MusicArtists.Add(albumArtist); await db.SaveChangesAsync(ct); artists[albumArtistKey] = albumArtist;
                     }
-                    var year = tag.Year is >= 1000 and <= 9999 ? (int?)tag.Year : null;
                     var albumKey = albumTitle.ToUpperInvariant();
                     var album = albums.FirstOrDefault(x => x.ArtistId == albumArtist.Id && x.NormalizedTitle == albumKey && x.Year == year);
                     if (album is null)
                     {
-                        album = MusicAlbum.Create(albumArtist.Id, albumTitle, year, tag.MusicBrainzReleaseId); db.MusicAlbums.Add(album); await db.SaveChangesAsync(ct); albums.Add(album);
+                        album = MusicAlbum.Create(albumArtist.Id, albumTitle, year, embeddedReleaseId ?? online?.AlbumMusicBrainzId); db.MusicAlbums.Add(album); await db.SaveChangesAsync(ct); albums.Add(album);
                     }
-                    else album.Update(albumTitle, year, tag.MusicBrainzReleaseId);
+                    else album.Update(albumTitle, year, embeddedReleaseId ?? online?.AlbumMusicBrainzId);
 
                     var metadata = new TrackMetadata(
-                        string.IsNullOrWhiteSpace(tag.Title) ? Path.GetFileNameWithoutExtension(path) : tag.Title,
+                        title,
                         path, MimeType(info.Extension), file.Properties.Description ?? info.Extension.TrimStart('.'),
                         JsonSerializer.Serialize(tag.Genres.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase)),
-                        tag.MusicBrainzTrackId, (int)tag.Track, tag.Disc == 0 ? null : (int?)tag.Disc,
+                        embeddedRecordingId ?? online?.TrackMusicBrainzId, embeddedTrackNumber > 0 ? embeddedTrackNumber : online?.TrackNumber ?? 0,
+                        embeddedDiscNumber ?? online?.DiscNumber,
                         file.Properties.AudioBitrate, file.Properties.AudioSampleRate, file.Properties.AudioChannels,
                         (long)file.Properties.Duration.TotalMilliseconds, info.Length, info.LastWriteTimeUtc);
                     if (track is null) { track = MusicTrack.Create(artist.Id, album.Id, metadata); db.MusicTracks.Add(track); imported++; }
@@ -201,7 +217,7 @@ internal sealed partial class LocalMusicCatalog(
                 !db.MusicTracks.Any(track => track.ArtistId == artist.Id)).ToArrayAsync(ct);
             if (orphanArtists.Length > 0) { db.MusicArtists.RemoveRange(orphanArtists); await db.SaveChangesAsync(ct); }
             var result = new MusicScanResult(imported, updated, missing.Length, skipped, orphanAlbums.Length, orphanArtists.Length);
-            await settings.UpdateSettingAsync("Lanflix:Music:ScannerVersion", "2", ct);
+            await settings.UpdateSettingAsync("Lanflix:Music:ScannerVersion", "3", ct);
             logger.LogInformation("Music scan completed: {Imported} imported, {Updated} updated, {Removed} removed, {Skipped} skipped", result.Imported, result.Updated, result.Removed, result.Skipped);
             return result;
         }

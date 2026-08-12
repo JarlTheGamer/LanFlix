@@ -46,7 +46,7 @@ public sealed class ContinueWatchingTests
 
         using var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 32 });
         var palettes = new ArtworkPaletteService(db, new TestHttpClientFactory());
-        var catalog = new SqliteLibraryCatalog(db, new UnusedTmdbClient(), new UnusedMetadataService(), cache, palettes);
+        var catalog = new SqliteLibraryCatalog(db, new UnusedTmdbClient(), new UnusedMetadataService(), cache, palettes, new UnusedImageCacheService());
 
         var home = await catalog.GetHomeAsync(accountId, 10, CancellationToken.None);
 
@@ -81,7 +81,7 @@ public sealed class ContinueWatchingTests
             await db.SaveChangesAsync();
 
             using var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 32 });
-            var catalog = new SqliteLibraryCatalog(db, new UnusedTmdbClient(), new UnusedMetadataService(), cache, new ArtworkPaletteService(db, new TestHttpClientFactory()));
+            var catalog = new SqliteLibraryCatalog(db, new UnusedTmdbClient(), new UnusedMetadataService(), cache, new ArtworkPaletteService(db, new TestHttpClientFactory()), new UnusedImageCacheService());
             var artwork = await catalog.GetEpisodeArtworkAsync(episode.Id, CancellationToken.None);
 
             Assert.NotNull(artwork);
@@ -126,5 +126,10 @@ public sealed class ContinueWatchingTests
         public Task<TmdbSeasonDetails?> FetchSeasonDetailsAsync(int tmdbId, int seasonNumber, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task FetchAndStoreEpisodeMetadataAsync(int contentId, int tmdbId, string seriesFolder, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DownloadSubtitlesAsync(int contentId, string mediaFolderPath, string languageCode, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class UnusedImageCacheService : IImageCacheService
+    {
+        public Task<(byte[] Bytes, string ContentType)?> GetOrFetchImageAsync(string imageUrl, CancellationToken cancellationToken = default) => Task.FromResult<(byte[] Bytes, string ContentType)?>(null);
     }
 }

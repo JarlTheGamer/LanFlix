@@ -76,6 +76,7 @@ public interface ILibraryCatalog
     Task<IReadOnlyList<WatchHistoryDto>> GetWatchHistoryAsync(Guid accountId, CancellationToken cancellationToken);
     Task ClearWatchHistoryAsync(Guid accountId, CancellationToken cancellationToken);
     Task<IReadOnlyList<CastMemberDto>> GetCastAsync(int id, CancellationToken cancellationToken);
+    Task<ArtworkFileDto?> GetCastProfileArtworkAsync(int contentId, int personId, CancellationToken cancellationToken);
 }
 
 public sealed record CastMemberDto(
@@ -83,4 +84,5 @@ public sealed record CastMemberDto(
     string Name,
     string? Character,
     string? ProfileUrl,
-    int Order);
+    int Order,
+    string? SourceProfileUrl = null);

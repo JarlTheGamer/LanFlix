@@ -89,6 +89,12 @@ builder.Services.AddHttpClient<ITmdbClient, TmdbClient>(client =>
 }).AddHttpMessageHandler<TmdbRateLimitHandler>();
 builder.Services.AddHttpClient("LiveTvMetadata", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHttpClient("LiveTvStream", client => client.Timeout = Timeout.InfiniteTimeSpan);
+builder.Services.AddHttpClient("MusicBrainz", client =>
+{
+    client.BaseAddress = new Uri("https://musicbrainz.org/ws/2/");
+    client.Timeout = TimeSpan.FromSeconds(20);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Lanflix/1.0 (self-hosted music metadata scanner)");
+});
 
 var signingKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("JWT signing key is missing from the external secrets file.");

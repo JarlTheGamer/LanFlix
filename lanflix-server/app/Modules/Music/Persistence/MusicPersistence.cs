@@ -14,6 +14,7 @@ public interface IMusicDbContext
     DbSet<MusicPlayHistory> MusicPlayHistory { get; }
     DbSet<MusicQueueItem> MusicQueueItems { get; }
     DbSet<MusicLyrics> MusicLyrics { get; }
+    DbSet<MusicMetadataCache> MusicMetadataCaches { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
 
@@ -52,4 +53,17 @@ public sealed class MusicQueueItemConfiguration : IEntityTypeConfiguration<Music
 public sealed class MusicLyricsConfiguration : IEntityTypeConfiguration<MusicLyrics>
 {
     public void Configure(EntityTypeBuilder<MusicLyrics> b) { b.ToTable("MusicLyrics"); b.HasKey(x => x.Id); b.Property(x => x.Text).HasColumnType("TEXT").IsRequired(); b.Property(x => x.Source).HasMaxLength(128); b.HasIndex(x => x.TrackId).IsUnique(); b.HasOne<MusicTrack>().WithOne().HasForeignKey<MusicLyrics>(x => x.TrackId).OnDelete(DeleteBehavior.Cascade); }
+}
+public sealed class MusicMetadataCacheConfiguration : IEntityTypeConfiguration<MusicMetadataCache>
+{
+    public void Configure(EntityTypeBuilder<MusicMetadataCache> b)
+    {
+        b.ToTable("MusicMetadataCaches"); b.HasKey(x => x.Id);
+        b.Property(x => x.LookupKey).HasMaxLength(768).IsRequired();
+        b.Property(x => x.ReleaseMusicBrainzId).HasMaxLength(64).IsRequired();
+        b.Property(x => x.AlbumArtist).HasMaxLength(512);
+        b.Property(x => x.TrackListJson).HasColumnType("TEXT").IsRequired();
+        b.HasIndex(x => x.LookupKey).IsUnique();
+        b.HasIndex(x => x.ReleaseMusicBrainzId);
+    }
 }

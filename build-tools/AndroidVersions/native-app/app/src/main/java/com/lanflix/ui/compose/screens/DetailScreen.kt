@@ -75,6 +75,7 @@ import com.lanflix.api.CastMemberDto
 import com.lanflix.api.DiscoveryItem
 import com.lanflix.api.LanflixApiClient
 import com.lanflix.api.SocialReview
+import com.lanflix.api.SocialActivity
 import com.lanflix.models.ContentItem
 import com.lanflix.models.EpisodeItem
 import com.lanflix.ui.compose.LanflixGold
@@ -84,6 +85,7 @@ import com.lanflix.ui.compose.components.SeriesEpisodeBrowser
 import com.lanflix.ui.compose.components.TitleArtwork
 import com.lanflix.ui.compose.theme.DefaultArtworkPalette
 import com.lanflix.ui.compose.theme.extractArtworkPalette
+import com.lanflix.webview.ServerManager
 import kotlinx.coroutines.launch
 
 @Composable
@@ -105,12 +107,14 @@ fun DetailScreen(
     var acquisitionRequested by remember(item.id) { mutableStateOf(false) }
     var targetPalette by remember(item.id) { mutableStateOf(DefaultArtworkPalette) }
     var reviews by remember(item.id) { mutableStateOf<List<SocialReview>>(emptyList()) }
+    var contentActivity by remember(item.id) { mutableStateOf<List<SocialActivity>>(emptyList()) }
     var castMembers by remember(item.id) { mutableStateOf<List<CastMemberDto>>(emptyList()) }
     var showRateSheet by remember { mutableStateOf(false) }
     val reviewTargetId = if (item.id > 0) item.id else item.tmdbId
     LaunchedEffect(item.id, reviewTargetId) {
         targetPalette = DefaultArtworkPalette
         if (reviewTargetId > 0) reviews = discoveryApi.getReviews(reviewTargetId)
+        if (item.id > 0) contentActivity = discoveryApi.getContentActivity(item.id)
         if (item.id > 0) castMembers = discoveryApi.getCast(item.id)
     }
     val artworkPalette = targetPalette
@@ -247,42 +251,23 @@ fun DetailScreen(
                     Text(if (isDiscovery) "Available to request through your Lanflix server" else "Available from your Lanflix server", color = LanflixMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
 
                     // ─ Social Activity Row ───────────────────────────────────────────
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val avatarColors = listOf(Color(0xFFE5A00D), Color(0xFFE91E63), Color(0xFF2196F3))
-                        val sampleAvatars = listOf(
-                            "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-                            "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150",
-                            "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150"
-                        )
-                        Box(modifier = Modifier.width(72.dp).height(32.dp)) {
-                            sampleAvatars.forEachIndexed { idx, url ->
-                                AsyncImage(
-                                    model = url,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .offset(x = (idx * 18).dp)
-                                        .size(30.dp)
-                                        .clip(CircleShape)
-                                        .background(avatarColors[idx % avatarColors.size])
-                                )
+                    Text("Activity", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 18.dp, bottom = 8.dp))
+                    if (contentActivity.isEmpty()) {
+                        Text("No activity yet. Be the first to rate or review this title.", color = LanflixMuted, fontSize = 13.sp)
+                    } else {
+                        contentActivity.take(3).forEach { entry ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(30.dp).clip(CircleShape).background(LanflixGold), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Filled.Person, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                }
+                                Column(Modifier.padding(start = 10.dp)) {
+                                    Text(entry.author.displayName, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(entry.body?.takeIf { it.isNotBlank() } ?: entry.kind.replaceFirstChar { it.uppercase() },
+                                        color = Color.White.copy(alpha = .78f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                }
                             }
                         }
-                        val activityText = if (reviews.isNotEmpty()) {
-                            val names = reviews.take(2).map { it.author.displayName }
-                            "Activity by ${names.joinToString(", ")} and ${reviews.size + 19} others"
-                        } else {
-                            "Activity by Belle, Craig Hill and 21 others"
-                        }
-                        Text(
-                            text = activityText,
-                            color = Color.White.copy(alpha = 0.85f),
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
                     }
 
                     // ─ Cast & Crew ───────────────────────────────────────────────────
@@ -304,7 +289,9 @@ fun DetailScreen(
                                     modifier = Modifier.width(90.dp)
                                 ) {
                                     AsyncImage(
-                                        model = person.profileUrl,
+                                        model = person.profileUrl?.let { url ->
+                                            if (url.startsWith("http", ignoreCase = true)) url else "${ServerManager.activeServerUrl}$url"
+                                        },
                                         contentDescription = person.name,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier

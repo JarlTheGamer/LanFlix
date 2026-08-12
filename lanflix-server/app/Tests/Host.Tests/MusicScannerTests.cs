@@ -2,6 +2,7 @@ using Lanflix.Infrastructure.Adapters.Music;
 using Lanflix.Infrastructure.Persistence;
 using Lanflix.Application.Common.DTOs;
 using Lanflix.Application.Common.Interfaces;
+using Lanflix.Modules.Music;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -35,7 +36,7 @@ public sealed class MusicScannerTests
             await using var db = new ApplicationDbContext(options);
             await db.Database.MigrateAsync();
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Music:Folders:0"] = root }).Build();
-            var catalog = new LocalMusicCatalog(db, configuration, new TestSettingsService(root), NullLogger<LocalMusicCatalog>.Instance);
+            var catalog = new LocalMusicCatalog(db, configuration, new TestSettingsService(root), new NoopMusicMetadataProvider(), NullLogger<LocalMusicCatalog>.Instance);
 
             Assert.Equal(2, (await catalog.ScanAsync(CancellationToken.None)).Imported);
             Assert.Single(await db.MusicAlbums.ToListAsync());
@@ -66,7 +67,7 @@ public sealed class MusicScannerTests
             await using var db = new ApplicationDbContext(options);
             await db.Database.MigrateAsync();
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Music:Folders:0"] = root }).Build();
-            var catalog = new LocalMusicCatalog(db, configuration, new TestSettingsService(root), NullLogger<LocalMusicCatalog>.Instance);
+            var catalog = new LocalMusicCatalog(db, configuration, new TestSettingsService(root), new NoopMusicMetadataProvider(), NullLogger<LocalMusicCatalog>.Instance);
 
             var first = await catalog.ScanAsync(CancellationToken.None);
             Assert.Equal(1, first.Imported);
@@ -109,6 +110,11 @@ public sealed class MusicScannerTests
         media.Tag.Track = 1;
         media.Tag.Genres = ["Soundtrack"];
         media.Save();
+    }
+
+    private sealed class NoopMusicMetadataProvider : IMusicMetadataProvider
+    {
+        public Task<MusicMetadataMatch?> FindAsync(MusicMetadataHint hint, CancellationToken cancellationToken) => Task.FromResult<MusicMetadataMatch?>(null);
     }
 
     private static void WriteWave(string path)
