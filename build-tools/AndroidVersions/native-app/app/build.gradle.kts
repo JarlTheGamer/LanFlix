@@ -6,11 +6,11 @@ plugins {
 
 android {
     namespace = "com.lanflix.webview"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.lanflix.webview"
-        minSdk = 21
+        minSdk = 23
         targetSdk = 34
         versionCode = 50
         versionName = "1.5.0"
@@ -101,9 +101,9 @@ dependencies {
     implementation("androidx.palette:palette-ktx:1.0.0")
 
     // Native playback
-    implementation("androidx.media3:media3-exoplayer:1.3.1")
-    implementation("androidx.media3:media3-exoplayer-hls:1.3.1")  // required for .m3u8 HLS streams
-    implementation("androidx.media3:media3-ui:1.3.1")
+    implementation("androidx.media3:media3-exoplayer:1.10.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.10.1")  // required for .m3u8 HLS streams
+    implementation("androidx.media3:media3-ui:1.10.1")
 
     // Offline-first catalog
     implementation("androidx.room:room-runtime:2.6.1")
