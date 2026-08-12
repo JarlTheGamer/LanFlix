@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -43,6 +44,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -55,6 +57,7 @@ import com.lanflix.api.LanflixApiClient
 import com.lanflix.api.PlaybackInfo
 import com.lanflix.auth.LanflixSessionStore
 import com.lanflix.models.ContentItem
+import com.lanflix.player.AndroidPlaybackCapabilities
 import com.lanflix.settings.DevicePreferences
 import com.lanflix.settings.DevicePreferencesRepository
 import com.lanflix.utils.RefreshingHttpDataSource
@@ -79,8 +82,26 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
 
     val playbackPreferences by playbackPreferencesRepository.preferences.collectAsStateWithLifecycle(initialValue = DevicePreferences())
     var playbackInfo by remember(item.id) { mutableStateOf<PlaybackInfo?>(null) }
-    val playbackClient = if (playbackPreferences.playbackQuality == "Data saver") "mobile-low" else "mobile-high"
-    LaunchedEffect(item.id, playbackClient) { if (item.localFilePath == null) playbackInfo = api.getPlaybackInfo(item, playbackClient) }
+    var playbackErrorMessage by remember(item.id) { mutableStateOf<String?>(null) }
+    var planLoading by remember(item.id) { mutableStateOf(item.localFilePath == null) }
+    val playbackClient = remember(
+        playbackPreferences.playbackQuality,
+        playbackPreferences.preferredAudioLanguage
+    ) {
+        if (playbackPreferences.playbackQuality == "Data saver") "mobile-low"
+        else AndroidPlaybackCapabilities.clientProfile(
+            context.applicationContext,
+            playbackPreferences.preferredAudioLanguage
+        )
+    }
+    LaunchedEffect(item.id, playbackClient) {
+        if (item.localFilePath == null) {
+            planLoading = true
+            playbackInfo = api.getPlaybackInfo(item, playbackClient)
+            playbackErrorMessage = if (playbackInfo == null) "The server could not prepare this video." else null
+            planLoading = false
+        }
+    }
     var initialPositionApplied by remember(item.id) { mutableStateOf(false) }
     DisposableEffect(activity) {
         if (activity == null) return@DisposableEffect onDispose { }
@@ -97,21 +118,49 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
         }
     }
     val uri = remember(item, playbackPreferences.playbackQuality, playbackInfo?.progress?.positionMilliseconds, playbackInfo?.playbackMode) {
-        item.localFilePath?.let { Uri.fromFile(File(it)) } ?: run {
+        item.localFilePath?.let { Uri.fromFile(File(it)) } ?: playbackInfo?.let {
             val kind = if (item.type.equals("episode", true)) "episode" else "movie"
-            val client = playbackClient
+            // DirectPlay must use the dedicated file endpoint. It is the only
+            // playback route that advertises HTTP range support, which keeps
+            // ExoPlayer seeking instant for media the device can already play.
+            val client = if (playbackInfo?.playbackMode.equals("DirectPlay", ignoreCase = true)) {
+                "direct"
+            } else {
+                playbackClient
+            }
             val startSeconds = playbackInfo?.progress?.positionMilliseconds?.takeIf { it > 0L }?.div(1000.0)
             val useHls = !playbackInfo?.playbackMode.isNullOrBlank() &&
                 playbackInfo?.playbackMode != "Unknown" &&
                 !playbackInfo?.playbackMode.equals("DirectPlay", ignoreCase = true)
             Uri.parse(buildString {
                 append("${ServerManager.activeServerUrl}/api/v2/playback/$kind/${item.id}/")
-                append(if (useHls) "hls/playlist.m3u8?client=$client" else "file?client=$client")
+                append(if (useHls) "hls/playlist.m3u8?client=${Uri.encode(client)}" else "file?client=${Uri.encode(client)}")
                 if (startSeconds != null) append("&startTime=$startSeconds")
             })
         }
     }
-    val player = remember(uri) {
+    val mediaItem = remember(uri, playbackInfo?.subtitles, playbackPreferences.preferredSubtitleLanguage) {
+        uri?.let { mediaUri ->
+            val preferred = playbackPreferences.preferredSubtitleLanguage.trim().lowercase()
+            val subtitle = playbackInfo?.subtitles?.firstOrNull { it.language.lowercase().startsWith(preferred) }
+                ?: playbackInfo?.subtitles?.firstOrNull { it.isDefault }
+                ?: playbackInfo?.subtitles?.firstOrNull()
+            val builder = MediaItem.Builder().setUri(mediaUri)
+            if (subtitle != null && subtitle.url.isNotBlank()) {
+                val subtitleUri = if (subtitle.url.startsWith("http")) subtitle.url
+                    else "${ServerManager.activeServerUrl}${subtitle.url}"
+                builder.setSubtitleConfigurations(listOf(
+                    MediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitleUri))
+                        .setMimeType(MimeTypes.TEXT_VTT)
+                        .setLanguage(subtitle.language)
+                        .setLabel(subtitle.title)
+                        .build()
+                ))
+            }
+            builder.build()
+        }
+    }
+    val player = remember(mediaItem) {
         // Build a factory that creates a DefaultHttpDataSource with the current token.
         // Re-invoked on each new data source, so a refreshed token is always used.
         fun makeHttpSource(): androidx.media3.datasource.DefaultHttpDataSource {
@@ -119,7 +168,10 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
             val headers = token?.let { mapOf("Authorization" to "Bearer $it") }.orEmpty()
             return DefaultHttpDataSource.Factory()
                 .setConnectTimeoutMs(8_000)
-                .setReadTimeoutMs(8_000)
+                // Initial managed-HLS segments may need to be encoded before
+                // they can be returned. An 8-second timeout caused Media3 to
+                // cancel and duplicate otherwise healthy FFmpeg batches.
+                .setReadTimeoutMs(60_000)
                 .setAllowCrossProtocolRedirects(true)
                 .setDefaultRequestProperties(headers)
                 .createDataSource()
@@ -154,13 +206,21 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
                 .setSelectUndeterminedTextLanguage(playbackPreferences.automaticSubtitles)
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !playbackPreferences.automaticSubtitles)
                 .build()
-            setMediaItem(MediaItem.fromUri(uri)); prepare(); playWhenReady = true
+            if (mediaItem != null) {
+                setMediaItem(mediaItem)
+                prepare()
+                playWhenReady = true
+            }
         }
     }
     DisposableEffect(player) { onDispose { player.release() } }
     LaunchedEffect(player, playbackInfo?.progress?.positionMilliseconds) {
         val position = playbackInfo?.progress?.positionMilliseconds ?: return@LaunchedEffect
         if (position > 0L && !initialPositionApplied) {
+            while (player.playbackState == androidx.media3.common.Player.STATE_IDLE ||
+                player.playbackState == androidx.media3.common.Player.STATE_BUFFERING) {
+                delay(50)
+            }
             player.seekTo(position)
             initialPositionApplied = true
         }
@@ -174,6 +234,9 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
                 if (videoSize.width > 0 && videoSize.height > 0)
                     videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
+            }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                playbackErrorMessage = error.localizedMessage ?: "Playback failed."
             }
         }
         player.addListener(listener)
@@ -268,6 +331,11 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
                 }
             },
             update = { view ->
+                // AndroidView instances survive recomposition. The playback
+                // plan changes the URI (loading -> direct/HLS), so explicitly
+                // attach the newly-created ExoPlayer instead of leaving the
+                // view bound to the empty planning player.
+                if (view.player !== player) view.player = player
                 // Keep resizeMode in sync whenever state changes
                 view.resizeMode = currentResizeMode
                 // Forward events to PlayerView only when NOT pinching.
@@ -281,6 +349,25 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        if (planLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.Center),
+                color = Color.White,
+                strokeWidth = 2.dp
+            )
+        }
+
+        playbackErrorMessage?.let { message ->
+            Text(
+                text = message,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .background(Color.Black.copy(alpha = .78f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 18.dp, vertical = 12.dp)
+            )
+        }
 
         // ── Back button (top-start) ──────────────────────────────────────────
         IconButton(

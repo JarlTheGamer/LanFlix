@@ -67,7 +67,8 @@ builder.Services.AddScoped<ISocialDbContext>(provider => provider.GetRequiredSer
 builder.Services.AddScoped<StartupDatabaseMigrator>();
 builder.Services.AddApplication();
 builder.Services.AddScoped<IHardwareAccelerationDetector, EnhancedHardwareAccelerationDetector>();
-builder.Services.AddScoped<ITranscodingPipeline, EnhancedTranscodingPipeline>();
+// v2 playback uses the managed FFmpeg planner/session services registered by
+// the infrastructure adapters; the legacy pipe-based pipeline is not exposed.
 builder.Services.AddScoped<TranscodingSettingsProvider>();
 
 builder.Services.AddIdentityModule();

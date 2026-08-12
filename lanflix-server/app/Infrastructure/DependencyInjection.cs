@@ -10,7 +10,6 @@ using Lanflix.Infrastructure.Services.FFmpeg;
 using Lanflix.Infrastructure.Services.Library;
 using Lanflix.Infrastructure.Services.Metadata;
 using Lanflix.Infrastructure.Services.Settings;
-using Lanflix.Infrastructure.Services.Streaming;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,7 +51,6 @@ public static class DependencyInjection
         services.AddScoped<ICacheService, MemoryCacheService>();
         services.AddScoped<ILibraryService, LibraryService>();
         services.AddScoped<IMetadataService, MetadataService>();
-        services.AddSingleton<ITranscodingSessionManager, TranscodingSessionManager>();
         
         // Transcoding Settings & Analysis
         services.AddScoped<TranscodingSettingsProvider>();
@@ -82,7 +80,6 @@ public static class DependencyInjection
 
         // FFmpeg Services
         services.AddScoped<IHardwareAccelerationDetector, EnhancedHardwareAccelerationDetector>();
-        services.AddScoped<ITranscodingPipeline, EnhancedTranscodingPipeline>();
         services.AddScoped<IProgressBroadcaster, SimpleProgressBroadcaster>();
 
         // Audio Services

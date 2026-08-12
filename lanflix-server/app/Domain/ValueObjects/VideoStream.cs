@@ -49,4 +49,8 @@ public record VideoStream
     /// HDR format (e.g., HDR10, Dolby Vision, HDR10+)
     /// </summary>
     public string? HdrFormat { get; init; }
+
+    public string? Profile { get; init; }
+    public int? Level { get; init; }
+    public int BitDepth { get; init; } = 8;
 }

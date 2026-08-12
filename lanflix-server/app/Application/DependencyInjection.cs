@@ -1,8 +1,6 @@
 using System.Reflection;
 using FluentValidation;
 using Lanflix.Application.Common.Behaviors;
-using Lanflix.Application.Features.Streaming.Services;
-using Lanflix.Application.Features.Streaming.Strategies;
 using Lanflix.Domain.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,16 +26,6 @@ public static class DependencyInjection
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
-
-        // Register Enhanced Streaming Services
-        services.AddScoped<TranscodingDecisionEngine>();
-        services.AddScoped<EnhancedStreamingService>();
-
-        // Register New Streaming Strategies (order by priority)
-        services.AddScoped<IStreamingStrategy, DirectPlayStrategy>();
-        services.AddScoped<IStreamingStrategy, RemuxStrategy>();
-        services.AddScoped<IStreamingStrategy, DirectStreamStrategy>();
-        services.AddScoped<IStreamingStrategy, TranscodeStrategy>();
 
         // Register default transcoding settings (can be overridden in Infrastructure)
         services.AddSingleton(new TranscodingSettings

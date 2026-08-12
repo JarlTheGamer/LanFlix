@@ -57,44 +57,9 @@ public class MediaAnalyzer : IMediaAnalyzer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to analyze media file, using defaults: {FilePath}", filePath);
-            
-            var container = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-
-            return new MediaInfo
-            {
-                Video = new VideoStream
-                {
-                    Codec = "h264",
-                    Width = 1920,
-                    Height = 1080,
-                    Bitrate = 5_000_000,
-                    FrameRate = 24,
-                    PixelFormat = "yuv420p",
-                    ColorSpace = "bt709",
-                    IsHDR = false,
-                    HdrFormat = null
-                },
-                Audio = new List<AudioStream>
-                {
-                    new AudioStream
-                    {
-                        Index = 0,
-                        Codec = "aac",
-                        Channels = 2,
-                        SampleRate = 48000,
-                        Bitrate = 192_000,
-                        Language = "eng",
-                        Title = null,
-                        IsDefault = true
-                    }
-                },
-                Subtitles = new List<SubtitleStream>(),
-                Duration = TimeSpan.FromHours(2),
-                FileSize = fileInfo.Length,
-                Container = container,
-                OverallBitrate = 5_000_000
-            };
+            _logger.LogError(ex, "Failed to analyze media file: {FilePath}", filePath);
+            throw new InvalidOperationException(
+                $"Playback cannot be planned because FFprobe could not analyze '{Path.GetFileName(filePath)}'.", ex);
         }
     }
 
@@ -256,8 +221,20 @@ public class MediaAnalyzer : IMediaAnalyzer
             PixelFormat = videoStream.PixFmt ?? "unknown",
             ColorSpace = videoStream.ColorSpace,
             IsHDR = isHDR,
-            HdrFormat = hdrFormat
+            HdrFormat = hdrFormat,
+            Profile = videoStream.Profile,
+            Level = videoStream.Level,
+            BitDepth = ParseBitDepth(videoStream.BitsPerRawSample, videoStream.PixFmt)
         };
+    }
+
+    private static int ParseBitDepth(string? raw, string? pixelFormat)
+    {
+        if (int.TryParse(raw, out var bits) && bits > 0) return bits;
+        var format = pixelFormat?.ToLowerInvariant() ?? string.Empty;
+        if (format.Contains("12")) return 12;
+        if (format.Contains("10") || format.Contains("p010")) return 10;
+        return 8;
     }
 
     private List<AudioStream> ExtractAudioStreams(FFprobeResult probeResult)
@@ -280,6 +257,8 @@ public class MediaAnalyzer : IMediaAnalyzer
 
     private bool DetectHDR(FFprobeStream stream)
     {
+        if (stream.CodecTagString?.StartsWith("dv", StringComparison.OrdinalIgnoreCase) == true)
+            return true;
         if (stream.ColorTransfer != null)
         {
             var hdrTransfers = new[] { "smpte2084", "arib-std-b67" };
@@ -311,6 +290,8 @@ public class MediaAnalyzer : IMediaAnalyzer
 
     private string? DetectHDRFormat(FFprobeStream stream)
     {
+        if (stream.CodecTagString?.StartsWith("dv", StringComparison.OrdinalIgnoreCase) == true)
+            return "Dolby Vision";
         if (stream.ColorTransfer == null)
         {
             return null;
@@ -435,6 +416,9 @@ public class MediaAnalyzer : IMediaAnalyzer
         
         [JsonPropertyName("codec_type")]
         public string? CodecType { get; set; }
+
+        [JsonPropertyName("codec_tag_string")]
+        public string? CodecTagString { get; set; }
         
         [JsonPropertyName("width")]
         public int? Width { get; set; }
@@ -444,6 +428,15 @@ public class MediaAnalyzer : IMediaAnalyzer
         
         [JsonPropertyName("pix_fmt")]
         public string? PixFmt { get; set; }
+
+        [JsonPropertyName("profile")]
+        public string? Profile { get; set; }
+
+        [JsonPropertyName("level")]
+        public int? Level { get; set; }
+
+        [JsonPropertyName("bits_per_raw_sample")]
+        public string? BitsPerRawSample { get; set; }
         
         [JsonPropertyName("color_space")]
         public string? ColorSpace { get; set; }

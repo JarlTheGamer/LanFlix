@@ -121,7 +121,7 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
 
     suspend fun getPlaybackInfo(item: ContentItem, client: String = "mobile-high"): PlaybackInfo? {
         val kind = if (item.type.equals("episode", true)) "episode" else "movie"
-        return get("/api/v2/playback/$kind/${item.id}?client=$client", true, PlaybackInfo::class.java)
+        return get("/api/v2/playback/$kind/${item.id}?client=${android.net.Uri.encode(client)}", true, PlaybackInfo::class.java)
     }
 
     // ── Feed & Posts ─────────────────────────────────────────────────────────

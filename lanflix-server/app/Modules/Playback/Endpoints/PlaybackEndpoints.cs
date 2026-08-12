@@ -6,14 +6,11 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Security.Cryptography;
-using System.Globalization;
 
 namespace Lanflix.Modules.Playback;
 
 public static class PlaybackModule
 {
-    private const double HlsSegmentDuration = 4.0; // seconds per HLS segment
-
     public static IServiceCollection AddPlaybackModule(this IServiceCollection services) => services;
 
     public static IEndpointRouteBuilder MapPlaybackModule(this IEndpointRouteBuilder endpoints)
@@ -30,7 +27,10 @@ public static class PlaybackModule
 
         // HLS adaptive streaming endpoints
         playback.MapGet("/{kind:regex(^(movie|episode)$)}/{id:int}/hls/playlist.m3u8", GetHlsPlaylistAsync);
-        playback.MapGet("/{kind:regex(^(movie|episode)$)}/{id:int}/hls/segment/{start}.ts", GetHlsSegmentAsync);
+        playback.MapGet("/sessions/{sessionId:minlength(32):maxlength(32)}/segments/{segmentIndex:int}.ts", GetSessionSegmentAsync);
+        playback.MapDelete("/sessions/{sessionId:minlength(32):maxlength(32)}", StopSessionAsync);
+        playback.MapGet("/sessions", (IAdaptivePlaybackService service) => Results.Ok(service.GetSessionDiagnostics()))
+            .RequireAuthorization("AdminOnly");
 
         return endpoints;
     }
@@ -44,12 +44,13 @@ public static class PlaybackModule
         await using var stream = file.OpenRead();
         var hash = await SHA256.HashDataAsync(stream, ct);
         return Results.Ok(new PlaybackDownloadManifestDto(id, kind, source.Title, file.Length, source.MimeType,
-            Convert.ToHexString(hash).ToLowerInvariant(), $"/api/v2/playback/{kind}/{id}/file", file.LastWriteTimeUtc));
+            Convert.ToHexString(hash).ToLowerInvariant(), $"/api/v2/playback/{kind}/{id}/file?client=direct", file.LastWriteTimeUtc));
     }
 
     private static async Task<IResult> GetInfoAsync(
         string kind, int id, ClaimsPrincipal user, IPlaybackSourceCatalog sources,
-        IPlaybackDbContext db, IAdaptivePlaybackService playback, string? client, CancellationToken ct)
+        IPlaybackDbContext db, IAdaptivePlaybackService playback,
+        Lanflix.Modules.Subtitles.ISubtitleCatalog subtitles, string? client, CancellationToken ct)
     {
         var source = await sources.FindAsync(kind, id, ct);
         if (source is null) return Results.Problem(statusCode: 404, title: "Playable media unavailable");
@@ -57,11 +58,15 @@ public static class PlaybackModule
         var progressEntity = await db.PlaybackProgress.AsNoTracking()
             .SingleOrDefaultAsync(item => item.AccountId == accountId && item.MediaKind == kind && item.MediaId == id, ct);
         var progress = progressEntity?.ToDto();
-        var playbackMode = await playback.GetPlaybackModeAsync(source, client ?? "mobile-high", ct);
+        var plan = await playback.GetPlanAsync(source, client ?? "mobile-high", ct);
+        var subtitleTracks = await subtitles.GetTracksAsync(source.ContentId,
+            source.Kind == "episode" ? source.Id : null, ct) ?? [];
         return Results.Ok(new PlaybackInfoDto(source.Id, source.Kind, source.Title,
             $"/api/v2/playback/{kind}/{id}/file", source.MimeType, source.FileSize,
             source.SeasonNumber, source.EpisodeNumber, source.IntroStartSeconds, source.IntroEndSeconds,
-            source.CreditsStartSeconds, progress, source.DurationSeconds, playbackMode));
+            source.CreditsStartSeconds, progress,
+            plan.DurationSeconds > 0 ? plan.DurationSeconds : source.DurationSeconds, plan.Method,
+            plan.Reason, plan.SupportsSeeking, plan.TranscodesVideo, plan.TranscodesAudio, subtitleTracks));
     }
 
     private static async Task<IResult> StreamAsync(
@@ -76,7 +81,12 @@ public static class PlaybackModule
             context.Response.Headers["Access-Control-Expose-Headers"] = "X-Playback-Mode";
             return Results.File(source.FilePath, source.MimeType, enableRangeProcessing: true);
         }
-        var delivery = await playback.OpenAsync(source, client ?? "mobile", startTime,
+        var plan = await playback.GetPlanAsync(source, client ?? "mobile-high", ct);
+        if (!string.Equals(plan.Method, "DirectPlay", StringComparison.OrdinalIgnoreCase))
+            return Results.Problem(statusCode: StatusCodes.Status409Conflict,
+                title: "This source requires managed HLS playback",
+                detail: $"{plan.Method}: {plan.Reason}");
+        var delivery = await playback.OpenAsync(source, client ?? "mobile-high", startTime,
             context.Request.Headers.Range.FirstOrDefault(), ct);
         context.Response.Headers["X-Playback-Mode"] = delivery.Mode;
         context.Response.Headers["Access-Control-Expose-Headers"] = "X-Playback-Mode";
@@ -99,53 +109,28 @@ public static class PlaybackModule
         var source = await sources.FindAsync(kind, id, ct);
         if (source is null) return Results.Problem(statusCode: 404, title: "Playable media unavailable");
 
-        // If the DB has no duration, probe it from the file via ffprobe
-        var duration = source.DurationSeconds > 0
-            ? source.DurationSeconds
-            : await playback.ProbeDurationAsync(source.FilePath, ct);
-
-        if (duration <= 0) return Results.Problem(statusCode: 500, title: "Could not determine media duration");
-
-        var clientParam = client ?? "mobile";
-        var sb = new StringBuilder();
-        sb.AppendLine("#EXTM3U");
-        sb.AppendLine("#EXT-X-VERSION:3");
-        sb.AppendLine($"#EXT-X-TARGETDURATION:{(int)Math.Ceiling(HlsSegmentDuration)}");
-        sb.AppendLine("#EXT-X-MEDIA-SEQUENCE:0");
-        sb.AppendLine("#EXT-X-PLAYLIST-TYPE:VOD");
-        sb.AppendLine("#EXT-X-INDEPENDENT-SEGMENTS");
-
-        double position = 0;
-        while (position < duration)
-        {
-            var segLen = Math.Min(HlsSegmentDuration, duration - position);
-            sb.AppendLine($"#EXTINF:{segLen.ToString("0.0000", CultureInfo.InvariantCulture)},");
-            sb.AppendLine($"/api/v2/playback/{kind}/{id}/hls/segment/{position.ToString("0.000", CultureInfo.InvariantCulture)}.ts?client={Uri.EscapeDataString(clientParam)}");
-            position += HlsSegmentDuration;
-        }
-        sb.AppendLine("#EXT-X-ENDLIST");
-
+        var manifest = await playback.GetManifestAsync(source, client ?? "mobile-high", ct);
         context.Response.Headers["Cache-Control"] = "no-cache";
-        return Results.Content(sb.ToString(), "application/vnd.apple.mpegurl", Encoding.UTF8);
+        context.Response.Headers["X-Playback-Session"] = manifest.SessionId;
+        context.Response.Headers["Access-Control-Expose-Headers"] = "X-Playback-Session";
+        return Results.Content(manifest.Content, "application/vnd.apple.mpegurl", Encoding.UTF8);
     }
 
-    /// <summary>
-    /// Transcodes a single HLS segment starting at <paramref name="start"/> seconds,
-    /// with a duration of <see cref="HlsSegmentDuration"/> seconds.
-    /// </summary>
-    private static async Task<IResult> GetHlsSegmentAsync(
-        string kind, int id, double start, string? client, HttpContext context,
-        IPlaybackSourceCatalog sources, IAdaptivePlaybackService playback, CancellationToken ct)
+    private static async Task<IResult> GetSessionSegmentAsync(
+        string sessionId, int segmentIndex, HttpContext context,
+        IAdaptivePlaybackService playback, CancellationToken ct)
     {
-        var source = await sources.FindAsync(kind, id, ct);
-        if (source is null) return Results.Problem(statusCode: 404, title: "Playable media unavailable");
+        var segment = await playback.OpenSessionSegmentAsync(sessionId, segmentIndex, ct);
+        if (segment is null) return Results.NotFound();
+        context.Response.Headers["Cache-Control"] = "private, max-age=3600, immutable";
+        return Results.File(segment.FilePath, segment.ContentType, enableRangeProcessing: false);
+    }
 
-        // Use the client type to drive transcoding decision, but force the segment window
-        var delivery = await playback.OpenSegmentAsync(source, client ?? "mobile", start, HlsSegmentDuration, ct);
-        context.Response.Headers["X-Playback-Mode"] = delivery.Mode;
-        context.Response.Headers["Access-Control-Expose-Headers"] = "X-Playback-Mode";
-        context.Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
-        return Results.Stream(delivery.Stream, "video/mp2t", enableRangeProcessing: false);
+    private static async Task<IResult> StopSessionAsync(
+        string sessionId, IAdaptivePlaybackService playback, CancellationToken ct)
+    {
+        await playback.StopSessionAsync(sessionId, ct);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> UpdateProgressAsync(

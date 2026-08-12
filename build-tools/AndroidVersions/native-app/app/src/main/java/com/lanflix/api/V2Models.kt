@@ -14,7 +14,13 @@ data class PlaybackDownloadManifest(val id: Int = 0, val kind: String = "movie",
     val mimeType: String = "video/mp4", val sha256: String = "", val downloadUrl: String = "")
 data class PlaybackInfo(val id: Int = 0, val kind: String = "movie", val title: String = "", val streamUrl: String = "",
     val introStartSeconds: Double? = null, val introEndSeconds: Double? = null, val creditsStartSeconds: Double? = null,
-    val progress: PlaybackProgress? = null, val durationSeconds: Double = 0.0, val playbackMode: String = "Unknown")
+    val progress: PlaybackProgress? = null, val durationSeconds: Double = 0.0, val playbackMode: String = "Unknown",
+    val playbackReason: String = "", val supportsSeeking: Boolean = true,
+    val transcodesVideo: Boolean = false, val transcodesAudio: Boolean = false,
+    val subtitles: List<PlaybackSubtitle> = emptyList())
+data class PlaybackSubtitle(val index: Int = 0, val language: String = "und", val title: String = "",
+    val format: String = "", val isForced: Boolean = false, val isDefault: Boolean = false,
+    val isEmbedded: Boolean = true, val url: String = "")
 data class PlaybackProgress(val mediaKind: String = "", val mediaId: Int = 0, val positionMilliseconds: Long = 0L,
     val durationMilliseconds: Long = 0L, val percentage: Double = 0.0, val completed: Boolean = false)
 
