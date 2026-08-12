@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,8 +46,10 @@ import java.util.Calendar
 fun MusicLibraryScreen(
     music: MusicHome?,
     onAlbum: (MusicAlbum) -> Unit,
-    onPlay: (MusicTrack, List<MusicTrack>) -> Unit
+    onPlay: (MusicTrack, List<MusicTrack>) -> Unit,
+    onBack: () -> Unit
 ) {
+    MusicImmersiveSystemBars()
     if (music == null || music.recentlyAdded.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             EmptyState("Music library", "Add music to the server's media/music folder and run a music scan.")
@@ -91,6 +94,7 @@ fun MusicLibraryScreen(
         LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 100.dp)) {
             item {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
                     Column(Modifier.weight(1f)) {
                         Text("Music", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                         Text("Your Lanflix library", color = Color.White.copy(alpha = .62f), fontSize = 11.sp)

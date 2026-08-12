@@ -207,7 +207,8 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                         MusicLibraryScreen(
                             music = state.music,
                             onAlbum = { musicAlbum = it },
-                            onPlay = { track, queue -> musicQueue = queue; musicTrack = track }
+                            onPlay = { track, queue -> musicQueue = queue; musicTrack = track },
+                            onBack = { musicHomeVisible = false }
                         )
                     } else AnimatedContent(targetState = destination, label = "main-destination") { target ->
                         when (target) {
@@ -296,11 +297,13 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                         }
                     }
 
-                    Box(Modifier.align(Alignment.BottomCenter)) {
-                        BottomChrome(destination, onSelect = {
-                            musicHomeVisible = false
-                            destination = it
-                        })
+                    if (!musicHomeVisible) {
+                        Box(Modifier.align(Alignment.BottomCenter)) {
+                            BottomChrome(destination, onSelect = {
+                                musicHomeVisible = false
+                                destination = it
+                            })
+                        }
                     }
                     if (musicHomeVisible && musicPlayback.currentTrack != null) {
                         Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 58.dp)) {

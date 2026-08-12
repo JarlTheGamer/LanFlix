@@ -2,10 +2,15 @@
 
 package com.lanflix.ui.compose.screens
 
+import android.app.Activity
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -25,7 +30,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,6 +67,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun MusicAlbumScreen(album: MusicAlbum, onBack: () -> Unit, onPlay: (MusicTrack, List<MusicTrack>) -> Unit) {
+    MusicImmersiveSystemBars()
     val context = LocalContext.current
     val api = remember { LanflixApiClient.getInstance(context) }
     val session = remember { LanflixSessionStore(context) }
@@ -116,6 +124,7 @@ fun MusicAlbumScreen(album: MusicAlbum, onBack: () -> Unit, onPlay: (MusicTrack,
 
 @Composable
 fun MusicPlayerScreen(initialTrack: MusicTrack, queue: List<MusicTrack>, onBack: () -> Unit) {
+    MusicImmersiveSystemBars()
     val context = LocalContext.current
     val api = remember { LanflixApiClient.getInstance(context) }
     val session = remember { LanflixSessionStore(context) }
@@ -125,24 +134,30 @@ fun MusicPlayerScreen(initialTrack: MusicTrack, queue: List<MusicTrack>, onBack:
     var lyrics by remember { mutableStateOf<MusicLyrics?>(null) }
     var waveform by remember { mutableStateOf<List<Float>>(emptyList()) }
     var showLyrics by remember { mutableStateOf(false) }
-    var palette by remember(track.id) { mutableStateOf(DefaultArtworkPalette) }
+    // Palette identity follows the artwork, not the track. Tracks on one
+    // album must not flash through the default palette when the queue advances.
+    val artworkKey = track.album.artworkUrl ?: "album:${track.album.id}"
+    var palette by remember(artworkKey) { mutableStateOf(DefaultArtworkPalette) }
+    val animatedBase by animateColorAsState(palette.base, tween(650), label = "music-base")
+    val animatedDepth by animateColorAsState(palette.depth, tween(650), label = "music-depth")
+    val animatedGlow by animateColorAsState(palette.glow, tween(650), label = "music-glow")
+    val animatedAccent by animateColorAsState(palette.accent, tween(650), label = "music-accent")
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(initialTrack.id, queue.map { it.id }) { controller.play(queue.ifEmpty { listOf(initialTrack) }, initialTrack) }
     LaunchedEffect(track.id) {
-        palette = DefaultArtworkPalette
         lyrics = api.getMusicLyrics(track.id)
         waveform = api.getMusicWaveform(track.id)?.amplitudes.orEmpty()
     }
     val artwork = authenticatedArtwork(track.album.artworkUrl, session.accessToken, context)
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        MusicDynamicBackdrop(artwork, palette) { drawable -> scope.launch { palette = extractArtworkPalette(drawable) } }
+        MusicDynamicBackdrop(artwork, palette.copy(base = animatedBase, depth = animatedDepth, glow = animatedGlow, accent = animatedAccent)) { drawable -> scope.launch { palette = extractArtworkPalette(drawable) } }
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
                 Text("Now playing", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                IconButton(onClick = { showLyrics = !showLyrics }, enabled = lyrics != null) { Icon(Icons.Filled.Lyrics, "Lyrics", tint = if (showLyrics) palette.accent else Color.White) }
+                IconButton(onClick = { showLyrics = !showLyrics }, enabled = lyrics != null) { Icon(Icons.Filled.Lyrics, "Lyrics", tint = if (showLyrics) animatedAccent else Color.White) }
             }
             if (showLyrics && lyrics != null) {
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(vertical = 18.dp)) { item { Text(lyrics!!.text, color = Color.White, fontSize = 17.sp, lineHeight = 27.sp) } }
@@ -156,7 +171,7 @@ fun MusicPlayerScreen(initialTrack: MusicTrack, queue: List<MusicTrack>, onBack:
             MusicWaveform(
                 position = playback.positionMilliseconds,
                 duration = playback.durationMilliseconds,
-                accent = palette.accent,
+                accent = animatedAccent,
                 amplitudes = waveform,
                 onSeek = controller::seekTo,
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
@@ -180,8 +195,10 @@ fun MusicMiniPlayer(state: MusicPlaybackState, onOpen: () -> Unit) {
     val track = state.currentTrack ?: return
     val session = remember { LanflixSessionStore(context) }
     val scope = rememberCoroutineScope()
-    var palette by remember(track.id) { mutableStateOf(DefaultArtworkPalette) }
-    val solidColor = darkenArtworkColor(palette.accent, .18f)
+    val artworkKey = track.album.artworkUrl ?: "album:${track.album.id}"
+    var palette by remember(artworkKey) { mutableStateOf(DefaultArtworkPalette) }
+    val animatedAccent by animateColorAsState(palette.accent, tween(500), label = "mini-accent")
+    val solidColor = darkenArtworkColor(animatedAccent, .18f)
     Row(
         Modifier.fillMaxWidth().height(62.dp).background(solidColor).clickable(onClick = onOpen).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -199,8 +216,22 @@ fun MusicMiniPlayer(state: MusicPlaybackState, onOpen: () -> Unit) {
 
 @Composable
 private fun MusicWaveform(position: Long, duration: Long, accent: Color, amplitudes: List<Float>, onSeek: (Long) -> Unit, modifier: Modifier = Modifier) {
-    val progress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
-    Box(modifier.height(52.dp), contentAlignment = Alignment.Center) {
+    val targetProgress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
+    val progress by animateFloatAsState(targetProgress, tween(220), label = "wave-progress")
+    var waveformWidth by remember { mutableIntStateOf(0) }
+    Box(
+        modifier = modifier
+            .height(52.dp)
+            .onSizeChanged { waveformWidth = it.width }
+            .pointerInput(duration, waveformWidth) {
+                detectTapGestures { offset ->
+                    if (duration > 0 && waveformWidth > 0) {
+                        onSeek((offset.x / waveformWidth.toFloat() * duration).toLong().coerceIn(0L, duration))
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
         Canvas(Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 8.dp)) {
             val bars = amplitudes.size
             if (bars == 0) return@Canvas
@@ -217,16 +248,6 @@ private fun MusicWaveform(position: Long, duration: Long, accent: Color, amplitu
                 )
             }
         }
-        Slider(
-            value = position.toFloat().coerceIn(0f, duration.coerceAtLeast(1L).toFloat()),
-            onValueChange = { onSeek(it.toLong()) },
-            valueRange = 0f..duration.coerceAtLeast(1L).toFloat(),
-            colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = Color.Transparent,
-                inactiveTrackColor = Color.Transparent
-            )
-        )
     }
 }
 
@@ -262,6 +283,23 @@ private fun MusicDynamicBackdrop(artwork: Any?, palette: ArtworkPalette, onArtwo
             .42f to palette.base.copy(alpha = .24f),
             1f to palette.depth.copy(alpha = .86f)
         )))
+    }
+}
+
+@Composable
+fun MusicImmersiveSystemBars() {
+    val activity = LocalContext.current as? Activity ?: return
+    DisposableEffect(activity) {
+        val controller = androidx.core.view.WindowCompat.getInsetsController(
+            activity.window, activity.window.decorView
+        )
+        val previousBehavior = controller.systemBarsBehavior
+        controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        onDispose {
+            controller.systemBarsBehavior = previousBehavior
+            controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        }
     }
 }
 
