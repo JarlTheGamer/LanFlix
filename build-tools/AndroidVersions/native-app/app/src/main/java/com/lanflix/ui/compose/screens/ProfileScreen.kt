@@ -89,11 +89,13 @@ fun ProfileScreen(
     var avatarVersion by remember { mutableStateOf(System.currentTimeMillis()) }
     var backdropVersion by remember { mutableStateOf(System.currentTimeMillis()) }
     var watchHistory by remember { mutableStateOf<List<WatchHistoryItem>>(emptyList()) }
+    var myActivity by remember { mutableStateOf<List<SocialActivity>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         scope.launch(Dispatchers.IO) {
             val history = api.getWatchHistory()
             watchHistory = history
+            myActivity = api.getMySocialActivity()
         }
     }
 
@@ -243,8 +245,8 @@ fun ProfileScreen(
                 Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp).offset(y = (-8).dp), shape = RoundedCornerShape(18.dp), color = Color.Black.copy(alpha = .28f)) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 17.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                         Stat(watchHistory.size.toString(), "Watched")
-                        Stat(library.count { it.type == "movie" }.toString(), "Movies")
-                        Stat(library.count { it.type == "series" }.toString(), "Shows")
+                        Stat(watchHistory.count { it.kind == "movie" }.toString(), "Movies")
+                        Stat(watchHistory.count { it.kind == "episode" }.toString(), "Episodes")
                     }
                 }
                 if (watchHistory.isNotEmpty()) {
@@ -281,9 +283,9 @@ fun ProfileScreen(
                         MediaShelf("Continue Watching", fallbackItems, onSelect)
                     }
                 }
-                if (activity.isNotEmpty()) {
+                if (myActivity.isNotEmpty()) {
                     Text("Recent Activity", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
-                    activity.take(3).forEach { entry ->
+                    myActivity.take(3).forEach { entry ->
                         Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), shape = RoundedCornerShape(14.dp), color = Color.White.copy(alpha = .07f)) {
                             Column(Modifier.padding(13.dp)) { Text(entry.kind.replaceFirstChar { it.uppercase() }, color = LanflixGold, fontWeight = FontWeight.Bold, fontSize = 11.sp); Text(entry.body ?: "Media activity", color = Color.White.copy(alpha = .84f), maxLines = 2, overflow = TextOverflow.Ellipsis) }
                         }

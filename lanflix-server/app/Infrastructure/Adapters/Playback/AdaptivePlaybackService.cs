@@ -1,6 +1,8 @@
 using Lanflix.Application.Common.Interfaces;
 using Lanflix.Domain.ValueObjects;
 using Lanflix.Infrastructure.Services.Playback.Planning;
+using Lanflix.Infrastructure.Services.Playback.Ffmpeg;
+using Lanflix.Infrastructure.Services.Playback;
 using Lanflix.Infrastructure.Services.Playback.Sessions;
 using Lanflix.Infrastructure.Services.Settings;
 using Lanflix.Modules.Playback;
@@ -24,6 +26,9 @@ internal sealed class AdaptivePlaybackService(
         PlaybackSource source, string clientType, CancellationToken cancellationToken)
     {
         var plan = await CreatePlanAsync(source, clientType, cancellationToken);
+        if (plan.Method == PlannedPlaybackMethod.DirectPlay && GetMatroskaPatch(source, clientType) is not null)
+            return new AdaptivePlaybackPlan("DirectPlay", "Virtual Matroska seek-index compatibility for Android Media3",
+                plan.Media.Duration.TotalSeconds, "video/x-matroska", true, false, false);
         return ToContract(plan);
     }
 
@@ -37,8 +42,11 @@ internal sealed class AdaptivePlaybackService(
         var plan = await CreatePlanAsync(source, clientType, cancellationToken);
         if (plan.Method != PlannedPlaybackMethod.DirectPlay)
             throw new InvalidOperationException("Converted playback must use a managed HLS session.");
-        var stream = new FileStream(source.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read,
-            1024 * 128, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        Stream stream = new FileStream(source.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            1024 * 128, FileOptions.Asynchronous | FileOptions.RandomAccess);
+        var patch = GetMatroskaPatch(source, clientType);
+        if (patch is not null)
+            stream = new VirtualMatroskaSeekStream(stream, patch);
         return new AdaptivePlaybackDelivery(stream, source.MimeType, stream.Length, true, null, null, "DirectPlay");
     }
 
@@ -52,10 +60,20 @@ internal sealed class AdaptivePlaybackService(
         return new AdaptivePlaybackManifest(session.Id, session.Manifest);
     }
 
-    public async Task<AdaptivePlaybackSegment?> OpenSessionSegmentAsync(
-        string sessionId, int segmentIndex, CancellationToken cancellationToken)
+    public Task<AdaptivePlaybackRendition?> GetSessionRenditionAsync(
+        string sessionId, string rendition, int? audioStreamIndex, CancellationToken cancellationToken)
     {
-        var path = await sessions.GetSegmentAsync(sessionId, segmentIndex, cancellationToken);
+        var kind = ParseRendition(rendition);
+        var manifest = kind is null ? null : sessions.GetRendition(sessionId, kind.Value, audioStreamIndex);
+        return Task.FromResult(manifest is null ? null : new AdaptivePlaybackRendition(manifest.Content));
+    }
+
+    public async Task<AdaptivePlaybackSegment?> OpenSessionSegmentAsync(
+        string sessionId, string rendition, int? audioStreamIndex, int segmentIndex, CancellationToken cancellationToken)
+    {
+        var kind = ParseRendition(rendition);
+        if (kind is null) return null;
+        var path = await sessions.GetSegmentAsync(sessionId, kind.Value, audioStreamIndex, segmentIndex, cancellationToken);
         return path is null ? null : new AdaptivePlaybackSegment(path, "video/mp2t");
     }
 
@@ -77,16 +95,24 @@ internal sealed class AdaptivePlaybackService(
         var media = await analyzer.AnalyzeAsync(source.FilePath, cancellationToken);
         var detectedHardware = await hardware.DetectAsync();
         var transcodingSettings = await settings.GetSettingsAsync();
-        var requiresSeekableContainerRemux =
-            clientType.StartsWith("android-v1|", StringComparison.OrdinalIgnoreCase) &&
-            media.Container.Equals("mkv", StringComparison.OrdinalIgnoreCase) &&
-            matroskaSeekIndex.Inspect(source.FilePath) == MatroskaSeekIndexStatus.MissingDirectCueReference;
-        return planner.Plan(media, clientType, detectedHardware, transcodingSettings,
-            requiresSeekableContainerRemux);
+        return planner.Plan(media, clientType, detectedHardware, transcodingSettings);
     }
+
+    private MatroskaSeekIndexPatch? GetMatroskaPatch(PlaybackSource source, string clientType) =>
+        clientType.StartsWith("android-v1|", StringComparison.OrdinalIgnoreCase) &&
+        Path.GetExtension(source.FilePath).Equals(".mkv", StringComparison.OrdinalIgnoreCase)
+            ? matroskaSeekIndex.GetVirtualPatch(source.FilePath)
+            : null;
 
     private static AdaptivePlaybackPlan ToContract(PlaybackPlan plan) => new(
         plan.Method.ToString(), plan.Reason, plan.Media.Duration.TotalSeconds,
         plan.Method == PlannedPlaybackMethod.DirectPlay ? "video/*" : "application/vnd.apple.mpegurl",
         true, plan.TranscodesVideo, plan.TranscodesAudio);
+
+    private static HlsSegmentKind? ParseRendition(string rendition) => rendition.ToLowerInvariant() switch
+    {
+        "video" => HlsSegmentKind.Video,
+        "audio" => HlsSegmentKind.Audio,
+        _ => null
+    };
 }

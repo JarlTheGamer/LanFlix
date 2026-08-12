@@ -10,6 +10,7 @@ using Lanflix.Infrastructure.Services.Library;
 using Lanflix.Infrastructure.Services.Metadata;
 using Lanflix.Infrastructure.Services.FFmpeg;
 using Lanflix.Infrastructure.Services.Playback.Ffmpeg;
+using Lanflix.Infrastructure.Services.Playback;
 using Lanflix.Infrastructure.Services.Playback.Planning;
 using Lanflix.Infrastructure.Services.Playback.Sessions;
 using Lanflix.Modules.Administration;
@@ -57,6 +58,7 @@ public static class AdapterRegistration
         services.AddScoped<IMusicCatalog, LocalMusicCatalog>();
         services.AddScoped<ILiveTvCatalog, LiveTvCatalog>();
         services.AddScoped<ISocialResourceDirectory, SocialResourceDirectory>();
+        services.AddScoped<IPlaybackActivityRecorder, PlaybackActivityRecorder>();
         services.AddScoped<ISocialNotificationPublisher, SignalRSocialNotificationPublisher>();
         services.AddScoped<ILibraryService, LibraryService>();
         services.AddScoped<IMetadataService, MetadataService>();

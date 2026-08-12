@@ -189,7 +189,7 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                 currentOverlay == AppOverlay.Profile -> ProfileScreen(
                     library = state.library,
                     account = state.account,
-                    activity = state.socialFeed,
+                    activity = emptyList(),
                     pendingRequests = state.relationships.count { it.kind == "friend" && it.status == "pending" && it.incoming },
                     onBack = ::closeOverlay,
                     onSelect = { detail = it },

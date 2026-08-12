@@ -1,6 +1,7 @@
 using Lanflix.Infrastructure.Persistence;
 using Lanflix.Modules.Realtime;
 using Lanflix.Modules.Social;
+using Lanflix.Modules.Playback;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,4 +29,20 @@ internal sealed class SignalRSocialNotificationPublisher(IHubContext<Notificatio
 {
     public Task PublishAsync(Guid accountId, SocialNotificationDto notification, CancellationToken cancellationToken) =>
         hub.Clients.Group(NotificationHub.AccountGroup(accountId)).SendAsync("NotificationReceived", notification, cancellationToken);
+}
+
+internal sealed class PlaybackActivityRecorder(ApplicationDbContext db) : IPlaybackActivityRecorder
+{
+    public async Task RecordCompletedAsync(Guid accountId, string kind, int mediaId, CancellationToken cancellationToken)
+    {
+        // Episodes store the series content id on the activity, so its detail
+        // page shows all completed episodes together. Movies already use it.
+        var contentId = kind == "episode"
+            ? await db.Episodes.AsNoTracking().Where(x => x.Id == mediaId).Select(x => (int?)x.ContentId).SingleOrDefaultAsync(cancellationToken)
+            : mediaId;
+        if (contentId is null || contentId <= 0) return;
+        if (await db.SocialActivities.AnyAsync(x => x.AccountId == accountId && x.Kind == "watch" && x.ContentId == contentId, cancellationToken)) return;
+        db.SocialActivities.Add(SocialActivity.Watch(accountId, contentId.Value));
+        await db.SaveChangesAsync(cancellationToken);
+    }
 }

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 namespace Lanflix.Infrastructure.Services.Playback.Sessions;
 
 internal sealed record ManagedPlaybackSession(string Id, string Manifest);
+internal sealed record ManagedPlaybackRendition(string Content);
 internal sealed record ManagedSessionDiagnostics(
     string Id, string ClientType, string Method, string Reason,
     DateTime CreatedAtUtc, DateTime LastAccessUtc, int SegmentCount,
@@ -59,12 +60,21 @@ internal sealed class ManagedTranscodeSessionManager : BackgroundService
         return new(id, BuildManifest(session));
     }
 
-    public async Task<string?> GetSegmentAsync(string sessionId, int segmentIndex, CancellationToken cancellationToken)
+    public ManagedPlaybackRendition? GetRendition(string sessionId, HlsSegmentKind kind, int? audioStreamIndex)
     {
-        if (!_sessions.TryGetValue(sessionId, out var session) || segmentIndex < 0 || segmentIndex >= session.SegmentCount)
+        if (!_sessions.TryGetValue(sessionId, out var session) || !session.IsValidRendition(kind, audioStreamIndex)) return null;
+        session.Touch();
+        return new(BuildRenditionManifest(session, kind, audioStreamIndex));
+    }
+
+    public async Task<string?> GetSegmentAsync(string sessionId, HlsSegmentKind kind, int? audioStreamIndex,
+        int segmentIndex, CancellationToken cancellationToken)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session) || !session.IsValidRendition(kind, audioStreamIndex) ||
+            segmentIndex < 0 || segmentIndex >= session.SegmentCount)
             return null;
         session.Touch();
-        var path = session.SegmentPath(segmentIndex);
+        var path = session.SegmentPath(kind, audioStreamIndex, segmentIndex);
         if (File.Exists(path) && new FileInfo(path).Length > 0) return path;
 
         await session.Gate.WaitAsync(cancellationToken);
@@ -83,7 +93,7 @@ internal sealed class ManagedTranscodeSessionManager : BackgroundService
                 // A disconnected HTTP request must not kill useful shared
                 // transcode work. The session owns FFmpeg and server shutdown
                 // or explicit session deletion owns its cancellation.
-                await GenerateBatchAsync(session, firstSegment, batchCount, false, session.Lifetime.Token);
+                await GenerateBatchAsync(session, kind, audioStreamIndex, firstSegment, batchCount, false, session.Lifetime.Token);
             }
             finally
             {
@@ -106,11 +116,11 @@ internal sealed class ManagedTranscodeSessionManager : BackgroundService
             await session.Gate.WaitAsync(session.Lifetime.Token);
             try
             {
-                if (File.Exists(session.SegmentPath(0))) return;
+                if (File.Exists(session.SegmentPath(HlsSegmentKind.Video, null, 0))) return;
                 await _processSlots.WaitAsync(session.Lifetime.Token);
                 try
                 {
-                    await GenerateBatchAsync(session, 0, Math.Min(BatchSize, session.SegmentCount), false,
+                    await GenerateBatchAsync(session, HlsSegmentKind.Video, null, 0, Math.Min(BatchSize, session.SegmentCount), false,
                         session.Lifetime.Token);
                 }
                 finally { _processSlots.Release(); }
@@ -133,19 +143,20 @@ internal sealed class ManagedTranscodeSessionManager : BackgroundService
         .Select(session => new ManagedSessionDiagnostics(
             session.Id, session.ClientType, session.Plan.Method.ToString(), session.Plan.Reason,
             session.CreatedAtUtc, session.LastAccessUtc, session.SegmentCount,
-            Directory.Exists(session.Directory) ? Directory.EnumerateFiles(session.Directory, "segment-*.ts").Count() : 0,
+            Directory.Exists(session.Directory) ? Directory.EnumerateFiles(session.Directory, "*-segment-*.ts").Count() : 0,
             session.Process is { HasExited: false }))
         .ToArray();
 
-    private async Task GenerateBatchAsync(Session session, int firstSegment, int count, bool softwareFallback, CancellationToken ct)
+    private async Task GenerateBatchAsync(Session session, HlsSegmentKind kind, int? audioStreamIndex,
+        int firstSegment, int count, bool softwareFallback, CancellationToken ct)
     {
         for (var index = firstSegment; index < firstSegment + count; index++)
         {
-            var oldSegment = session.SegmentPath(index);
+            var oldSegment = session.SegmentPath(kind, audioStreamIndex, index);
             if (File.Exists(oldSegment)) File.Delete(oldSegment);
         }
         var spec = new FfmpegSegmentBatch(session.SourcePath, session.Directory, firstSegment, count,
-            SegmentDuration, session.Plan);
+            SegmentDuration, session.Plan, kind, audioStreamIndex);
         var arguments = _commands.BuildSegmentBatch(spec, softwareFallback);
         var startInfo = new ProcessStartInfo
         {
@@ -182,7 +193,7 @@ internal sealed class ManagedTranscodeSessionManager : BackgroundService
         {
             _logger.LogWarning("Hardware FFmpeg batch failed for {SessionId}; retrying in software. Exit={ExitCode}: {Error}",
                 session.Id, process.ExitCode, Tail(stderr));
-            await GenerateBatchAsync(session, firstSegment, count, true, ct);
+            await GenerateBatchAsync(session, kind, audioStreamIndex, firstSegment, count, true, ct);
             return;
         }
         throw new InvalidOperationException($"FFmpeg exited with code {process.ExitCode}: {Tail(stderr)}");
@@ -193,7 +204,28 @@ internal sealed class ManagedTranscodeSessionManager : BackgroundService
         var text = new StringBuilder();
         text.AppendLine("#EXTM3U");
         text.AppendLine("#EXT-X-VERSION:3");
-        text.AppendLine($"#EXT-X-TARGETDURATION:{(int)SegmentDuration}");
+        foreach (var audio in session.Plan.Media.Audio)
+        {
+            var language = string.IsNullOrWhiteSpace(audio.Language) ? "und" : audio.Language;
+            var name = string.IsNullOrWhiteSpace(audio.Title) ? $"Audio {audio.Index + 1}" : audio.Title;
+            var isDefault = audio.Index == session.Plan.AudioStreamIndex ? "YES" : "NO";
+            text.AppendLine($"#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"{Escape(name)}\",LANGUAGE=\"{Escape(language)}\",DEFAULT={isDefault},AUTOSELECT=YES,URI=\"/api/v2/playback/sessions/{session.Id}/audio/{audio.Index}/playlist.m3u8\"");
+        }
+        var bandwidth = Math.Max(1_000_000, session.Plan.VideoBitrate + session.Plan.AudioBitrate);
+        text.AppendLine($"#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={session.Plan.Width}x{session.Plan.Height}" +
+            (session.Plan.Media.Audio.Count > 0 ? ",AUDIO=\"audio\"" : string.Empty));
+        text.AppendLine($"/api/v2/playback/sessions/{session.Id}/video/playlist.m3u8");
+        return text.ToString();
+    }
+
+    private static string BuildRenditionManifest(Session session, HlsSegmentKind kind, int? audioStreamIndex)
+    {
+        var text = new StringBuilder();
+        text.AppendLine("#EXTM3U");
+        text.AppendLine("#EXT-X-VERSION:3");
+        // Copied video can only be cut at source keyframes, so use a safe
+        // upper bound even where a source GOP is longer than six seconds.
+        text.AppendLine("#EXT-X-TARGETDURATION:30");
         text.AppendLine("#EXT-X-MEDIA-SEQUENCE:0");
         text.AppendLine("#EXT-X-PLAYLIST-TYPE:VOD");
         text.AppendLine("#EXT-X-INDEPENDENT-SEGMENTS");
@@ -202,11 +234,16 @@ internal sealed class ManagedTranscodeSessionManager : BackgroundService
             var start = index * SegmentDuration;
             var length = Math.Min(SegmentDuration, session.DurationSeconds - start);
             text.AppendLine($"#EXTINF:{length.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)},");
-            text.AppendLine($"/api/v2/playback/sessions/{session.Id}/segments/{index}.ts");
+            var path = kind == HlsSegmentKind.Audio
+                ? $"/api/v2/playback/sessions/{session.Id}/audio/{audioStreamIndex}/segments/{index}.ts"
+                : $"/api/v2/playback/sessions/{session.Id}/video/segments/{index}.ts";
+            text.AppendLine(path);
         }
         text.AppendLine("#EXT-X-ENDLIST");
         return text.ToString();
     }
+
+    private static string Escape(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -288,6 +325,13 @@ internal sealed class ManagedTranscodeSessionManager : BackgroundService
         public Process? Process { get; set; }
         public Task? Warmup { get; set; }
         public void Touch() => LastAccessUtc = DateTime.UtcNow;
-        public string SegmentPath(int index) => Path.Combine(Directory, $"segment-{index:D5}.ts");
+        public bool IsValidRendition(HlsSegmentKind kind, int? audioStreamIndex) => kind == HlsSegmentKind.Video
+            ? audioStreamIndex is null
+            : audioStreamIndex is { } index && Plan.Media.Audio.Any(audio => audio.Index == index);
+
+        public string SegmentPath(HlsSegmentKind kind, int? audioStreamIndex, int index) => Path.Combine(Directory,
+            kind == HlsSegmentKind.Audio
+                ? $"audio-{audioStreamIndex!.Value:D2}-segment-{index:D5}.ts"
+                : $"video-segment-{index:D5}.ts");
     }
 }

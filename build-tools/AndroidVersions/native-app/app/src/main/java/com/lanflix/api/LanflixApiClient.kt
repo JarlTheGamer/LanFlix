@@ -77,6 +77,13 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
     suspend fun changePassword(current: String, replacement: String): Boolean = mutate("POST", "/api/v2/accounts/me/password", mapOf("currentPassword" to current, "newPassword" to replacement))
 
     suspend fun getWatchHistory(): List<WatchHistoryItem> = getList("/api/v2/history")
+    suspend fun updatePlaybackProgress(item: ContentItem, positionMilliseconds: Long, durationMilliseconds: Long, completed: Boolean): Boolean {
+        val kind = if (item.type.equals("episode", true)) "episode" else "movie"
+        return mutate("PUT", "/api/v2/playback/$kind/${item.id}/progress", mapOf(
+            "positionMilliseconds" to positionMilliseconds.coerceAtLeast(0L),
+            "durationMilliseconds" to durationMilliseconds.coerceAtLeast(0L), "completed" to completed
+        ))
+    }
 
     suspend fun clearWatchHistory(): Boolean = mutate("DELETE", "/api/v2/history")
 
@@ -126,6 +133,7 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
 
     // ── Feed & Posts ─────────────────────────────────────────────────────────
     suspend fun getSocialFeed(): List<SocialActivity> = getList("/api/v2/social/feed?limit=50")
+    suspend fun getMySocialActivity(): List<SocialActivity> = getList("/api/v2/social/me/activity?limit=50")
     suspend fun getContentActivity(contentId: Int): List<SocialActivity> =
         getList("/api/v2/social/feed?limit=20&contentId=$contentId")
     suspend fun createPost(body: String, visibility: String = "Friends"): Boolean =

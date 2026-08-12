@@ -29,6 +29,13 @@ public interface IPlaybackSourceCatalog
     Task<PlaybackSource?> FindAsync(string kind, int id, CancellationToken cancellationToken);
 }
 
+/// <summary>Optional social projection for completed playback. Playback only
+/// depends on this contract; the Social module owns the stored activity.</summary>
+public interface IPlaybackActivityRecorder
+{
+    Task RecordCompletedAsync(Guid accountId, string kind, int mediaId, CancellationToken cancellationToken);
+}
+
 public sealed record AdaptivePlaybackDelivery(
     Stream Stream, string ContentType, long? ContentLength, bool SupportsRanges,
     long? RangeStart, long? RangeEnd, string Mode);
@@ -38,6 +45,8 @@ public sealed record AdaptivePlaybackPlan(
     bool SupportsSeeking, bool TranscodesVideo, bool TranscodesAudio);
 
 public sealed record AdaptivePlaybackManifest(string SessionId, string Content);
+
+public sealed record AdaptivePlaybackRendition(string Content);
 
 public sealed record AdaptivePlaybackSegment(string FilePath, string ContentType);
 
@@ -57,8 +66,11 @@ public interface IAdaptivePlaybackService
     Task<AdaptivePlaybackManifest> GetManifestAsync(
         PlaybackSource source, string clientType, CancellationToken cancellationToken);
 
+    Task<AdaptivePlaybackRendition?> GetSessionRenditionAsync(
+        string sessionId, string rendition, int? audioStreamIndex, CancellationToken cancellationToken);
+
     Task<AdaptivePlaybackSegment?> OpenSessionSegmentAsync(
-        string sessionId, int segmentIndex, CancellationToken cancellationToken);
+        string sessionId, string rendition, int? audioStreamIndex, int segmentIndex, CancellationToken cancellationToken);
 
     Task StopSessionAsync(string sessionId, CancellationToken cancellationToken);
 

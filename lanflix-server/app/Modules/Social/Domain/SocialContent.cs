@@ -57,6 +57,12 @@ public sealed class SocialActivity : Entity<Guid>
         ReviewId = review.Id, Body = review.Body, Visibility = review.Visibility
     };
 
+    public static SocialActivity Watch(Guid accountId, int contentId) => new()
+    {
+        Id = Guid.NewGuid(), AccountId = accountId, Kind = "watch", ContentId = contentId,
+        Visibility = SocialVisibility.Friends
+    };
+
     public void UpdateFromReview(SocialReview review)
     {
         Body = review.Body;

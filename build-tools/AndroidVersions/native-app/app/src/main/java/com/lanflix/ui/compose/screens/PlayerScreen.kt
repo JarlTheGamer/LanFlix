@@ -64,6 +64,8 @@ import com.lanflix.utils.RefreshingHttpDataSource
 import com.lanflix.webview.ServerManager
 import android.view.ScaleGestureDetector
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.io.File
 
 /** Resize modes used for pinch-to-zoom: Fit (letterboxed) ↔ Zoom (fill/crop). */
@@ -119,14 +121,10 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
     val uri = remember(item, playbackPreferences.playbackQuality, playbackInfo?.progress?.positionMilliseconds, playbackInfo?.playbackMode) {
         item.localFilePath?.let { Uri.fromFile(File(it)) } ?: playbackInfo?.let {
             val kind = if (item.type.equals("episode", true)) "episode" else "movie"
-            // DirectPlay must use the dedicated file endpoint. It is the only
-            // playback route that advertises HTTP range support, which keeps
-            // ExoPlayer seeking instant for media the device can already play.
-            val client = if (playbackInfo?.playbackMode.equals("DirectPlay", ignoreCase = true)) {
-                "direct"
-            } else {
-                playbackClient
-            }
+            // Keep the actual device profile on direct-file requests. The
+            // server may transparently expose a Media3-compatible Matroska
+            // seek header without changing or copying the source file.
+            val client = playbackClient
             val useHls = !playbackInfo?.playbackMode.isNullOrBlank() &&
                 playbackInfo?.playbackMode != "Unknown" &&
                 !playbackInfo?.playbackMode.equals("DirectPlay", ignoreCase = true)
@@ -139,9 +137,16 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
     val mediaItem = remember(uri, playbackInfo?.subtitles, playbackPreferences.preferredSubtitleLanguage) {
         uri?.let { mediaUri ->
             val preferred = playbackPreferences.preferredSubtitleLanguage.trim().lowercase()
-            val subtitle = playbackInfo?.subtitles?.firstOrNull { it.language.lowercase().startsWith(preferred) }
-                ?: playbackInfo?.subtitles?.firstOrNull { it.isDefault }
-                ?: playbackInfo?.subtitles?.firstOrNull()
+            // Embedded tracks already arrive in the direct-play Matroska and
+            // remain selectable in Media3. Only attach external text tracks;
+            // side-loading embedded PGS duplicates the track with bad timing.
+            val externalTextSubtitles = playbackInfo?.subtitles.orEmpty().filter {
+                !it.isEmbedded && !it.format.equals("hdmv_pgs_subtitle", true) &&
+                    !it.format.equals("pgs", true)
+            }
+            val subtitle = externalTextSubtitles.firstOrNull { it.language.lowercase().startsWith(preferred) }
+                ?: externalTextSubtitles.firstOrNull { it.isDefault }
+                ?: externalTextSubtitles.firstOrNull()
             val builder = MediaItem.Builder().setUri(mediaUri)
             if (subtitle != null && subtitle.url.isNotBlank()) {
                 val subtitleUri = if (subtitle.url.startsWith("http")) subtitle.url
@@ -232,6 +237,34 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
         }
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
+    }
+
+    // Persist progress while playing and once when the player leaves. This is
+    // deliberately independent of the UI controller, so hiding controls or
+    // rotating the screen never loses history.
+    var lastReportedPosition by remember(item.id) { mutableStateOf(-1L) }
+    LaunchedEffect(player, item.id) {
+        while (isActive) {
+            delay(15_000)
+            val duration = player.duration.takeIf { it > 0 } ?: continue
+            val position = player.currentPosition.coerceAtLeast(0L)
+            if (position != lastReportedPosition) {
+                api.updatePlaybackProgress(item, position, duration, position >= duration - 10_000)
+                lastReportedPosition = position
+            }
+        }
+    }
+    DisposableEffect(player, item.id) {
+        onDispose {
+            val duration = player.duration.takeIf { it > 0 } ?: 0L
+            val position = player.currentPosition.coerceAtLeast(0L)
+            if (duration > 0) {
+                val completed = position >= duration - 10_000
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    api.updatePlaybackProgress(item, position, duration, completed)
+                }
+            }
+        }
     }
 
     var positionMs by remember { mutableStateOf(0L) }

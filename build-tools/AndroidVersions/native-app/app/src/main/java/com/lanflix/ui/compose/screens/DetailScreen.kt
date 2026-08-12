@@ -76,6 +76,7 @@ import com.lanflix.api.DiscoveryItem
 import com.lanflix.api.LanflixApiClient
 import com.lanflix.api.SocialReview
 import com.lanflix.api.SocialActivity
+import com.lanflix.auth.LanflixSessionStore
 import com.lanflix.models.ContentItem
 import com.lanflix.models.EpisodeItem
 import com.lanflix.ui.compose.LanflixGold
@@ -104,6 +105,7 @@ fun DetailScreen(
     val canPlay = isPlayableType && (item.isOfflinePlayable || (online && item.serverAvailable))
     val context = LocalContext.current
     val discoveryApi = remember { LanflixApiClient(context) }
+    val currentAccount = remember { LanflixSessionStore(context).account }
     var acquisitionRequested by remember(item.id) { mutableStateOf(false) }
     var targetPalette by remember(item.id) { mutableStateOf(DefaultArtworkPalette) }
     var reviews by remember(item.id) { mutableStateOf<List<SocialReview>>(emptyList()) }
@@ -241,7 +243,7 @@ fun DetailScreen(
                             enabled = isPlayableType && online && !item.isOfflinePlayable && !downloading,
                             onClick = onDownload
                         )
-                        DetailAction(Icons.Filled.Star, "Rate", onClick = { showRateSheet = true })
+                        DetailAction(Icons.Filled.Star, "Rate", enabled = item.id > 0, onClick = { showRateSheet = true })
                         DetailAction(Icons.Filled.Cast, "Cast", enabled = online, onClick = { onCast(item) })
                     }
                     if (item.type.equals("series", true)) {
@@ -361,6 +363,9 @@ fun DetailScreen(
                                             color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
                                             modifier = Modifier.padding(start = 8.dp).weight(1f)
                                         )
+                                        if (review.author.id == currentAccount?.id) {
+                                            TextButton(onClick = { showRateSheet = true }) { Text("Edit", color = LanflixGold, fontSize = 12.sp) }
+                                        }
                                         // Star display  (rating is 1–5, show as 5 stars)
                                         Row {
                                             repeat(5) { i ->
@@ -390,11 +395,25 @@ fun DetailScreen(
     // ─ Rate / Review dialog ───────────────────────────────────────────────────
     if (showRateSheet) {
         RateReviewSheet(
+            existing = reviews.firstOrNull { it.author.id == currentAccount?.id },
             onDismiss = { showRateSheet = false },
             onSubmit = { rating, body, visibility ->
                 scope.launch {
-                    discoveryApi.saveReview(reviewTargetId, rating, body.takeIf { it.isNotBlank() }, visibility)
-                    reviews = discoveryApi.getReviews(reviewTargetId)
+                    if (item.id > 0) {
+                        discoveryApi.saveReview(reviewTargetId, rating, body.takeIf { it.isNotBlank() }, visibility)
+                        reviews = discoveryApi.getReviews(reviewTargetId)
+                        contentActivity = discoveryApi.getContentActivity(item.id)
+                    }
+                    showRateSheet = false
+                }
+            },
+            onDelete = {
+                scope.launch {
+                    if (item.id > 0) {
+                        discoveryApi.deleteReview(item.id)
+                        reviews = discoveryApi.getReviews(item.id)
+                        contentActivity = discoveryApi.getContentActivity(item.id)
+                    }
                     showRateSheet = false
                 }
             }
@@ -403,16 +422,16 @@ fun DetailScreen(
 }
 
 @Composable
-private fun RateReviewSheet(onDismiss: () -> Unit, onSubmit: (rating: Int, body: String, visibility: String) -> Unit) {
-    var selectedRating by remember { mutableStateOf(0) }
-    var body by remember { mutableStateOf("") }
-    var visibility by remember { mutableStateOf("Friends") }
+private fun RateReviewSheet(existing: SocialReview?, onDismiss: () -> Unit, onSubmit: (rating: Int, body: String, visibility: String) -> Unit, onDelete: () -> Unit) {
+    var selectedRating by remember(existing?.id) { mutableStateOf(existing?.rating ?: 0) }
+    var body by remember(existing?.id) { mutableStateOf(existing?.body.orEmpty()) }
+    var visibility by remember(existing?.id) { mutableStateOf(existing?.visibility?.replaceFirstChar { it.uppercase() } ?: "Friends") }
     val visibilities = listOf("Friends", "Server", "Household")
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF1A1A2A),
-        title = { Text("Rate & Review", color = Color.White, fontWeight = FontWeight.Bold) },
+        title = { Text(if (existing == null) "Rate & Review" else "Edit review", color = Color.White, fontWeight = FontWeight.Bold) },
         text = {
             Column {
                 Text("Your rating (1-5 stars)", color = LanflixMuted, fontSize = 11.sp)
@@ -472,6 +491,11 @@ private fun RateReviewSheet(onDismiss: () -> Unit, onSubmit: (rating: Int, body:
                 colors = ButtonDefaults.buttonColors(containerColor = LanflixGold, contentColor = Color.Black)
             ) { Text("Submit", fontWeight = FontWeight.Bold) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = LanflixMuted) } }
+        dismissButton = {
+            Row {
+                if (existing != null) TextButton(onClick = onDelete) { Text("Delete", color = Color(0xFFFF7676)) }
+                TextButton(onClick = onDismiss) { Text("Cancel", color = LanflixMuted) }
+            }
+        }
     )
 }

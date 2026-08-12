@@ -11,6 +11,7 @@ internal static class FeedEndpoints
     public static void MapFeedEndpoints(this RouteGroupBuilder social)
     {
         social.MapGet("/feed", GetFeedAsync);
+        social.MapGet("/me/activity", GetMyActivityAsync);
         social.MapPost("/posts", CreatePostAsync);
         social.MapDelete("/posts/{activityId:guid}", DeletePostAsync);
         social.MapGet("/posts/{activityId:guid}/comments", GetCommentsAsync);
@@ -18,6 +19,17 @@ internal static class FeedEndpoints
         social.MapDelete("/comments/{commentId:guid}", DeleteCommentAsync);
         social.MapPut("/posts/{activityId:guid}/reaction", SaveReactionAsync);
         social.MapDelete("/posts/{activityId:guid}/reaction", DeleteReactionAsync);
+    }
+
+    private static async Task<IResult> GetMyActivityAsync(int? limit, ClaimsPrincipal user, ISocialDbContext db,
+        ISocialResourceDirectory directory, CancellationToken ct)
+    {
+        var accountId = SocialEndpointSupport.AccountId(user);
+        var activities = await db.SocialActivities.AsNoTracking().Where(x => x.AccountId == accountId)
+            .OrderByDescending(x => x.CreatedAtUtc).Take(Math.Clamp(limit ?? 50, 1, 200)).ToListAsync(ct);
+        var accounts = await directory.GetAccountsAsync([accountId], ct);
+        return Results.Ok(activities.Select(x => new SocialActivityDto(x.Id, SocialEndpointSupport.Author(x.AccountId, accounts), x.Kind,
+            x.ContentId, x.ReviewId, x.Body, x.Visibility.ToString().ToLowerInvariant(), 0, 0, x.CreatedAtUtc)));
     }
 
     private static async Task<IResult> GetFeedAsync(int? offset, int? limit, int? contentId, ClaimsPrincipal user,

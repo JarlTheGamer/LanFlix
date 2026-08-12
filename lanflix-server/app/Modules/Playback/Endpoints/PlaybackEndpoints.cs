@@ -27,7 +27,10 @@ public static class PlaybackModule
 
         // HLS adaptive streaming endpoints
         playback.MapGet("/{kind:regex(^(movie|episode)$)}/{id:int}/hls/playlist.m3u8", GetHlsPlaylistAsync);
-        playback.MapGet("/sessions/{sessionId:minlength(32):maxlength(32)}/segments/{segmentIndex:int}.ts", GetSessionSegmentAsync);
+        playback.MapGet("/sessions/{sessionId:minlength(32):maxlength(32)}/video/playlist.m3u8", GetVideoPlaylistAsync);
+        playback.MapGet("/sessions/{sessionId:minlength(32):maxlength(32)}/audio/{audioStreamIndex:int}/playlist.m3u8", GetAudioPlaylistAsync);
+        playback.MapGet("/sessions/{sessionId:minlength(32):maxlength(32)}/video/segments/{segmentIndex:int}.ts", GetVideoSegmentAsync);
+        playback.MapGet("/sessions/{sessionId:minlength(32):maxlength(32)}/audio/{audioStreamIndex:int}/segments/{segmentIndex:int}.ts", GetAudioSegmentAsync);
         playback.MapDelete("/sessions/{sessionId:minlength(32):maxlength(32)}", StopSessionAsync);
         playback.MapGet("/sessions", (IAdaptivePlaybackService service) => Results.Ok(service.GetSessionDiagnostics()))
             .RequireAuthorization("AdminOnly");
@@ -119,11 +122,32 @@ public static class PlaybackModule
         return Results.Content(manifest.Content, "application/vnd.apple.mpegurl", Encoding.UTF8);
     }
 
+    private static Task<IResult> GetVideoPlaylistAsync(string sessionId, HttpContext context,
+        IAdaptivePlaybackService playback, CancellationToken ct) => GetRenditionPlaylistAsync(sessionId, "video", null, context, playback, ct);
+
+    private static Task<IResult> GetAudioPlaylistAsync(string sessionId, int audioStreamIndex, HttpContext context,
+        IAdaptivePlaybackService playback, CancellationToken ct) => GetRenditionPlaylistAsync(sessionId, "audio", audioStreamIndex, context, playback, ct);
+
+    private static async Task<IResult> GetRenditionPlaylistAsync(string sessionId, string rendition, int? audioStreamIndex,
+        HttpContext context, IAdaptivePlaybackService playback, CancellationToken ct)
+    {
+        var manifest = await playback.GetSessionRenditionAsync(sessionId, rendition, audioStreamIndex, ct);
+        if (manifest is null) return Results.NotFound();
+        context.Response.Headers["Cache-Control"] = "no-cache";
+        return Results.Content(manifest.Content, "application/vnd.apple.mpegurl", Encoding.UTF8);
+    }
+
+    private static Task<IResult> GetVideoSegmentAsync(string sessionId, int segmentIndex, HttpContext context,
+        IAdaptivePlaybackService playback, CancellationToken ct) => GetSessionSegmentAsync(sessionId, "video", null, segmentIndex, context, playback, ct);
+
+    private static Task<IResult> GetAudioSegmentAsync(string sessionId, int audioStreamIndex, int segmentIndex, HttpContext context,
+        IAdaptivePlaybackService playback, CancellationToken ct) => GetSessionSegmentAsync(sessionId, "audio", audioStreamIndex, segmentIndex, context, playback, ct);
+
     private static async Task<IResult> GetSessionSegmentAsync(
-        string sessionId, int segmentIndex, HttpContext context,
+        string sessionId, string rendition, int? audioStreamIndex, int segmentIndex, HttpContext context,
         IAdaptivePlaybackService playback, CancellationToken ct)
     {
-        var segment = await playback.OpenSessionSegmentAsync(sessionId, segmentIndex, ct);
+        var segment = await playback.OpenSessionSegmentAsync(sessionId, rendition, audioStreamIndex, segmentIndex, ct);
         if (segment is null) return Results.NotFound();
         context.Response.Headers["Cache-Control"] = "private, max-age=3600, immutable";
         return Results.File(segment.FilePath, segment.ContentType, enableRangeProcessing: false);
@@ -138,7 +162,7 @@ public static class PlaybackModule
 
     private static async Task<IResult> UpdateProgressAsync(
         string kind, int id, UpdatePlaybackProgressRequest request, ClaimsPrincipal user, IPlaybackSourceCatalog sources,
-        IPlaybackDbContext db, CancellationToken ct)
+        IPlaybackDbContext db, IPlaybackActivityRecorder activityRecorder, CancellationToken ct)
     {
         if (request.PositionMilliseconds < 0 || request.DurationMilliseconds < 0 ||
             (request.DurationMilliseconds > 0 && request.PositionMilliseconds > request.DurationMilliseconds + 30_000))
@@ -155,6 +179,8 @@ public static class PlaybackModule
         }
         progress.Update(request.PositionMilliseconds, request.DurationMilliseconds, request.Completed);
         await db.SaveChangesAsync(ct);
+        if (progress.Completed)
+            await activityRecorder.RecordCompletedAsync(accountId, kind, id, ct);
         return Results.Ok(progress.ToDto());
     }
 

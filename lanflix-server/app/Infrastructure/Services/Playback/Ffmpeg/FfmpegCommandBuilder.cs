@@ -11,7 +11,11 @@ internal sealed record FfmpegSegmentBatch(
     int FirstSegment,
     int SegmentCount,
     double SegmentDuration,
-    PlaybackPlan Plan);
+    PlaybackPlan Plan,
+    HlsSegmentKind Kind = HlsSegmentKind.Video,
+    int? AudioStreamIndex = null);
+
+internal enum HlsSegmentKind { Video, Audio }
 
 internal sealed class FfmpegCommandBuilder
 {
@@ -32,17 +36,24 @@ internal sealed class FfmpegCommandBuilder
         args.Append("-ss ").Append(Number(start)).Append(' ');
         args.Append("-i ").Append(Quote(batch.InputPath)).Append(' ');
         args.Append("-to ").Append(Number(start + duration)).Append(' ');
-        args.Append("-map 0:v:0 -map 0:")
-            .Append(plan.AudioStreamIndex?.ToString(CultureInfo.InvariantCulture) ?? "a:0")
-            .Append("? -sn -dn ");
+        if (batch.Kind == HlsSegmentKind.Audio)
+        {
+            args.Append("-map 0:")
+                .Append(batch.AudioStreamIndex?.ToString(CultureInfo.InvariantCulture) ?? "a:0")
+                .Append("? -vn -sn -dn ");
+        }
+        else args.Append("-map 0:v:0 -an -sn -dn ");
 
-        switch (plan.Method)
+        if (batch.Kind == HlsSegmentKind.Audio)
+        {
+            if (plan.Method == PlannedPlaybackMethod.Remux) args.Append("-c:a copy ");
+            else args.Append("-c:a aac -ac 2 -b:a ").Append(plan.AudioBitrate).Append(' ');
+        }
+        else switch (plan.Method)
         {
             case PlannedPlaybackMethod.Remux:
-                args.Append("-c:v copy -c:a copy ");
-                break;
             case PlannedPlaybackMethod.DirectStream:
-                args.Append("-c:v copy -c:a aac -ac 2 -b:a ").Append(plan.AudioBitrate).Append(' ');
+                args.Append("-c:v copy ");
                 break;
             default:
                 args.Append("-c:v ").Append(codec).Append(' ');
@@ -51,7 +62,6 @@ internal sealed class FfmpegCommandBuilder
                     .Append("-bufsize ").Append(plan.VideoBitrate * 2).Append(' ');
                 AppendVideoFilters(args, plan, hardware);
                 AppendEncoderOptions(args, codec, batch.SegmentDuration, plan.Media.Video.FrameRate);
-                args.Append("-c:a aac -ac 2 -b:a ").Append(plan.AudioBitrate).Append(' ');
                 break;
         }
 
@@ -60,10 +70,14 @@ internal sealed class FfmpegCommandBuilder
         args.Append("-hls_list_size 0 -hls_flags independent_segments+temp_file ");
         args.Append("-start_number ").Append(batch.FirstSegment).Append(' ');
         args.Append("-hls_segment_filename ")
-            .Append(Quote(Path.Combine(batch.OutputDirectory, "segment-%05d.ts"))).Append(' ');
-        args.Append(Quote(Path.Combine(batch.OutputDirectory, $"batch-{batch.FirstSegment:D5}.m3u8")));
+            .Append(Quote(Path.Combine(batch.OutputDirectory, SegmentPrefix(batch) + "%05d.ts"))).Append(' ');
+        args.Append(Quote(Path.Combine(batch.OutputDirectory, $"{SegmentPrefix(batch)}batch-{batch.FirstSegment:D5}.m3u8")));
         return args.ToString();
     }
+
+    private static string SegmentPrefix(FfmpegSegmentBatch batch) => batch.Kind == HlsSegmentKind.Audio
+        ? $"audio-{batch.AudioStreamIndex ?? 0:D2}-segment-"
+        : "video-segment-";
 
     private static void AppendHardwareInput(StringBuilder args, HwAccelMethod hardware)
     {

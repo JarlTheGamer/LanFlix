@@ -9,11 +9,15 @@ internal enum MatroskaSeekIndexStatus
     Unknown
 }
 
+internal sealed record MatroskaBytePatch(long Offset, byte[] Replacement);
+
+internal sealed record MatroskaSeekIndexPatch(IReadOnlyList<MatroskaBytePatch> Bytes);
+
 /// <summary>
-/// Checks the small amount of Matroska metadata Media3 needs in order to
-/// expose a seekable timeline. Media3 expects the first SeekHead to reference
-/// Cues directly; a chained SeekHead at the end of the file is valid Matroska
-/// but is treated as unseekable by its extractor.
+/// Inspects the small amount of Matroska metadata Media3 uses to expose a
+/// seekable timeline. For valid files with a chained SeekHead, it also creates
+/// a same-length virtual header patch that points the initial SeekHead directly
+/// at Cues. The source file is never changed or copied.
 /// </summary>
 internal sealed class MatroskaSeekIndexInspector
 {
@@ -22,56 +26,66 @@ internal sealed class MatroskaSeekIndexInspector
     private const ulong SeekHeadId = 0x114D9B74;
     private const ulong SeekId = 0x4DBB;
     private const ulong SeekTargetId = 0x53AB;
+    private const ulong SeekPositionId = 0x53AC;
     private const ulong CuesId = 0x1C53BB6B;
     private const ulong ClusterId = 0x1F43B675;
     private const long MaximumHeaderScanBytes = 4 * 1024 * 1024;
 
     private readonly ConcurrentDictionary<string, CacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-    public MatroskaSeekIndexStatus Inspect(string filePath)
+    public MatroskaSeekIndexStatus Inspect(string filePath) => Analyze(filePath).Status;
+
+    public MatroskaSeekIndexPatch? GetVirtualPatch(string filePath) => Analyze(filePath).Patch;
+
+    private Inspection Analyze(string filePath)
     {
         var file = new FileInfo(filePath);
-        if (!file.Exists) return MatroskaSeekIndexStatus.Unknown;
+        if (!file.Exists) return new Inspection(MatroskaSeekIndexStatus.Unknown, null);
 
         if (_cache.TryGetValue(file.FullName, out var cached) &&
             cached.LastWriteUtc == file.LastWriteTimeUtc && cached.Length == file.Length)
-            return cached.Status;
+            return cached.Inspection;
 
-        MatroskaSeekIndexStatus status;
+        Inspection inspection;
         try
         {
             using var stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read,
                 64 * 1024, FileOptions.RandomAccess);
-            status = Inspect(stream);
+            inspection = Analyze(stream);
         }
         catch (IOException)
         {
-            status = MatroskaSeekIndexStatus.Unknown;
+            inspection = new Inspection(MatroskaSeekIndexStatus.Unknown, null);
         }
         catch (UnauthorizedAccessException)
         {
-            status = MatroskaSeekIndexStatus.Unknown;
+            inspection = new Inspection(MatroskaSeekIndexStatus.Unknown, null);
         }
         catch (InvalidDataException)
         {
-            status = MatroskaSeekIndexStatus.Unknown;
+            inspection = new Inspection(MatroskaSeekIndexStatus.Unknown, null);
         }
 
-        _cache[file.FullName] = new CacheEntry(file.LastWriteTimeUtc, file.Length, status);
-        return status;
+        _cache[file.FullName] = new CacheEntry(file.LastWriteTimeUtc, file.Length, inspection);
+        return inspection;
     }
 
-    internal static MatroskaSeekIndexStatus Inspect(Stream stream)
+    internal static MatroskaSeekIndexStatus Inspect(Stream stream) => Analyze(stream).Status;
+
+    internal static MatroskaSeekIndexPatch? GetVirtualPatch(Stream stream) => Analyze(stream).Patch;
+
+    private static Inspection Analyze(Stream stream)
     {
-        if (!stream.CanRead || !stream.CanSeek) return MatroskaSeekIndexStatus.Unknown;
+        if (!stream.CanRead || !stream.CanSeek)
+            return new Inspection(MatroskaSeekIndexStatus.Unknown, null);
         stream.Position = 0;
 
         if (!TryReadElementHeader(stream, out var ebml, out var ebmlSize) || ebml != EbmlId || ebmlSize < 0 ||
             !TrySkip(stream, ebmlSize))
-            return MatroskaSeekIndexStatus.Unknown;
+            return new Inspection(MatroskaSeekIndexStatus.Unknown, null);
 
         if (!TryReadElementHeader(stream, out var segment, out var segmentSize) || segment != SegmentId)
-            return MatroskaSeekIndexStatus.Unknown;
+            return new Inspection(MatroskaSeekIndexStatus.Unknown, null);
 
         var segmentDataStart = stream.Position;
         var segmentEnd = segmentSize < 0 ? stream.Length : Math.Min(stream.Length, segmentDataStart + segmentSize);
@@ -80,70 +94,143 @@ internal sealed class MatroskaSeekIndexInspector
         while (stream.Position < scanEnd)
         {
             if (!TryReadElementHeader(stream, out var id, out var size) || size < 0)
-                return MatroskaSeekIndexStatus.Unknown;
+                return new Inspection(MatroskaSeekIndexStatus.Unknown, null);
 
             if (id == SeekHeadId)
-                return SeekHeadReferencesCues(stream, size)
-                    ? MatroskaSeekIndexStatus.Compatible
-                    : MatroskaSeekIndexStatus.MissingDirectCueReference;
+                return AnalyzeInitialSeekHead(stream, size, segmentDataStart);
 
-            // Once media clusters begin there cannot be an initial SeekHead
-            // that Media3 can use without scanning the file.
             if (id == ClusterId)
-                return MatroskaSeekIndexStatus.MissingDirectCueReference;
+                return new Inspection(MatroskaSeekIndexStatus.MissingDirectCueReference, null);
 
-            if (!TrySkip(stream, size)) return MatroskaSeekIndexStatus.Unknown;
+            if (!TrySkip(stream, size))
+                return new Inspection(MatroskaSeekIndexStatus.Unknown, null);
         }
 
-        return MatroskaSeekIndexStatus.Unknown;
+        return new Inspection(MatroskaSeekIndexStatus.Unknown, null);
     }
 
-    private static bool SeekHeadReferencesCues(Stream stream, long size)
+    private static Inspection AnalyzeInitialSeekHead(Stream stream, long size, long segmentDataStart)
+    {
+        var entries = ReadSeekHead(stream, size);
+        if (entries is null)
+            return new Inspection(MatroskaSeekIndexStatus.Unknown, null);
+        if (entries.Any(entry => entry.Target == CuesId))
+            return new Inspection(MatroskaSeekIndexStatus.Compatible, null);
+
+        var chained = entries.FirstOrDefault(entry => entry.Target == SeekHeadId && entry.Position is not null);
+        if (chained is null)
+            return new Inspection(MatroskaSeekIndexStatus.MissingDirectCueReference, null);
+
+        if (chained.Position!.Value > (ulong)(stream.Length - segmentDataStart))
+            return new Inspection(MatroskaSeekIndexStatus.MissingDirectCueReference, null);
+        stream.Position = segmentDataStart + (long)chained.Position.Value;
+        if (!TryReadElementHeader(stream, out var nestedId, out var nestedSize) ||
+            nestedId != SeekHeadId || nestedSize < 0)
+            return new Inspection(MatroskaSeekIndexStatus.MissingDirectCueReference, null);
+
+        var nestedEntries = ReadSeekHead(stream, nestedSize);
+        var cues = nestedEntries?.FirstOrDefault(entry => entry.Target == CuesId && entry.Position is not null);
+        if (cues is null || chained.TargetDataOffset is null || chained.PositionDataOffset is null ||
+            !TryEncodeUnsigned(CuesId, chained.TargetDataLength, out var targetBytes) ||
+            !TryEncodeUnsigned(cues.Position!.Value, chained.PositionDataLength, out var positionBytes))
+            return new Inspection(MatroskaSeekIndexStatus.MissingDirectCueReference, null);
+
+        var patch = new MatroskaSeekIndexPatch([
+            new MatroskaBytePatch(chained.TargetDataOffset.Value, targetBytes),
+            new MatroskaBytePatch(chained.PositionDataOffset.Value, positionBytes)
+        ]);
+        return new Inspection(MatroskaSeekIndexStatus.MissingDirectCueReference, patch);
+    }
+
+    private static List<SeekEntry>? ReadSeekHead(Stream stream, long size)
     {
         var end = CheckedEnd(stream, size);
-        if (end is null) return false;
+        if (end is null) return null;
+        var entries = new List<SeekEntry>();
 
         while (stream.Position < end.Value)
         {
             if (!TryReadElementHeader(stream, out var id, out var childSize) || childSize < 0)
-                return false;
-
-            if (id == SeekId && SeekEntryTargetsCues(stream, childSize)) return true;
-            if (id != SeekId && !TrySkip(stream, childSize)) return false;
-        }
-
-        return false;
-    }
-
-    private static bool SeekEntryTargetsCues(Stream stream, long size)
-    {
-        var end = CheckedEnd(stream, size);
-        if (end is null) return false;
-
-        while (stream.Position < end.Value)
-        {
-            if (!TryReadElementHeader(stream, out var id, out var childSize) || childSize < 0)
-                return false;
-
-            if (id == SeekTargetId)
+                return null;
+            if (id == SeekId)
             {
-                if (childSize is <= 0 or > 8 || stream.Position + childSize > stream.Length) return false;
-                ulong target = 0;
-                for (var index = 0; index < childSize; index++)
-                {
-                    var value = stream.ReadByte();
-                    if (value < 0) return false;
-                    target = (target << 8) | (byte)value;
-                }
-                if (target == CuesId) return true;
+                var entry = ReadSeekEntry(stream, childSize);
+                if (entry is null) return null;
+                entries.Add(entry);
             }
             else if (!TrySkip(stream, childSize))
             {
-                return false;
+                return null;
+            }
+        }
+        return stream.Position == end.Value ? entries : null;
+    }
+
+    private static SeekEntry? ReadSeekEntry(Stream stream, long size)
+    {
+        var end = CheckedEnd(stream, size);
+        if (end is null) return null;
+        ulong? target = null;
+        ulong? position = null;
+        long? targetOffset = null;
+        long? positionOffset = null;
+        var targetLength = 0;
+        var positionLength = 0;
+
+        while (stream.Position < end.Value)
+        {
+            if (!TryReadElementHeader(stream, out var id, out var childSize) || childSize is < 0 or > 8)
+                return null;
+            var dataOffset = stream.Position;
+            if (id == SeekTargetId)
+            {
+                if (!TryReadUnsigned(stream, childSize, out var value)) return null;
+                target = value;
+                targetOffset = dataOffset;
+                targetLength = (int)childSize;
+            }
+            else if (id == SeekPositionId)
+            {
+                if (!TryReadUnsigned(stream, childSize, out var value)) return null;
+                position = value;
+                positionOffset = dataOffset;
+                positionLength = (int)childSize;
+            }
+            else if (!TrySkip(stream, childSize))
+            {
+                return null;
             }
         }
 
-        return false;
+        return stream.Position == end.Value
+            ? new SeekEntry(target, position, targetOffset, targetLength, positionOffset, positionLength)
+            : null;
+    }
+
+    private static bool TryReadUnsigned(Stream stream, long length, out ulong value)
+    {
+        value = 0;
+        if (length is <= 0 or > 8 || length > stream.Length - stream.Position) return false;
+        for (var index = 0; index < length; index++)
+        {
+            var next = stream.ReadByte();
+            if (next < 0) return false;
+            value = (value << 8) | (byte)next;
+        }
+        return true;
+    }
+
+    private static bool TryEncodeUnsigned(ulong value, int length, out byte[] bytes)
+    {
+        bytes = [];
+        if (length is <= 0 or > 8 || (length < 8 && value >= 1UL << (length * 8))) return false;
+        bytes = new byte[length];
+        for (var index = length - 1; index >= 0; index--)
+        {
+            bytes[index] = (byte)value;
+            value >>= 8;
+        }
+        return true;
     }
 
     private static bool TryReadElementHeader(Stream stream, out ulong id, out long size)
@@ -161,7 +248,6 @@ internal sealed class MatroskaSeekIndexInspector
         length = 0;
         var first = stream.ReadByte();
         if (first < 0) return false;
-
         var marker = 0x80;
         length = 1;
         while (length <= 8 && (first & marker) == 0)
@@ -170,7 +256,6 @@ internal sealed class MatroskaSeekIndexInspector
             length++;
         }
         if (length > 8 || (preserveMarker && length > 4)) return false;
-
         value = preserveMarker ? (byte)first : (ulong)(first & (marker - 1));
         for (var index = 1; index < length; index++)
         {
@@ -212,5 +297,9 @@ internal sealed class MatroskaSeekIndexInspector
         return true;
     }
 
-    private sealed record CacheEntry(DateTime LastWriteUtc, long Length, MatroskaSeekIndexStatus Status);
+    private sealed record SeekEntry(
+        ulong? Target, ulong? Position, long? TargetDataOffset, int TargetDataLength,
+        long? PositionDataOffset, int PositionDataLength);
+    private sealed record Inspection(MatroskaSeekIndexStatus Status, MatroskaSeekIndexPatch? Patch);
+    private sealed record CacheEntry(DateTime LastWriteUtc, long Length, Inspection Inspection);
 }

@@ -39,7 +39,8 @@ public sealed class PlaybackPlannerTests
         Assert.Contains("seek index", plan.Reason, StringComparison.OrdinalIgnoreCase);
         var command = new FfmpegCommandBuilder().BuildSegmentBatch(
             new FfmpegSegmentBatch("C:\\media\\episode.mkv", "C:\\temp\\session", 0, 8, 6, plan));
-        Assert.Contains("-c:v copy -c:a copy", command);
+        Assert.Contains("-map 0:v:0 -an", command);
+        Assert.Contains("-c:v copy", command);
     }
 
     [Fact]
@@ -81,7 +82,7 @@ public sealed class PlaybackPlannerTests
     [Fact]
     public void Preferred_audio_language_is_mapped_by_absolute_stream_index()
     {
-        var media = Media("mkv", "h264", "aac") with
+        var media = Media("mp4", "h264", "aac") with
         {
             Audio =
             [
@@ -94,7 +95,8 @@ public sealed class PlaybackPlannerTests
 
         Assert.Equal(2, plan.AudioStreamIndex);
         var command = new FfmpegCommandBuilder().BuildSegmentBatch(
-            new FfmpegSegmentBatch("C:\\media\\movie.mkv", "C:\\temp\\session", 0, 8, 6, plan));
+            new FfmpegSegmentBatch("C:\\media\\movie.mkv", "C:\\temp\\session", 0, 8, 6, plan,
+                HlsSegmentKind.Audio, plan.AudioStreamIndex));
         Assert.Contains("-map 0:2?", command);
     }
 
