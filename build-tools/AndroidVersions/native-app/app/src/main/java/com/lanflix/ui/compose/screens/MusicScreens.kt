@@ -30,7 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -69,6 +69,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun MusicAlbumScreen(album: MusicAlbum, onBack: () -> Unit, onPlay: (MusicTrack, List<MusicTrack>) -> Unit) {
     MusicImmersiveSystemBars()
     val context = LocalContext.current
@@ -106,7 +107,20 @@ fun MusicAlbumScreen(album: MusicAlbum, onBack: () -> Unit, onPlay: (MusicTrack,
                     Text((if (track.trackNumber > 0) track.trackNumber else index + 1).toString(), color = LanflixMuted, modifier = Modifier.width(30.dp))
                     Column(Modifier.weight(1f)) {
                         Text(track.title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
-                        Text("${track.codec.uppercase()}  •  ${formatDuration(track.durationMilliseconds)}", color = LanflixMuted, fontSize = 11.sp)
+                        Text(
+                            track.artist.name,
+                            color = LanflixMuted,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE)
+                        )
+                        Text(
+                            "${displayAudioFormat(track.codec)}  •  ${formatDuration(track.durationMilliseconds)}",
+                            color = LanflixMuted.copy(alpha = .8f),
+                            fontSize = 10.sp,
+                            maxLines = 1
+                        )
                     }
                     IconButton(onClick = {
                         val favorite = track.id !in favoriteIds
@@ -166,18 +180,19 @@ fun MusicPlayerScreen(initialTrack: MusicTrack, queue: List<MusicTrack>, onBack:
             if (showLyrics && lyrics != null) {
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(vertical = 18.dp)) { item { Text(lyrics!!.text, color = Color.White, fontSize = 17.sp, lineHeight = 27.sp) } }
             } else {
-                AsyncImage(artwork, track.album.title, Modifier.padding(top = 26.dp).fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(24.dp)).background(LanflixSurfaceRaised), contentScale = ContentScale.Crop,
+                AsyncImage(artwork, track.album.title, Modifier.padding(top = 26.dp).offset(y = 24.dp).fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(24.dp)).background(LanflixSurfaceRaised), contentScale = ContentScale.Crop,
                     onSuccess = { state -> scope.launch { palette = extractArtworkPalette(state.result.drawable) } })
                 Spacer(Modifier.height(10.dp))
             }
-            Text(track.title, color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.title, color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.offset(y = 18.dp))
             Text(
                 "${track.artist.name}  •  ${track.album.title}",
                 color = Color.White.copy(alpha = .68f),
                 maxLines = 1,
                 softWrap = false,
-                modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE)
+                modifier = Modifier.fillMaxWidth().offset(y = 18.dp).basicMarquee(iterations = Int.MAX_VALUE)
             )
+            Spacer(Modifier.weight(1f))
             MusicWaveform(
                 position = playback.positionMilliseconds,
                 duration = playback.durationMilliseconds,
@@ -224,20 +239,34 @@ fun MusicMiniPlayer(state: MusicPlaybackState, onOpen: () -> Unit) {
     }
 }
 
+private fun displayAudioFormat(codec: String): String {
+    val normalized = codec.trim().lowercase()
+    return when {
+        normalized.contains("mpeg") || normalized.contains("mp3") -> "MP3"
+        normalized.contains("flac") -> "FLAC"
+        normalized.contains("opus") -> "OPUS"
+        normalized.contains("vorbis") || normalized.contains("ogg") -> "OGG"
+        normalized.contains("aac") || normalized.contains("m4a") -> "AAC"
+        normalized.contains("wav") || normalized.contains("pcm") -> "WAV"
+        normalized.isBlank() -> "Audio"
+        else -> normalized.substringBefore(' ').take(8).uppercase()
+    }
+}
+
 @Composable
 private fun MusicWaveform(position: Long, duration: Long, accent: Color, amplitudes: List<Float>, onSeek: (Long) -> Unit, modifier: Modifier = Modifier) {
     val targetProgress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
     val progress by animateFloatAsState(targetProgress, tween(220), label = "wave-progress")
-    val barAmplitudes = amplitudes.mapIndexed { index, value ->
-        animateFloatAsState(
-            targetValue = value.coerceIn(.08f, 1f),
-            animationSpec = tween(600),
-            label = "wave-height-$index"
-        ).value
-    }
     val barProgress = amplitudes.mapIndexed { index, _ ->
         val target = (progress * amplitudes.size - index).coerceIn(0f, 1f)
         animateFloatAsState(target, tween(180), label = "wave-bar-$index").value
+    }
+    val barHeights = amplitudes.mapIndexed { index, amplitude ->
+        animateFloatAsState(
+            targetValue = amplitude.coerceIn(.08f, 1f),
+            animationSpec = tween(420),
+            label = "wave-height-$index"
+        ).value
     }
     var waveformWidth by remember { mutableIntStateOf(0) }
     Box(
@@ -258,15 +287,28 @@ private fun MusicWaveform(position: Long, duration: Long, accent: Color, amplitu
             if (bars == 0) return@Canvas
             val gap = size.width / bars
             repeat(bars) { index ->
-                val normalized = barAmplitudes.getOrElse(index) { .08f }
-                val barHeight = size.height * normalized
+                // Keep playback fill independent from track changes. When the
+                // next song loads, each bar smoothly morphs to its new height.
+                val barHeight = size.height * barHeights.getOrElse(index) { .08f }
                 val barPlayed = barProgress.getOrElse(index) { 0f }
+                val barWidth = (gap * .48f).coerceAtLeast(1.5f)
+                val top = (size.height - barHeight) / 2f
                 drawRoundRect(
-                    color = lerp(accent.copy(alpha = .55f), Color.White, barPlayed),
+                    color = accent.copy(alpha = .55f),
                     topLeft = Offset(index * gap, (size.height - barHeight) / 2f),
-                    size = androidx.compose.ui.geometry.Size((gap * .48f).coerceAtLeast(1.5f), barHeight),
+                    size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(gap * .25f)
                 )
+                if (barPlayed > 0f) {
+                    clipRect(index * gap, top, index * gap + barWidth * barPlayed, top + barHeight) {
+                        drawRoundRect(
+                            color = Color.White,
+                            topLeft = Offset(index * gap, top),
+                            size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(gap * .25f)
+                        )
+                    }
+                }
             }
         }
     }
