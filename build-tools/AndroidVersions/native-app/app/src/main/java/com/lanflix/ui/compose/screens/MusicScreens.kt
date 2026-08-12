@@ -214,6 +214,7 @@ fun MusicPlayerScreen(initialTrack: MusicTrack, queue: List<MusicTrack>, onBack:
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun MusicMiniPlayer(state: MusicPlaybackState, onOpen: () -> Unit) {
     val context = LocalContext.current
     val controller = remember { MusicPlaybackController.get(context) }
@@ -224,18 +225,21 @@ fun MusicMiniPlayer(state: MusicPlaybackState, onOpen: () -> Unit) {
     var palette by remember(artworkKey) { mutableStateOf(DefaultArtworkPalette) }
     val animatedAccent by animateColorAsState(palette.accent, tween(500), label = "mini-accent")
     val solidColor = darkenArtworkColor(animatedAccent, .18f)
-    Row(
-        Modifier.fillMaxWidth().height(62.dp).background(solidColor).clickable(onClick = onOpen).padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        AsyncImage(authenticatedArtwork(track.album.artworkUrl, session.accessToken, context), track.album.title, Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop,
-            onSuccess = { result -> scope.launch { palette = extractArtworkPalette(result.result.drawable) } })
-        Column(Modifier.padding(horizontal = 10.dp).weight(1f)) {
-            Text(track.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(track.artist.name, color = Color.White.copy(alpha = .62f), fontSize = 11.sp, maxLines = 1)
+    Column(Modifier.fillMaxWidth().height(74.dp).background(solidColor).clickable(onClick = onOpen)) {
+        Row(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            AsyncImage(authenticatedArtwork(track.album.artworkUrl, session.accessToken, context), track.album.title, Modifier.size(52.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop,
+                onSuccess = { result -> scope.launch { palette = extractArtworkPalette(result.result.drawable) } })
+            Column(Modifier.padding(horizontal = 12.dp).weight(1f)) {
+                Text(track.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(track.artist.name, color = Color.White.copy(alpha = .74f), fontSize = 12.sp, maxLines = 1, softWrap = false, modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE))
+            }
+            IconButton(onClick = controller::toggle) { Icon(if (state.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, "Play or pause", tint = Color.White) }
+            IconButton(onClick = controller::next, enabled = state.currentIndex in 0 until state.queue.lastIndex) { Icon(Icons.Filled.SkipNext, "Next", tint = Color.White) }
         }
-        IconButton(onClick = controller::toggle) { Icon(if (state.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, "Play or pause", tint = Color.White) }
-        IconButton(onClick = controller::next, enabled = state.currentIndex in 0 until state.queue.lastIndex) { Icon(Icons.Filled.SkipNext, "Next", tint = Color.White) }
+        val progress = if (state.durationMilliseconds > 0) (state.positionMilliseconds.toFloat() / state.durationMilliseconds).coerceIn(0f, 1f) else 0f
+        Box(Modifier.fillMaxWidth().height(3.dp).background(Color.Black.copy(alpha = .26f))) {
+            Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(Color.White.copy(alpha = .9f)))
+        }
     }
 }
 

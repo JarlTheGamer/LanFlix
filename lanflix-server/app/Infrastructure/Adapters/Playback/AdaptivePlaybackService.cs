@@ -17,6 +17,7 @@ internal sealed class AdaptivePlaybackService(
     IHardwareAccelerationDetector hardware,
     TranscodingSettingsProvider settings,
     PlaybackPlanner planner,
+    MatroskaSeekIndexInspector matroskaSeekIndex,
     ManagedTranscodeSessionManager sessions) : IAdaptivePlaybackService
 {
     public async Task<AdaptivePlaybackPlan> GetPlanAsync(
@@ -76,7 +77,12 @@ internal sealed class AdaptivePlaybackService(
         var media = await analyzer.AnalyzeAsync(source.FilePath, cancellationToken);
         var detectedHardware = await hardware.DetectAsync();
         var transcodingSettings = await settings.GetSettingsAsync();
-        return planner.Plan(media, clientType, detectedHardware, transcodingSettings);
+        var requiresSeekableContainerRemux =
+            clientType.StartsWith("android-v1|", StringComparison.OrdinalIgnoreCase) &&
+            media.Container.Equals("mkv", StringComparison.OrdinalIgnoreCase) &&
+            matroskaSeekIndex.Inspect(source.FilePath) == MatroskaSeekIndexStatus.MissingDirectCueReference;
+        return planner.Plan(media, clientType, detectedHardware, transcodingSettings,
+            requiresSeekableContainerRemux);
     }
 
     private static AdaptivePlaybackPlan ToContract(PlaybackPlan plan) => new(

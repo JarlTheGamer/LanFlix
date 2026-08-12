@@ -39,6 +39,7 @@ public static class AdapterRegistration
         services.AddScoped<IPlaybackSourceCatalog, SqlitePlaybackSourceCatalog>();
         services.AddScoped<IAdaptivePlaybackService, AdaptivePlaybackService>();
         services.AddSingleton<PlaybackPlanner>();
+        services.AddSingleton<MatroskaSeekIndexInspector>();
         services.AddSingleton<FfmpegCommandBuilder>();
         services.AddSingleton<ManagedTranscodeSessionManager>();
         services.AddHostedService(provider => provider.GetRequiredService<ManagedTranscodeSessionManager>());

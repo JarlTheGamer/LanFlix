@@ -23,6 +23,26 @@ public sealed class PlaybackPlannerTests
     }
 
     [Fact]
+    public void Android_remuxes_otherwise_compatible_mkv_when_seek_index_requires_it()
+    {
+        var media = Media("mkv", "hevc", "aac") with
+        {
+            Video = Media("mkv", "hevc", "aac").Video with { BitDepth = 10 }
+        };
+        var plan = _planner.Plan(media,
+            "android-v1|v=h264,hevc,hevc10|a=aac|c=mp4,mkv,ts|r=3840x2160|hdr=none",
+            NoHardware, Settings, requireSeekableContainerRemux: true);
+
+        Assert.Equal(PlannedPlaybackMethod.Remux, plan.Method);
+        Assert.False(plan.TranscodesVideo);
+        Assert.False(plan.TranscodesAudio);
+        Assert.Contains("seek index", plan.Reason, StringComparison.OrdinalIgnoreCase);
+        var command = new FfmpegCommandBuilder().BuildSegmentBatch(
+            new FfmpegSegmentBatch("C:\\media\\episode.mkv", "C:\\temp\\session", 0, 8, 6, plan));
+        Assert.Contains("-c:v copy -c:a copy", command);
+    }
+
+    [Fact]
     public void Unsupported_audio_keeps_video_eligible_for_direct_stream()
     {
         var plan = _planner.Plan(Media("mkv", "h264", "dts"),

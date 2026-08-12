@@ -199,6 +199,7 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
     suspend fun setMusicFavorite(trackId: Long, favorite: Boolean): Boolean =
         mutate(if (favorite) "PUT" else "DELETE", "/api/v2/music/favorites/$trackId")
     suspend fun getMusicPlaylists(): List<MusicPlaylist> = getList("/api/v2/music/playlists")
+    suspend fun getMusicPlaylist(id: Long): MusicPlaylist? = get("/api/v2/music/playlists/$id", true, MusicPlaylist::class.java)
     suspend fun createMusicPlaylist(name: String): Boolean = mutate("POST", "/api/v2/music/playlists", mapOf("name" to name.trim()))
     suspend fun addTrackToMusicPlaylist(playlistId: Long, trackId: Long): Boolean =
         mutate("POST", "/api/v2/music/playlists/$playlistId/tracks", mapOf("trackId" to trackId))

@@ -13,7 +13,8 @@ internal sealed class PlaybackPlanner
         MediaInfo media,
         string clientType,
         HardwareAcceleration hardware,
-        TranscodingSettings settings)
+        TranscodingSettings settings,
+        bool requireSeekableContainerRemux = false)
     {
         var profile = Profiles.For(clientType);
         var container = Normalize(media.Container);
@@ -37,6 +38,11 @@ internal sealed class PlaybackPlanner
             hdrSupported;
         var audioSupported = audio is null ||
             (profile.AudioCodecs.Contains(audioCodec) && audio.Channels <= profile.MaxAudioChannels);
+
+        if (!profile.ForceTranscode && requireSeekableContainerRemux &&
+            containerSupported && videoSupported && audioSupported)
+            return Build(PlannedPlaybackMethod.Remux,
+                "The Matroska seek index is not directly readable by Android Media3", media, profile, hardware, settings);
 
         if (!profile.ForceTranscode && containerSupported && videoSupported && audioSupported)
             return Build(PlannedPlaybackMethod.DirectPlay, "Container, video, audio and HDR are supported by the client", media, profile, hardware, settings);

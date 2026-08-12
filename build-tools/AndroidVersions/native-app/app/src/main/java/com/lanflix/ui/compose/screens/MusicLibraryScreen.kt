@@ -47,6 +47,7 @@ fun MusicLibraryScreen(
     music: MusicHome?,
     onAlbum: (MusicAlbum) -> Unit,
     onPlay: (MusicTrack, List<MusicTrack>) -> Unit,
+    onPlaylist: (MusicPlaylist) -> Unit,
     onBack: () -> Unit
 ) {
     MusicImmersiveSystemBars()
@@ -110,7 +111,7 @@ fun MusicLibraryScreen(
                 item {
                     LazyRow(contentPadding = PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(playlists, key = { it.id }) { playlist ->
-                            PlaylistCard(playlist, palette.accent) { playlist.tracks.firstOrNull()?.let { onPlay(it, playlist.tracks) } }
+                            PlaylistCard(playlist, palette.accent) { onPlaylist(playlist) }
                         }
                     }
                 }
@@ -222,6 +223,45 @@ fun MusicLibraryScreen(
     }
 }
 
+@Composable
+fun MusicPlaylistScreen(playlist: MusicPlaylist, onBack: () -> Unit, onPlay: (MusicTrack, List<MusicTrack>) -> Unit) {
+    MusicImmersiveSystemBars()
+    val context = LocalContext.current
+    val api = remember { LanflixApiClient.getInstance(context) }
+    var current by remember(playlist.id) { mutableStateOf(playlist) }
+    LaunchedEffect(playlist.id) { api.getMusicPlaylist(playlist.id)?.let { current = it } }
+    Box(Modifier.fillMaxSize().background(Color(0xFF0B0712))) {
+        LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 36.dp)) {
+            item {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
+                    Column(Modifier.padding(start = 8.dp)) {
+                        Text("Playlist", color = Color.White.copy(alpha = .68f), fontSize = 12.sp)
+                        Text(current.name, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Button(onClick = { current.tracks.firstOrNull()?.let { onPlay(it, current.tracks) } }, enabled = current.tracks.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) {
+                    Icon(Icons.Filled.PlayArrow, null); Spacer(Modifier.width(6.dp)); Text("Play playlist", fontWeight = FontWeight.Bold)
+                }
+            }
+            if (current.tracks.isEmpty()) item { Text("This playlist is empty.", color = LanflixMuted, modifier = Modifier.padding(24.dp)) }
+            items(current.tracks, key = { it.id }) { track ->
+                Row(Modifier.fillMaxWidth().clickable { onPlay(track, current.tracks) }.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AlbumArtwork(track.album, null, Modifier.size(48.dp))
+                    Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                        Text(track.title, color = Color.White, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(track.artist.name, color = LanflixMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(formatTrackDuration(track.durationMilliseconds), color = LanflixMuted, fontSize = 11.sp)
+                    Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.padding(start = 10.dp))
+                }
+            }
+        }
+    }
+}
+
 @Composable private fun TrackCard(track: MusicTrack, token: String?, accent: Color, onClick: () -> Unit) {
     Column(Modifier.width(126.dp).clickable(onClick = onClick)) {
         Box {
@@ -236,4 +276,9 @@ private fun musicArtworkRequest(path: String?, token: String?, context: android.
     if (path.isNullOrBlank()) return null
     val url = if (path.startsWith("http")) path else "${ServerManager.activeServerUrl}$path"
     return ImageRequest.Builder(context).data(url).apply { if (!token.isNullOrBlank()) addHeader("Authorization", "Bearer $token") }.build()
+}
+
+private fun formatTrackDuration(milliseconds: Long): String {
+    val seconds = (milliseconds / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(seconds / 60, seconds % 60)
 }

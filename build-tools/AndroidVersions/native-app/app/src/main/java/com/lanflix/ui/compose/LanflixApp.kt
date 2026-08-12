@@ -56,6 +56,7 @@ import androidx.activity.compose.BackHandler
 import com.lanflix.models.ContentItem
 import com.lanflix.api.MusicAlbum
 import com.lanflix.api.MusicTrack
+import com.lanflix.api.MusicPlaylist
 import com.lanflix.music.MusicPlaybackController
 import com.lanflix.webview.ServerBrowserActivity
 import com.lanflix.webview.ServerManager
@@ -82,6 +83,7 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
     var musicAlbum by remember { mutableStateOf<MusicAlbum?>(null) }
     var musicTrack by remember { mutableStateOf<MusicTrack?>(null) }
     var musicQueue by remember { mutableStateOf<List<MusicTrack>>(emptyList()) }
+    var musicPlaylist by remember { mutableStateOf<MusicPlaylist?>(null) }
     var libraryFilter by remember { mutableStateOf("Movies") }
     var musicHomeVisible by remember { mutableStateOf(false) }
     val currentOverlay = overlayStack.lastOrNull()
@@ -121,11 +123,12 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
         return
     }
 
-    BackHandler(enabled = playerItem != null || musicTrack != null || musicAlbum != null || detail != null || musicHomeVisible || profileMenuVisible || overlayStack.isNotEmpty()) {
+    BackHandler(enabled = playerItem != null || musicTrack != null || musicAlbum != null || musicPlaylist != null || detail != null || musicHomeVisible || profileMenuVisible || overlayStack.isNotEmpty()) {
         when {
             playerItem != null -> playerItem = null
             musicTrack != null -> musicTrack = null
             musicAlbum != null -> musicAlbum = null
+            musicPlaylist != null -> musicPlaylist = null
             detail != null -> detail = null
             musicHomeVisible -> musicHomeVisible = false
             profileMenuVisible -> profileMenuVisible = false
@@ -141,6 +144,11 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                 musicAlbum != null -> MusicAlbumScreen(
                     album = musicAlbum!!,
                     onBack = { musicAlbum = null },
+                    onPlay = { track, queue -> musicQueue = queue; musicTrack = track }
+                )
+                musicPlaylist != null -> MusicPlaylistScreen(
+                    playlist = musicPlaylist!!,
+                    onBack = { musicPlaylist = null },
                     onPlay = { track, queue -> musicQueue = queue; musicTrack = track }
                 )
                 detail != null -> DetailScreen(
@@ -208,6 +216,7 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                             music = state.music,
                             onAlbum = { musicAlbum = it },
                             onPlay = { track, queue -> musicQueue = queue; musicTrack = track },
+                            onPlaylist = { musicPlaylist = it },
                             onBack = { musicHomeVisible = false }
                         )
                     } else AnimatedContent(targetState = destination, label = "main-destination") { target ->
@@ -306,7 +315,7 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                         }
                     }
                     if (musicHomeVisible && musicPlayback.currentTrack != null) {
-                        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 58.dp)) {
+                        Box(Modifier.align(Alignment.BottomCenter)) {
                             MusicMiniPlayer(musicPlayback) {
                                 musicQueue = musicPlayback.queue
                                 musicTrack = musicPlayback.currentTrack

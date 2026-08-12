@@ -60,7 +60,7 @@ public sealed class MusicMetadataCacheConfiguration : IEntityTypeConfiguration<M
     {
         b.ToTable("MusicMetadataCaches"); b.HasKey(x => x.Id);
         b.Property(x => x.LookupKey).HasMaxLength(768).IsRequired();
-        b.Property(x => x.ReleaseMusicBrainzId).HasMaxLength(64).IsRequired();
+        b.Property(x => x.ReleaseMusicBrainzId).HasMaxLength(64);
         b.Property(x => x.AlbumArtist).HasMaxLength(512);
         b.Property(x => x.TrackListJson).HasColumnType("TEXT").IsRequired();
         b.HasIndex(x => x.LookupKey).IsUnique();

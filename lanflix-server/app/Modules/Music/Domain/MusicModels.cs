@@ -77,10 +77,11 @@ public sealed class MusicMetadataCache : Entity<long>
 {
     private MusicMetadataCache() { }
     public string LookupKey { get; private set; } = string.Empty;
-    public string ReleaseMusicBrainzId { get; private set; } = string.Empty;
+    public string? ReleaseMusicBrainzId { get; private set; }
     public string? AlbumArtist { get; private set; }
     public string TrackListJson { get; private set; } = "[]";
     public DateTime ResolvedAtUtc { get; private set; }
+    public DateTime? RetryAfterUtc { get; private set; }
 
     public static MusicMetadataCache Create(string lookupKey, string releaseMusicBrainzId, string? albumArtist, string trackListJson) => new()
     {
@@ -89,10 +90,15 @@ public sealed class MusicMetadataCache : Entity<long>
         ResolvedAtUtc = DateTime.UtcNow
     };
 
+    public static MusicMetadataCache CreateUnavailable(string lookupKey, DateTime retryAfterUtc) => new()
+    {
+        LookupKey = Require(lookupKey), TrackListJson = "[]", ResolvedAtUtc = DateTime.UtcNow, RetryAfterUtc = retryAfterUtc
+    };
+
     public void Refresh(string releaseMusicBrainzId, string? albumArtist, string trackListJson)
     {
         ReleaseMusicBrainzId = Require(releaseMusicBrainzId); AlbumArtist = BlankToNull(albumArtist);
-        TrackListJson = string.IsNullOrWhiteSpace(trackListJson) ? "[]" : trackListJson; ResolvedAtUtc = DateTime.UtcNow; MarkUpdated();
+        TrackListJson = string.IsNullOrWhiteSpace(trackListJson) ? "[]" : trackListJson; ResolvedAtUtc = DateTime.UtcNow; RetryAfterUtc = null; MarkUpdated();
     }
 
     private static string Require(string value) => string.IsNullOrWhiteSpace(value) ? throw new ArgumentException("Music metadata value is required.", nameof(value)) : value.Trim();

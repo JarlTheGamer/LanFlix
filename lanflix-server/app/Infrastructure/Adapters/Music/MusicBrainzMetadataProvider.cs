@@ -26,15 +26,26 @@ internal sealed class MusicBrainzMetadataProvider(
             return null;
 
         var key = LookupKey(hint.AlbumTitle, hint.Year);
-        var cached = await db.MusicMetadataCaches.AsNoTracking().SingleOrDefaultAsync(x => x.LookupKey == key, ct);
-        if (cached is not null)
+        var cached = await db.MusicMetadataCaches.SingleOrDefaultAsync(x => x.LookupKey == key, ct);
+        if (cached is not null && cached.RetryAfterUtc is { } retryAfter && retryAfter > DateTime.UtcNow)
+            return null;
+        if (cached is not null && !string.IsNullOrWhiteSpace(cached.ReleaseMusicBrainzId))
             return Match(cached.ReleaseMusicBrainzId, cached.AlbumArtist, DeserializeTracks(cached.TrackListJson), hint);
 
         var release = await FindReleaseAsync(hint.AlbumTitle, hint.Year, ct);
-        if (release is null) return null;
+        if (release is null)
+        {
+            if (cached is null)
+            {
+                db.MusicMetadataCaches.Add(MusicMetadataCache.CreateUnavailable(key, DateTime.UtcNow.AddHours(24)));
+                await db.SaveChangesAsync(ct);
+            }
+            return null;
+        }
 
         var trackListJson = JsonSerializer.Serialize(release.Tracks);
-        db.MusicMetadataCaches.Add(MusicMetadataCache.Create(key, release.Id, release.Artist, trackListJson));
+        if (cached is null) db.MusicMetadataCaches.Add(MusicMetadataCache.Create(key, release.Id, release.Artist, trackListJson));
+        else cached.Refresh(release.Id, release.Artist, trackListJson);
         await db.SaveChangesAsync(ct);
         return Match(release.Id, release.Artist, release.Tracks, hint);
     }

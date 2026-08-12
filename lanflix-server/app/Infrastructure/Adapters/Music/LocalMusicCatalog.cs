@@ -36,7 +36,7 @@ internal sealed partial class LocalMusicCatalog(
         return await MapAlbumsAsync(await albums.OrderByDescending(x => x.Year).ThenBy(x => x.Title).Take(limit).ToListAsync(ct), ct);
     }
 
-    public async Task<IReadOnlyList<MusicTrackDto>> GetAlbumTracksAsync(long albumId, CancellationToken ct) => await MapTracksAsync(await db.MusicTracks.AsNoTracking().Where(x => x.AlbumId == albumId).OrderBy(x => x.DiscNumber).ThenBy(x => x.TrackNumber).ToListAsync(ct), ct);
+    public async Task<IReadOnlyList<MusicTrackDto>> GetAlbumTracksAsync(long albumId, CancellationToken ct) => await MapTracksAsync(await db.MusicTracks.AsNoTracking().Where(x => x.AlbumId == albumId).OrderBy(x => x.DiscNumber).ThenBy(x => x.TrackNumber).ThenBy(x => x.Title).ToListAsync(ct), ct);
 
     public async Task<IReadOnlyList<MusicTrackDto>> GetTracksByIdsAsync(IReadOnlyCollection<long> ids, CancellationToken ct)
     {
@@ -135,7 +135,7 @@ internal sealed partial class LocalMusicCatalog(
             var discovered = EnumerateFiles(roots);
             logger.LogInformation("Music scan found {FileCount} supported files beneath {Roots}", discovered.Count, roots);
             var forceMetadataRefresh = !string.Equals(
-                await settings.GetSettingAsync("Lanflix:Music:ScannerVersion", ct), "3", StringComparison.Ordinal);
+                await settings.GetSettingAsync("Lanflix:Music:ScannerVersion", ct), "4", StringComparison.Ordinal);
             var existing = await db.MusicTracks.ToDictionaryAsync(x => x.FilePath, PathComparer(), ct);
             var artists = await db.MusicArtists.ToDictionaryAsync(x => x.NormalizedName, StringComparer.Ordinal, ct);
             var albums = await db.MusicAlbums.ToListAsync(ct);
@@ -217,7 +217,7 @@ internal sealed partial class LocalMusicCatalog(
                 !db.MusicTracks.Any(track => track.ArtistId == artist.Id)).ToArrayAsync(ct);
             if (orphanArtists.Length > 0) { db.MusicArtists.RemoveRange(orphanArtists); await db.SaveChangesAsync(ct); }
             var result = new MusicScanResult(imported, updated, missing.Length, skipped, orphanAlbums.Length, orphanArtists.Length);
-            await settings.UpdateSettingAsync("Lanflix:Music:ScannerVersion", "3", ct);
+            await settings.UpdateSettingAsync("Lanflix:Music:ScannerVersion", "4", ct);
             logger.LogInformation("Music scan completed: {Imported} imported, {Updated} updated, {Removed} removed, {Skipped} skipped", result.Imported, result.Updated, result.Removed, result.Skipped);
             return result;
         }
