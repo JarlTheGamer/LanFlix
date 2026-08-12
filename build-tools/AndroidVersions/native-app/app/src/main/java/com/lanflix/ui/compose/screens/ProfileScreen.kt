@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -51,6 +52,9 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.lanflix.api.LanflixApiClient
+import com.lanflix.api.MusicListeningStats
 import com.lanflix.api.SocialActivity
 import com.lanflix.api.WatchHistoryItem
 import com.lanflix.auth.LanflixAccount
@@ -86,17 +91,31 @@ fun ProfileScreen(
     val context = LocalContext.current
     val api = remember(context) { LanflixApiClient.getInstance(context) }
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
     var avatarVersion by remember { mutableStateOf(System.currentTimeMillis()) }
     var backdropVersion by remember { mutableStateOf(System.currentTimeMillis()) }
     var watchHistory by remember { mutableStateOf<List<WatchHistoryItem>>(emptyList()) }
     var myActivity by remember { mutableStateOf<List<SocialActivity>>(emptyList()) }
+    var listeningStats by remember { mutableStateOf(MusicListeningStats()) }
 
-    LaunchedEffect(Unit) {
+    suspend fun refreshProfileData() {
+        val history = api.getWatchHistory()
+        watchHistory = history
+        myActivity = api.getMySocialActivity()
+        listeningStats = api.getMusicListeningStats() ?: MusicListeningStats()
+    }
+
+    LaunchedEffect(account?.id) {
         scope.launch(Dispatchers.IO) {
-            val history = api.getWatchHistory()
-            watchHistory = history
-            myActivity = api.getMySocialActivity()
+            refreshProfileData()
         }
+    }
+    DisposableEffect(lifecycleOwner, account?.id) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) scope.launch(Dispatchers.IO) { refreshProfileData() }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val avatarLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -247,6 +266,7 @@ fun ProfileScreen(
                         Stat(watchHistory.size.toString(), "Watched")
                         Stat(watchHistory.count { it.kind == "movie" }.toString(), "Movies")
                         Stat(watchHistory.count { it.kind == "episode" }.toString(), "Episodes")
+                        Stat(listeningStats.listens.toString(), "Listens")
                     }
                 }
                 if (watchHistory.isNotEmpty()) {
@@ -287,7 +307,21 @@ fun ProfileScreen(
                     Text("Recent Activity", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
                     myActivity.take(3).forEach { entry ->
                         Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), shape = RoundedCornerShape(14.dp), color = Color.White.copy(alpha = .07f)) {
-                            Column(Modifier.padding(13.dp)) { Text(entry.kind.replaceFirstChar { it.uppercase() }, color = LanflixGold, fontWeight = FontWeight.Bold, fontSize = 11.sp); Text(entry.body ?: "Media activity", color = Color.White.copy(alpha = .84f), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                            Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                AsyncImage(
+                                    model = entry.contentPosterUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" },
+                                    contentDescription = entry.contentTitle,
+                                    modifier = Modifier.size(56.dp, 68.dp).clip(RoundedCornerShape(9.dp)).background(Color.White.copy(alpha = .08f)),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Column(Modifier.padding(start = 11.dp).weight(1f)) {
+                                    Text(entry.kind.replaceFirstChar { it.uppercase() }, color = LanflixGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    Text(
+                                        entry.body ?: entry.contentTitle?.let { "Watched $it" } ?: "Media activity",
+                                        color = Color.White.copy(alpha = .84f), maxLines = 2, overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
                         }
                     }
                 }

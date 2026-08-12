@@ -204,6 +204,7 @@ class LanflixApiClient(context: Context, private val baseUrl: String = ServerMan
     suspend fun getMusicLyrics(trackId: Long): MusicLyrics? = get("/api/v2/music/tracks/$trackId/lyrics", true, MusicLyrics::class.java)
     suspend fun getMusicWaveform(trackId: Long): MusicWaveform? = get("/api/v2/music/tracks/$trackId/waveform", true, MusicWaveform::class.java)
     suspend fun getMusicFavorites(): List<MusicTrack> = getList("/api/v2/music/favorites")
+    suspend fun getMusicListeningStats(): MusicListeningStats? = get("/api/v2/music/me/stats", true, MusicListeningStats::class.java)
     suspend fun setMusicFavorite(trackId: Long, favorite: Boolean): Boolean =
         mutate(if (favorite) "PUT" else "DELETE", "/api/v2/music/favorites/$trackId")
     suspend fun getMusicPlaylists(): List<MusicPlaylist> = getList("/api/v2/music/playlists")

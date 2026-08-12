@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lanflix.api.AccountSession
 import com.lanflix.api.LanflixApiClient
@@ -35,6 +36,7 @@ import com.lanflix.api.SocialRelationship
 import com.lanflix.auth.LanflixAccount
 import com.lanflix.settings.DevicePreferences
 import com.lanflix.settings.DevicePreferencesRepository
+import com.lanflix.webview.ServerManager
 import kotlinx.coroutines.launch
 
 @Composable
@@ -342,17 +344,12 @@ private fun FeedCard(
         Column(Modifier.fillMaxWidth().padding(15.dp)) {
             // ─ Author row ─────────────────────────────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Avatar initial
-                Box(
-                    modifier = Modifier.size(38.dp).clip(CircleShape)
-                        .background(LanflixGold.copy(alpha = 0.18f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = activity.author.displayName.firstOrNull()?.uppercase() ?: "?",
-                        color = LanflixGold, fontSize = 16.sp, fontWeight = FontWeight.Bold
-                    )
-                }
+                AsyncImage(
+                    model = activity.author.avatarUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" },
+                    contentDescription = activity.author.displayName,
+                    modifier = Modifier.size(38.dp).clip(CircleShape).background(Color.White.copy(alpha = .12f)),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
                 Column(Modifier.padding(start = 10.dp).weight(1f)) {
                     Text(activity.author.displayName, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     Text(kindLabel, color = kindColor, fontSize = 11.sp)
@@ -378,6 +375,24 @@ private fun FeedCard(
                     fontSize = 14.sp,
                     modifier = Modifier.padding(top = 10.dp)
                 )
+            }
+            activity.contentTitle?.let { title ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 11.dp)
+                        .clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = .06f)).padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AsyncImage(
+                        model = activity.contentPosterUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" },
+                        contentDescription = title,
+                        modifier = Modifier.size(44.dp, 58.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = .08f)),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                    Column(Modifier.padding(start = 10.dp)) {
+                        Text(title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("$kindLabel this title", color = LanflixMuted, fontSize = 11.sp)
+                    }
+                }
             }
 
             // ─ Reactions row ──────────────────────────────────────────────

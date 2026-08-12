@@ -24,10 +24,11 @@ data class PlaybackSubtitle(val index: Int = 0, val language: String = "und", va
 data class PlaybackProgress(val mediaKind: String = "", val mediaId: Int = 0, val positionMilliseconds: Long = 0L,
     val durationMilliseconds: Long = 0L, val percentage: Double = 0.0, val completed: Boolean = false)
 
-data class SocialAuthor(val id: String = "", val displayName: String = "")
+data class SocialAuthor(val id: String = "", val displayName: String = "", val avatarUrl: String? = null)
 data class SocialActivity(val id: String = "", val author: SocialAuthor = SocialAuthor(), val kind: String = "",
     val contentId: Int? = null, val reviewId: String? = null, val body: String? = null, val visibility: String = "friends",
-    val commentCount: Int = 0, val reactionCount: Int = 0, val createdAtUtc: String = "")
+    val commentCount: Int = 0, val reactionCount: Int = 0, val createdAtUtc: String = "",
+    val contentTitle: String? = null, val contentPosterUrl: String? = null)
 data class SocialNotification(val id: String = "", val actor: SocialAuthor? = null, val kind: String = "",
     val resourceType: String = "", val resourceId: String = "", val isRead: Boolean = false, val createdAtUtc: String = "")
 data class SocialReview(val id: String = "", val author: SocialAuthor = SocialAuthor(), val contentId: Int = 0,
@@ -42,6 +43,7 @@ data class UnreadCount(val count: Int = 0)
 data class MusicArtist(val id: Long = 0, val name: String = "", val artworkUrl: String? = null)
 data class MusicAlbum(val id: Long = 0, val title: String = "", val year: Int? = null, val artist: MusicArtist = MusicArtist(), val artworkUrl: String? = null, val trackCount: Int = 0)
 data class MusicHome(val recentlyAdded: List<MusicAlbum> = emptyList(), val artists: List<MusicArtist> = emptyList())
+data class MusicListeningStats(val listens: Int = 0, val completedTracks: Int = 0)
 data class MusicTrack(val id: Long = 0, val title: String = "", val trackNumber: Int = 0, val discNumber: Int? = null,
     val durationMilliseconds: Long = 0, val genres: List<String> = emptyList(), val codec: String = "",
     val bitrateKbps: Int? = null, val sampleRateHz: Int? = null, val channels: Int? = null,

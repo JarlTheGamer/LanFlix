@@ -5,13 +5,14 @@ public enum RelationshipKind { Follow, Friend }
 public enum RelationshipStatus { Pending, Accepted }
 public enum ReportStatus { Open, Resolved, Dismissed }
 
-public sealed record SocialAccountDto(Guid Id, string DisplayName, string Role);
-public sealed record SocialAuthorDto(Guid Id, string DisplayName);
+public sealed record SocialAccountDto(Guid Id, string DisplayName, string Role, string? AvatarUrl = null);
+public sealed record SocialAuthorDto(Guid Id, string DisplayName, string? AvatarUrl = null);
 public sealed record SocialRelationshipDto(Guid Id, SocialAccountDto Account, string Kind, string Status, bool Incoming, DateTime CreatedAtUtc);
 public sealed record SocialReviewDto(Guid Id, SocialAuthorDto Author, int ContentId, int Rating, string? Body, string Visibility, DateTime UpdatedAtUtc);
 public sealed record SocialCommentDto(Guid Id, SocialAuthorDto Author, string Body, DateTime CreatedAtUtc);
 public sealed record SocialActivityDto(Guid Id, SocialAuthorDto Author, string Kind, int? ContentId, Guid? ReviewId,
-    string? Body, string Visibility, int CommentCount, int ReactionCount, DateTime CreatedAtUtc);
+    string? Body, string Visibility, int CommentCount, int ReactionCount, DateTime CreatedAtUtc,
+    string? ContentTitle = null, string? ContentPosterUrl = null);
 public sealed record SocialNotificationDto(Guid Id, SocialAuthorDto? Actor, string Kind, string ResourceType,
     string ResourceId, bool IsRead, DateTime CreatedAtUtc);
 public sealed record SocialReportDto(Guid Id, Guid ReporterAccountId, string TargetType, string TargetId,
@@ -30,7 +31,10 @@ public interface ISocialResourceDirectory
     Task<bool> AccountExistsAsync(Guid accountId, CancellationToken cancellationToken);
     Task<bool> MediaExistsAsync(int contentId, CancellationToken cancellationToken);
     Task<IReadOnlyDictionary<Guid, SocialAccountDto>> GetAccountsAsync(IEnumerable<Guid> accountIds, CancellationToken cancellationToken);
+    Task<IReadOnlyDictionary<int, SocialMediaDto>> GetMediaAsync(IEnumerable<int> contentIds, CancellationToken cancellationToken);
 }
+
+public sealed record SocialMediaDto(int Id, string Title);
 
 public interface ISocialNotificationPublisher
 {

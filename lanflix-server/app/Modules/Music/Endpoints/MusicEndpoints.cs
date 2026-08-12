@@ -27,6 +27,7 @@ public static class MusicEndpoints
         music.MapPut("/favorites/{trackId:long}", AddFavoriteAsync);
         music.MapDelete("/favorites/{trackId:long}", RemoveFavoriteAsync);
         music.MapGet("/history", GetHistoryAsync);
+        music.MapGet("/me/stats", GetListeningStatsAsync);
         music.MapGet("/queue", GetQueueAsync);
         music.MapPut("/queue", ReplaceQueueAsync);
         music.MapDelete("/queue", ClearQueueAsync);
@@ -59,6 +60,14 @@ public static class MusicEndpoints
 
     private static async Task<IResult> GetHistoryAsync(int? limit, ClaimsPrincipal user, IMusicDbContext db, IMusicCatalog catalog, CancellationToken ct)
     { var ids = await db.MusicPlayHistory.AsNoTracking().Where(x => x.AccountId == AccountId(user)).OrderByDescending(x => x.PlayedAtUtc).Take(Math.Clamp(limit ?? 50, 1, 200)).Select(x => x.TrackId).ToArrayAsync(ct); return Results.Ok(await catalog.GetTracksByIdsAsync(ids.Distinct().ToArray(), ct)); }
+
+    private static async Task<IResult> GetListeningStatsAsync(ClaimsPrincipal user, IMusicDbContext db, CancellationToken ct)
+    {
+        var accountId = AccountId(user);
+        var listens = await db.MusicPlayHistory.AsNoTracking().CountAsync(x => x.AccountId == accountId, ct);
+        var completed = await db.MusicPlayHistory.AsNoTracking().CountAsync(x => x.AccountId == accountId && x.Completed, ct);
+        return Results.Ok(new MusicListeningStatsDto(listens, completed));
+    }
 
     private static async Task<IResult> GetQueueAsync(ClaimsPrincipal user, IMusicDbContext db, IMusicCatalog catalog, CancellationToken ct)
     { var ids = await db.MusicQueueItems.AsNoTracking().Where(x => x.AccountId == AccountId(user)).OrderBy(x => x.Position).Select(x => x.TrackId).ToArrayAsync(ct); return Results.Ok(await catalog.GetTracksByIdsAsync(ids, ct)); }

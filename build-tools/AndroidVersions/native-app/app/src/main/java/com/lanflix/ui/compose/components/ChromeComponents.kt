@@ -34,12 +34,20 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.request.CachePolicy
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import com.lanflix.auth.LanflixAccount
+import com.lanflix.webview.ServerManager
 import com.lanflix.ui.compose.LanflixGold
 import com.lanflix.ui.compose.LanflixMuted
 import com.lanflix.ui.compose.navigation.Destination
 
 @Composable
-fun TopChrome(title: String, online: Boolean, onSearch: () -> Unit, onProfile: () -> Unit, onCast: () -> Unit) {
+fun TopChrome(title: String, online: Boolean, account: LanflixAccount?, onSearch: () -> Unit, onProfile: () -> Unit, onCast: () -> Unit) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -65,9 +73,16 @@ fun TopChrome(title: String, online: Boolean, onSearch: () -> Unit, onProfile: (
                 modifier = Modifier.size(38.dp).clickable(onClick = onProfile),
                 contentAlignment = Alignment.Center
             ) {
-                Box(Modifier.size(27.dp).clip(CircleShape).background(LanflixGold), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Person, "Profile", tint = Color.Black, modifier = Modifier.size(17.dp))
-                }
+                AsyncImage(
+                    model = account?.id?.let {
+                        ImageRequest.Builder(context)
+                            .data("${ServerManager.activeServerUrl}/api/v2/accounts/$it/avatar")
+                            .memoryCachePolicy(CachePolicy.DISABLED)
+                            .build()
+                    },
+                    contentDescription = "Profile", contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(27.dp).clip(CircleShape).background(LanflixGold)
+                )
             }
         }
     }

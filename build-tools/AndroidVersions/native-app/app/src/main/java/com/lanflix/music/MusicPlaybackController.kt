@@ -57,6 +57,7 @@ class MusicPlaybackController private constructor(context: Context) {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val index = player.currentMediaItemIndex.takeIf { it >= 0 } ?: -1
                 publish(currentIndex = index, position = 0)
+                recordCurrent(completed = false)
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) recordCurrent(completed = true)
@@ -88,6 +89,7 @@ class MusicPlaybackController private constructor(context: Context) {
         player.setMediaItems(mediaItems, selectedIndex, 0)
         player.prepare()
         player.play()
+        recordCurrent(completed = false)
         scope.launch(Dispatchers.IO) { api.replaceMusicQueue(playable.map { it.id }) }
     }
 

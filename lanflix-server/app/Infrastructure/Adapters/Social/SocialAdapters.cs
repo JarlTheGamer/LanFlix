@@ -19,9 +19,27 @@ internal sealed class SocialResourceDirectory(ApplicationDbContext db) : ISocial
     {
         var ids = accountIds.Distinct().ToArray();
         if (ids.Length == 0) return new Dictionary<Guid, SocialAccountDto>();
-        return await db.Accounts.AsNoTracking().Where(x => ids.Contains(x.Id))
-            .Select(x => new SocialAccountDto(x.Id, x.DisplayName, x.Role.ToString()))
-            .ToDictionaryAsync(x => x.Id, cancellationToken);
+        var accounts = await db.Accounts.AsNoTracking().Where(x => ids.Contains(x.Id))
+            .Select(x => new { x.Id, x.DisplayName, x.Role }).ToArrayAsync(cancellationToken);
+        return accounts.ToDictionary(
+            x => x.Id,
+            x => new SocialAccountDto(x.Id, x.DisplayName, x.Role.ToString(), AvatarUrl(x.Id)));
+    }
+
+    public async Task<IReadOnlyDictionary<int, SocialMediaDto>> GetMediaAsync(IEnumerable<int> contentIds, CancellationToken cancellationToken)
+    {
+        var ids = contentIds.Distinct().ToArray();
+        if (ids.Length == 0) return new Dictionary<int, SocialMediaDto>();
+        return await db.Contents.AsNoTracking().Where(x => ids.Contains(x.Id))
+            .Select(x => new SocialMediaDto(x.Id, x.Title)).ToDictionaryAsync(x => x.Id, cancellationToken);
+    }
+
+    private static string AvatarUrl(Guid accountId)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "config", "avatars", $"{accountId:N}_pfp.jpg");
+        return File.Exists(path)
+            ? $"/api/v2/accounts/{accountId}/avatar?v={File.GetLastWriteTimeUtc(path).Ticks}"
+            : $"/api/v2/accounts/{accountId}/avatar";
     }
 }
 

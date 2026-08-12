@@ -157,7 +157,7 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                     downloading = "${detail!!.type}:${detail!!.id}" in state.downloading,
                     onBack = { detail = null },
                     onPlay = { playerItem = detail },
-                    onPlayEpisode = { episode -> playerItem = episode.asContentItem(detail!!) },
+                    onPlayEpisode = { episode -> detail = episode.asContentItem(detail!!) },
                     onDownload = { viewModel.download(detail!!) { saved -> if (saved != null) detail = saved } },
                     onCast = { startCastFlow(it) }
                 )
@@ -249,6 +249,7 @@ fun LanflixApp(viewModel: LanflixViewModel = viewModel()) {
                         TopChrome(
                             title = if (destination == Destination.Home) "lanflix" else destination.label,
                             online = state.online,
+                            account = state.account,
                             onSearch = { openOverlay(AppOverlay.Search) },
                             onProfile = { profileMenuVisible = !profileMenuVisible },
                             onCast = { startCastFlow(null) }

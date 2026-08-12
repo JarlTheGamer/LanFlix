@@ -101,6 +101,7 @@ fun DetailScreen(
     onCast: (ContentItem) -> Unit = {}
 ) {
     val isPlayableType = item.type.equals("movie", true) || item.type.equals("episode", true)
+    val isEpisode = item.type.equals("episode", true)
     val isDiscovery = item.id < 0 && item.tmdbId > 0
     val canPlay = isPlayableType && (item.isOfflinePlayable || (online && item.serverAvailable))
     val context = LocalContext.current
@@ -115,9 +116,9 @@ fun DetailScreen(
     val reviewTargetId = if (item.id > 0) item.id else item.tmdbId
     LaunchedEffect(item.id, reviewTargetId) {
         targetPalette = DefaultArtworkPalette
-        if (reviewTargetId > 0) reviews = discoveryApi.getReviews(reviewTargetId)
-        if (item.id > 0) contentActivity = discoveryApi.getContentActivity(item.id)
-        if (item.id > 0) castMembers = discoveryApi.getCast(item.id)
+        if (!isEpisode && reviewTargetId > 0) reviews = discoveryApi.getReviews(reviewTargetId)
+        if (!isEpisode && item.id > 0) contentActivity = discoveryApi.getContentActivity(item.id)
+        if (!isEpisode && item.id > 0) castMembers = discoveryApi.getCast(item.id)
     }
     val artworkPalette = targetPalette
     val scope = rememberCoroutineScope()
@@ -243,16 +244,17 @@ fun DetailScreen(
                             enabled = isPlayableType && online && !item.isOfflinePlayable && !downloading,
                             onClick = onDownload
                         )
-                        DetailAction(Icons.Filled.Star, "Rate", enabled = item.id > 0, onClick = { showRateSheet = true })
-                        DetailAction(Icons.Filled.Cast, "Cast", enabled = online, onClick = { onCast(item) })
+                        if (!isDiscovery && !isEpisode) DetailAction(Icons.Filled.Star, "Rate", onClick = { showRateSheet = true })
+                        if (!isDiscovery && !isEpisode) DetailAction(Icons.Filled.Cast, "Cast", enabled = online, onClick = { onCast(item) })
                     }
                     if (item.type.equals("series", true)) {
-                        SeriesEpisodeBrowser(item = item, online = online, onPlayEpisode = onPlayEpisode)
+                        SeriesEpisodeBrowser(item = item, online = online, onOpenEpisode = onPlayEpisode)
                     }
                     Text(item.overview ?: "No overview available.", color = Color.White.copy(alpha = .88f), fontSize = 14.sp, lineHeight = 20.sp)
                     Text(if (isDiscovery) "Available to request through your Lanflix server" else "Available from your Lanflix server", color = LanflixMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
 
                     // ─ Social Activity Row ───────────────────────────────────────────
+                    if (!isEpisode) {
                     Text("Activity", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(top = 18.dp, bottom = 8.dp))
                     if (contentActivity.isEmpty()) {
@@ -260,9 +262,12 @@ fun DetailScreen(
                     } else {
                         contentActivity.take(3).forEach { entry ->
                             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(30.dp).clip(CircleShape).background(LanflixGold), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Filled.Person, null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                                }
+                                AsyncImage(
+                                    model = entry.author.avatarUrl?.let { if (it.startsWith("http")) it else "${ServerManager.activeServerUrl}$it" },
+                                    contentDescription = entry.author.displayName,
+                                    modifier = Modifier.size(30.dp).clip(CircleShape).background(Color.White.copy(alpha = .12f)),
+                                    contentScale = ContentScale.Crop
+                                )
                                 Column(Modifier.padding(start = 10.dp)) {
                                     Text(entry.author.displayName, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                     Text(entry.body?.takeIf { it.isNotBlank() } ?: entry.kind.replaceFirstChar { it.uppercase() },
@@ -270,6 +275,7 @@ fun DetailScreen(
                                 }
                             }
                         }
+                    }
                     }
 
                     // ─ Cast & Crew ───────────────────────────────────────────────────
@@ -326,7 +332,8 @@ fun DetailScreen(
                         }
                     }
                     // ─ Reviews ───────────────────────────────────────────────
-                    Text("Reviews", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+                    if (!isEpisode) Text("Reviews", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+                    if (!isEpisode) {
                     if (reviews.isEmpty()) {
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
@@ -386,6 +393,7 @@ fun DetailScreen(
                                 }
                             }
                         }
+                    }
                     }
                 }
             }

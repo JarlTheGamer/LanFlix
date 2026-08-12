@@ -18,6 +18,7 @@ public sealed record RenamePlaylistRequest(string Name);
 public sealed record AddPlaylistTrackRequest(long TrackId);
 public sealed record ReplaceQueueRequest(IReadOnlyList<long> TrackIds);
 public sealed record RecordPlayRequest(long PositionMilliseconds, bool Completed);
+public sealed record MusicListeningStatsDto(int Listens, int CompletedTracks);
 
 public interface IMusicCatalog
 {

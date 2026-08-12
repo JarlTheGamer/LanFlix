@@ -137,6 +137,7 @@ data class EpisodeItem(
         posterUrl = resolvedStillUrl,
         backdropUrl = series.resolvedBackdropUrl,
         releaseDate = airDate,
-        type = "episode"
+        type = "episode",
+        serverAvailable = hasFile
     )
 }

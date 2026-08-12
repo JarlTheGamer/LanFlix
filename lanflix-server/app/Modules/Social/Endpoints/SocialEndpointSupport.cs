@@ -33,7 +33,7 @@ internal static class SocialEndpointSupport
     }
 
     public static SocialAuthorDto Author(Guid id, IReadOnlyDictionary<Guid, SocialAccountDto> accounts) =>
-        accounts.TryGetValue(id, out var account) ? new(account.Id, account.DisplayName) : new(id, "Unknown account");
+        accounts.TryGetValue(id, out var account) ? new(account.Id, account.DisplayName, account.AvatarUrl) : new(id, "Unknown account");
 
     public static async Task<SocialNotificationDto> NotifyAsync(
         ISocialDbContext db, ISocialResourceDirectory directory, ISocialNotificationPublisher publisher,

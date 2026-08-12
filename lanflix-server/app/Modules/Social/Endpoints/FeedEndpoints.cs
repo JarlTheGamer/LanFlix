@@ -28,8 +28,11 @@ internal static class FeedEndpoints
         var activities = await db.SocialActivities.AsNoTracking().Where(x => x.AccountId == accountId)
             .OrderByDescending(x => x.CreatedAtUtc).Take(Math.Clamp(limit ?? 50, 1, 200)).ToListAsync(ct);
         var accounts = await directory.GetAccountsAsync([accountId], ct);
+        var media = await directory.GetMediaAsync(activities.Where(x => x.ContentId.HasValue).Select(x => x.ContentId!.Value), ct);
         return Results.Ok(activities.Select(x => new SocialActivityDto(x.Id, SocialEndpointSupport.Author(x.AccountId, accounts), x.Kind,
-            x.ContentId, x.ReviewId, x.Body, x.Visibility.ToString().ToLowerInvariant(), 0, 0, x.CreatedAtUtc)));
+            x.ContentId, x.ReviewId, x.Body, x.Visibility.ToString().ToLowerInvariant(), 0, 0, x.CreatedAtUtc,
+            x.ContentId is { } id && media.TryGetValue(id, out var value) ? value.Title : null,
+            x.ContentId is { } posterId && media.ContainsKey(posterId) ? $"/api/v2/artwork/content/{posterId}/poster" : null)));
     }
 
     private static async Task<IResult> GetFeedAsync(int? offset, int? limit, int? contentId, ClaimsPrincipal user,
@@ -59,9 +62,12 @@ internal static class FeedEndpoints
         var reactions = await db.SocialReactions.AsNoTracking().Where(x => ids.Contains(x.ActivityId))
             .GroupBy(x => x.ActivityId).Select(x => new { Id = x.Key, Count = x.Count() }).ToDictionaryAsync(x => x.Id, x => x.Count, ct);
         var accounts = await directory.GetAccountsAsync(activities.Select(x => x.AccountId), ct);
+        var media = await directory.GetMediaAsync(activities.Where(x => x.ContentId.HasValue).Select(x => x.ContentId!.Value), ct);
         return Results.Ok(activities.Select(x => new SocialActivityDto(x.Id, SocialEndpointSupport.Author(x.AccountId, accounts), x.Kind,
             x.ContentId, x.ReviewId, x.Body, x.Visibility.ToString().ToLowerInvariant(),
-            comments.GetValueOrDefault(x.Id), reactions.GetValueOrDefault(x.Id), x.CreatedAtUtc)));
+            comments.GetValueOrDefault(x.Id), reactions.GetValueOrDefault(x.Id), x.CreatedAtUtc,
+            x.ContentId is { } id && media.TryGetValue(id, out var value) ? value.Title : null,
+            x.ContentId is { } posterId && media.ContainsKey(posterId) ? $"/api/v2/artwork/content/{posterId}/poster" : null)));
     }
 
     private static async Task<IResult> CreatePostAsync(CreatePostRequest request, ClaimsPrincipal user, ISocialDbContext db, CancellationToken ct)

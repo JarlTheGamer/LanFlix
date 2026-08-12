@@ -49,7 +49,7 @@ import com.lanflix.ui.compose.LanflixGold
 import com.lanflix.ui.compose.LanflixMuted
 
 @Composable
-fun SeriesEpisodeBrowser(item: ContentItem, online: Boolean, onPlayEpisode: (EpisodeItem) -> Unit) {
+fun SeriesEpisodeBrowser(item: ContentItem, online: Boolean, onOpenEpisode: (EpisodeItem) -> Unit) {
     val context = LocalContext.current
     val api = remember(item.id) { LanflixApiClient(context) }
     var seasons by remember(item.id) { mutableStateOf<List<SeasonSummary>>(emptyList()) }
@@ -118,7 +118,7 @@ fun SeriesEpisodeBrowser(item: ContentItem, online: Boolean, onPlayEpisode: (Epi
             Text("No seasons were found on this server.", color = LanflixMuted, fontSize = 12.sp)
         }
         episodes.forEach { episode ->
-            EpisodeRow(episode = episode, onClick = { if (episode.hasFile) onPlayEpisode(episode) })
+            EpisodeRow(episode = episode, onClick = { onOpenEpisode(episode) })
         }
     }
 }
@@ -127,7 +127,7 @@ fun SeriesEpisodeBrowser(item: ContentItem, online: Boolean, onPlayEpisode: (Epi
 fun EpisodeRow(episode: EpisodeItem, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(vertical = 5.dp).clip(RoundedCornerShape(13.dp))
-            .background(Color.White.copy(alpha = .065f)).clickable(enabled = episode.hasFile, onClick = onClick).padding(8.dp),
+            .background(Color.White.copy(alpha = .065f)).clickable(onClick = onClick).padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.width(116.dp).height(68.dp).clip(RoundedCornerShape(9.dp)).background(Color.Black.copy(alpha = .22f))) {
