@@ -222,7 +222,11 @@ internal sealed partial class LocalMusicCatalog(
         }
         if (bytes.Length > 20 * 1024 * 1024) return;
         var folder = Path.Combine(AppContext.BaseDirectory, "cache", "music", "artwork"); Directory.CreateDirectory(folder);
-        var path = Path.Combine(folder, $"album-{album.Id}{extension}");
+        // Album IDs are only unique inside one database. Hashing the source
+        // path prevents parallel scans/databases from overwriting each
+        // other's artwork and also invalidates the cache when the source moves.
+        var cacheKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(mediaPath))))[..24].ToLowerInvariant();
+        var path = Path.Combine(folder, $"album-{cacheKey}{extension}");
         if (!File.Exists(path) || new FileInfo(path).Length != bytes.Length) await File.WriteAllBytesAsync(path, bytes, ct);
         if (!string.Equals(album.ArtworkPath, path, StringComparison.OrdinalIgnoreCase)) { album.SetArtwork(path); await db.SaveChangesAsync(ct); }
     }

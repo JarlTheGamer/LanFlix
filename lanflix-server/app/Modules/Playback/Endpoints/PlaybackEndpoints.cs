@@ -78,7 +78,10 @@ public static class PlaybackModule
         if (string.Equals(client, "direct", StringComparison.OrdinalIgnoreCase))
         {
             context.Response.Headers["X-Playback-Mode"] = "DirectPlay";
-            context.Response.Headers["Access-Control-Expose-Headers"] = "X-Playback-Mode";
+            context.Response.Headers["Accept-Ranges"] = "bytes";
+            context.Response.Headers["Cache-Control"] = "private, no-transform";
+            context.Response.Headers["Access-Control-Expose-Headers"] =
+                "X-Playback-Mode, Accept-Ranges, Content-Length, Content-Range";
             return Results.File(source.FilePath, source.MimeType, enableRangeProcessing: true);
         }
         var plan = await playback.GetPlanAsync(source, client ?? "mobile-high", ct);

@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import com.google.gson.Gson
-import com.lanflix.webview.R
 import com.lanflix.webview.ServerManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,10 +19,6 @@ class UpdateChecker(private val context: Context) {
         .build()
     
     private val gson = Gson()
-    
-    // Get server URL from resources
-    private val serverUrl = context.getString(R.string.update_server_url)
-    private val updateEndpoint = serverUrl + context.getString(R.string.update_endpoint)
     
     suspend fun checkForUpdate(): UpdateResponse = withContext(Dispatchers.IO) {
         try {

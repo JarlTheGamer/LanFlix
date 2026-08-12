@@ -99,8 +99,12 @@ public sealed class PlaybackPlannerTests
         var command = new FfmpegCommandBuilder().BuildSegmentBatch(
             new FfmpegSegmentBatch("C:\\media\\movie.mkv", "C:\\temp\\session", 10, 8, 6, plan));
 
+        Assert.Contains("-copyts", command);
         Assert.Contains("-ss 60", command);
-        Assert.Contains("-output_ts_offset 60", command);
+        Assert.Contains("-to 108", command);
+        Assert.Contains("-avoid_negative_ts disabled", command);
+        Assert.Contains("-mpegts_copyts 1", command);
+        Assert.DoesNotContain("-output_ts_offset", command);
         Assert.Contains("-c:v libx264", command);
         Assert.Contains("-force_key_frames", command);
         Assert.Contains("-hls_flags independent_segments+temp_file", command);

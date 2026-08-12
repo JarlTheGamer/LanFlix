@@ -25,9 +25,13 @@ internal sealed class FfmpegCommandBuilder
         var args = new StringBuilder("-hide_banner -loglevel warning -nostdin -y ");
 
         AppendHardwareInput(args, hardware);
+        // Preserve the source timeline across independently generated batches.
+        // Media3 seeks by the timestamps declared in the VOD manifest; resetting
+        // every batch to zero makes a request for minute 20 resume at the start.
+        args.Append("-copyts ");
         args.Append("-ss ").Append(Number(start)).Append(' ');
         args.Append("-i ").Append(Quote(batch.InputPath)).Append(' ');
-        args.Append("-t ").Append(Number(duration)).Append(' ');
+        args.Append("-to ").Append(Number(start + duration)).Append(' ');
         args.Append("-map 0:v:0 -map 0:")
             .Append(plan.AudioStreamIndex?.ToString(CultureInfo.InvariantCulture) ?? "a:0")
             .Append("? -sn -dn ");
@@ -51,12 +55,7 @@ internal sealed class FfmpegCommandBuilder
                 break;
         }
 
-        // Each on-demand batch is encoded independently, but all batches must
-        // retain one continuous media timeline. Without this offset a seek to
-        // segment 200 contains timestamps near zero and Media3 jumps back to
-        // the beginning even though the requested bytes are from minute 20.
-        args.Append("-max_muxing_queue_size 2048 -avoid_negative_ts make_zero ");
-        args.Append("-output_ts_offset ").Append(Number(start)).Append(' ');
+        args.Append("-max_muxing_queue_size 2048 -avoid_negative_ts disabled -mpegts_copyts 1 ");
         args.Append("-f hls -hls_segment_type mpegts -hls_time ").Append(Number(batch.SegmentDuration)).Append(' ');
         args.Append("-hls_list_size 0 -hls_flags independent_segments+temp_file ");
         args.Append("-start_number ").Append(batch.FirstSegment).Append(' ');

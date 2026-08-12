@@ -102,7 +102,6 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
             planLoading = false
         }
     }
-    var initialPositionApplied by remember(item.id) { mutableStateOf(false) }
     DisposableEffect(activity) {
         if (activity == null) return@DisposableEffect onDispose { }
         val previousOrientation = activity.requestedOrientation
@@ -128,14 +127,12 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
             } else {
                 playbackClient
             }
-            val startSeconds = playbackInfo?.progress?.positionMilliseconds?.takeIf { it > 0L }?.div(1000.0)
             val useHls = !playbackInfo?.playbackMode.isNullOrBlank() &&
                 playbackInfo?.playbackMode != "Unknown" &&
                 !playbackInfo?.playbackMode.equals("DirectPlay", ignoreCase = true)
             Uri.parse(buildString {
                 append("${ServerManager.activeServerUrl}/api/v2/playback/$kind/${item.id}/")
                 append(if (useHls) "hls/playlist.m3u8?client=${Uri.encode(client)}" else "file?client=${Uri.encode(client)}")
-                if (startSeconds != null) append("&startTime=$startSeconds")
             })
         }
     }
@@ -207,24 +204,18 @@ fun PlayerScreen(item: ContentItem, onBack: () -> Unit) {
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !playbackPreferences.automaticSubtitles)
                 .build()
             if (mediaItem != null) {
-                setMediaItem(mediaItem)
+                // Install the item and resume position in one operation. A
+                // delayed seek after prepare could overwrite the user's first
+                // 10-second seek while the source timeline was becoming ready.
+                val resumePosition = playbackInfo?.progress?.positionMilliseconds
+                    ?.coerceAtLeast(0L) ?: 0L
+                setMediaItem(mediaItem, resumePosition)
                 prepare()
                 playWhenReady = true
             }
         }
     }
     DisposableEffect(player) { onDispose { player.release() } }
-    LaunchedEffect(player, playbackInfo?.progress?.positionMilliseconds) {
-        val position = playbackInfo?.progress?.positionMilliseconds ?: return@LaunchedEffect
-        if (position > 0L && !initialPositionApplied) {
-            while (player.playbackState == androidx.media3.common.Player.STATE_IDLE ||
-                player.playbackState == androidx.media3.common.Player.STATE_BUFFERING) {
-                delay(50)
-            }
-            player.seekTo(position)
-            initialPositionApplied = true
-        }
-    }
 
     // Track the real video aspect ratio so the zoom ring hugs the video frame,
     // not the black letterbox bars.
