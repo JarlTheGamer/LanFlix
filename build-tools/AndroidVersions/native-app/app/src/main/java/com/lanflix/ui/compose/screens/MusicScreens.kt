@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -29,12 +30,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -123,6 +126,7 @@ fun MusicAlbumScreen(album: MusicAlbum, onBack: () -> Unit, onPlay: (MusicTrack,
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun MusicPlayerScreen(initialTrack: MusicTrack, queue: List<MusicTrack>, onBack: () -> Unit) {
     MusicImmersiveSystemBars()
     val context = LocalContext.current
@@ -164,10 +168,16 @@ fun MusicPlayerScreen(initialTrack: MusicTrack, queue: List<MusicTrack>, onBack:
             } else {
                 AsyncImage(artwork, track.album.title, Modifier.padding(top = 26.dp).fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(24.dp)).background(LanflixSurfaceRaised), contentScale = ContentScale.Crop,
                     onSuccess = { state -> scope.launch { palette = extractArtworkPalette(state.result.drawable) } })
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.height(10.dp))
             }
             Text(track.title, color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${track.artist.name}  •  ${track.album.title}", color = Color.White.copy(alpha = .68f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "${track.artist.name}  •  ${track.album.title}",
+                color = Color.White.copy(alpha = .68f),
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE)
+            )
             MusicWaveform(
                 position = playback.positionMilliseconds,
                 duration = playback.durationMilliseconds,
@@ -218,6 +228,17 @@ fun MusicMiniPlayer(state: MusicPlaybackState, onOpen: () -> Unit) {
 private fun MusicWaveform(position: Long, duration: Long, accent: Color, amplitudes: List<Float>, onSeek: (Long) -> Unit, modifier: Modifier = Modifier) {
     val targetProgress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
     val progress by animateFloatAsState(targetProgress, tween(220), label = "wave-progress")
+    val barAmplitudes = amplitudes.mapIndexed { index, value ->
+        animateFloatAsState(
+            targetValue = value.coerceIn(.08f, 1f),
+            animationSpec = tween(600),
+            label = "wave-height-$index"
+        ).value
+    }
+    val barProgress = amplitudes.mapIndexed { index, _ ->
+        val target = (progress * amplitudes.size - index).coerceIn(0f, 1f)
+        animateFloatAsState(target, tween(180), label = "wave-bar-$index").value
+    }
     var waveformWidth by remember { mutableIntStateOf(0) }
     Box(
         modifier = modifier
@@ -237,11 +258,11 @@ private fun MusicWaveform(position: Long, duration: Long, accent: Color, amplitu
             if (bars == 0) return@Canvas
             val gap = size.width / bars
             repeat(bars) { index ->
-                val normalized = amplitudes[index].coerceIn(.08f, 1f)
+                val normalized = barAmplitudes.getOrElse(index) { .08f }
                 val barHeight = size.height * normalized
-                val played = index.toFloat() / (bars - 1) <= progress
+                val barPlayed = barProgress.getOrElse(index) { 0f }
                 drawRoundRect(
-                    color = if (played) Color.White else accent.copy(alpha = .55f),
+                    color = lerp(accent.copy(alpha = .55f), Color.White, barPlayed),
                     topLeft = Offset(index * gap, (size.height - barHeight) / 2f),
                     size = androidx.compose.ui.geometry.Size((gap * .48f).coerceAtLeast(1.5f), barHeight),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(gap * .25f)
